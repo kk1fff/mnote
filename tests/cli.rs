@@ -73,3 +73,27 @@ fn generated_password_on_add() {
         .success()
         .stdout(predicate::str::contains("Temporary password:"));
 }
+
+#[test]
+fn warns_when_data_is_web_subdir() {
+    let root = tempdir().unwrap();
+    let real = root.path().join("data");
+    bin()
+        .args(["--data", real.to_str().unwrap(), "user", "add", "alice"])
+        .assert()
+        .success();
+
+    let web_data = root.path().join("web").join("data");
+    bin()
+        .args([
+            "--data",
+            web_data.to_str().unwrap(),
+            "user",
+            "add",
+            "bob",
+        ])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("cwd-relative"))
+        .stderr(predicate::str::contains(real.to_str().unwrap()));
+}

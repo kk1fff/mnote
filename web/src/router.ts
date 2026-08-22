@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { currentUser, refreshSession, sessionReady } from "./session";
+import { setUnauthorizedHandler } from "./api";
+import { currentUser, refreshSession } from "./session";
 import { todayPath } from "./lib/paths";
 
 const router = createRouter({
@@ -14,9 +15,7 @@ const router = createRouter({
 });
 
 router.beforeEach(async (to) => {
-  if (!sessionReady.value) {
-    await refreshSession();
-  }
+  await refreshSession();
   const user = currentUser.value;
   if (!user && to.path !== "/login") {
     return { path: "/login", query: { next: to.fullPath } };
@@ -28,6 +27,16 @@ router.beforeEach(async (to) => {
     return { path: "/" };
   }
   return true;
+});
+
+setUnauthorizedHandler(() => {
+  currentUser.value = null;
+  if (router.currentRoute.value.path !== "/login") {
+    void router.replace({
+      path: "/login",
+      query: { next: router.currentRoute.value.fullPath },
+    });
+  }
 });
 
 export default router;

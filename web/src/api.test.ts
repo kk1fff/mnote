@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, encodeNotePath } from "./api";
+import { api, ApiError, encodeNotePath, setUnauthorizedHandler } from "./api";
 
 afterEach(() => {
+  setUnauthorizedHandler(null);
   vi.unstubAllGlobals();
 });
 
@@ -29,6 +30,19 @@ describe("api", () => {
       "/api/health",
       expect.objectContaining({ credentials: "include" }),
     );
+  });
+
+  it("notifies on 401 except login and me", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => jsonResponse(401, { error: "unauthorized" })),
+    );
+    await api.listNotes().catch(() => undefined);
+    await api.login("a", "b").catch(() => undefined);
+    await api.me().catch(() => undefined);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
   it("throws ApiError from json error bodies", async () => {

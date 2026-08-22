@@ -40,19 +40,52 @@ enum UserCommand {
     },
 }
 
+fn resolve_data_dir(data: PathBuf) -> anyhow::Result<PathBuf> {
+    let path = if data.is_absolute() {
+        data
+    } else {
+        std::env::current_dir()?.join(data)
+    };
+    Ok(path.canonicalize().unwrap_or(path))
+}
+
+fn warn_if_likely_wrong_data_dir(data_dir: &std::path::Path) {
+    let this_db = mnote::db_path(data_dir);
+    let Some(alt) = data_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.join("data"))
+    else {
+        return;
+    };
+    let alt_db = mnote::db_path(&alt);
+    if alt_db == this_db || !alt_db.is_file() {
+        return;
+    }
+    if data_dir.ends_with("web/data") {
+        eprintln!(
+            "warning: using {} (cwd-relative). Notes DB is probably {}",
+            data_dir.display(),
+            alt.display()
+        );
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    ensure_data_layout(&cli.data)?;
-    let _guard = init_logging(&cli.data)?;
+    let data = resolve_data_dir(cli.data)?;
+    ensure_data_layout(&data)?;
+    let _guard = init_logging(&data)?;
     match cli.command {
-        Command::Serve { bind } => serve(cli.data, bind).await,
+        Command::Serve { bind } => serve(data, bind).await,
         Command::User { command } => {
-            let state = AppState::open(&cli.data)?;
+            warn_if_likely_wrong_data_dir(&data);
+            let state = AppState::open(&data)?;
             match command {
                 UserCommand::Add { username, password } => {
                     let password = db::create_user(&state, &username, password.as_deref())?;
-                    print_account_invite(&username, &password);
+                    print_account_invite(&username, &password, &data);
                 }
                 UserCommand::List => {
                     for user in db::list_users(&state)? {
@@ -66,7 +99,7 @@ async fn main() -> anyhow::Result<()> {
                 }
                 UserCommand::ResetPassword { username } => {
                     let password = db::reset_password(&state, &username)?;
-                    print_account_invite(&username, &password);
+                    print_account_invite(&username, &password, &data);
                 }
             }
             Ok(())
@@ -78,7 +111,7 @@ fn public_url() -> String {
     std::env::var("MNOTE_PUBLIC_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".into())
 }
 
-fn print_account_invite(username: &str, password: &str) {
+fn print_account_invite(username: &str, password: &str, data: &std::path::Path) {
     let url = public_url();
     println!("Created account '{username}'.");
     println!();
@@ -88,6 +121,7 @@ fn print_account_invite(username: &str, password: &str) {
     println!("  Temporary password:   {password}");
     println!();
     println!("They must choose a new password on first login.");
+    eprintln!("data {}", data.display());
 }
 
 fn init_logging(
@@ -110,6 +144,7 @@ fn init_logging(
 }
 
 async fn serve(data: PathBuf, bind: String) -> anyhow::Result<()> {
+    warn_if_likely_wrong_data_dir(&data);
     let state = AppState::open(&data)?;
     let app = api::router(state);
     let addr: SocketAddr = bind.parse()?;

@@ -9,6 +9,12 @@ export class ApiError extends Error {
   }
 }
 
+let onUnauthorized: (() => void) | null = null;
+
+export function setUnauthorizedHandler(fn: (() => void) | null) {
+  onUnauthorized = fn;
+}
+
 export interface Me {
   username: string;
   must_change_password: boolean;
@@ -61,6 +67,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
   }
   if (!res.ok) {
+    if (res.status === 401 && path !== "/api/auth/login" && path !== "/api/auth/me") {
+      onUnauthorized?.();
+    }
     const code =
       data && typeof data === "object" && "error" in data
         ? String((data as { error: string }).error)

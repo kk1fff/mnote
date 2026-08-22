@@ -1,5 +1,6 @@
 /target/
 /data/
+/web/data/
 *.db
 *.db-journal
 *.db-wal

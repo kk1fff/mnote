@@ -2,6 +2,8 @@ pub mod api;
 pub mod auth;
 pub mod db;
 pub mod error;
+pub mod live;
+pub mod merge;
 pub mod notes;
 
 use crate::error::AppError;
@@ -13,6 +15,7 @@ use std::sync::{Arc, Mutex};
 pub struct AppState {
     pub data_dir: PathBuf,
     pub db: Arc<Mutex<Connection>>,
+    pub live: live::LiveHub,
 }
 
 impl AppState {
@@ -24,6 +27,7 @@ impl AppState {
         Ok(Self {
             data_dir,
             db: Arc::new(Mutex::new(conn)),
+            live: live::LiveHub::new(),
         })
     }
 

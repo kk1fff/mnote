@@ -20,6 +20,20 @@ vi.mock("../api", async () => {
   };
 });
 
+vi.mock("../live", () => ({
+  live: {
+    id: "test",
+    connected: false,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    open: vi.fn(),
+    change: vi.fn(),
+    cursor: vi.fn(),
+    push: vi.fn(),
+    on: () => () => {},
+  },
+}));
+
 vi.mock("../components/Editor.vue", () => ({
   default: {
     props: ["modelValue"],
