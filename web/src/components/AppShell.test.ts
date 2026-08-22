@@ -17,7 +17,7 @@ describe("AppShell", () => {
       history: createWebHistory(),
       routes: [
         { path: "/", component: { template: "<div />" } },
-        { path: "/n/:path(.*)", component: { template: "<div />" } },
+        { path: "/n/:id", component: { template: "<div />" } },
       ],
     });
     await router.push("/");

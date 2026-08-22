@@ -4,10 +4,10 @@ import { noteTree } from "./tree";
 describe("noteTree", () => {
   it("nests notes under folders and sorts them", () => {
     const tree = noteTree([
-      { path: "zeta", title: "Zeta", modified_at: "" },
-      { path: "ideas/two", title: "Two", modified_at: "" },
-      { path: "ideas/one", title: "One", modified_at: "" },
-      { path: "work/plan", title: "Plan", modified_at: "" },
+      { id: "z", title: "Zeta", folder: "", modified_at: "" },
+      { id: "t", title: "Two", folder: "ideas", modified_at: "" },
+      { id: "o", title: "One", folder: "ideas", modified_at: "" },
+      { id: "p", title: "Plan", folder: "work", modified_at: "" },
     ]);
     expect(tree).toMatchObject([
       {
@@ -15,17 +15,17 @@ describe("noteTree", () => {
         name: "ideas",
         path: "ideas",
         children: [
-          { kind: "note", name: "One", note: { path: "ideas/one" } },
-          { kind: "note", name: "Two", note: { path: "ideas/two" } },
+          { kind: "note", name: "One", note: { id: "o" } },
+          { kind: "note", name: "Two", note: { id: "t" } },
         ],
       },
       {
         kind: "folder",
         name: "work",
         path: "work",
-        children: [{ kind: "note", name: "Plan", note: { path: "work/plan" } }],
+        children: [{ kind: "note", name: "Plan", note: { id: "p" } }],
       },
-      { kind: "note", name: "Zeta", note: { path: "zeta" } },
+      { kind: "note", name: "Zeta", note: { id: "z" } },
     ]);
   });
 });

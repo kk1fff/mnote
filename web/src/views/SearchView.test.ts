@@ -18,13 +18,13 @@ vi.mock("../api", async () => {
 describe("SearchView", () => {
   it("renders hits", async () => {
     vi.mocked(api.search).mockResolvedValue([
-      { path: "ideas/one", title: "One", snippet: "hello" },
+      { id: "o1", title: "One", snippet: "hello" },
     ]);
     const router = createRouter({
       history: createWebHistory(),
       routes: [
         { path: "/search", component: SearchView },
-        { path: "/n/:path(.*)", component: { template: "<div />" } },
+        { path: "/n/:id", component: { template: "<div />" } },
       ],
     });
     await router.push("/search?q=hello");

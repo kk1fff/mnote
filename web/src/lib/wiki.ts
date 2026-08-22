@@ -34,10 +34,7 @@ export function linkifyWiki(html: string): string {
     const target = (targetRaw ?? "").trim();
     if (!target || target.includes("..")) return escapeHtml(_full);
     const label = (labelRaw ?? targetRaw ?? "").trim() || target;
-    const href = `/n/${target
-      .split("/")
-      .map((part) => encodeURIComponent(part))
-      .join("/")}`;
+    const href = `/n/${encodeURIComponent(target)}`;
     return `<a href="${href}" data-wiki="${escapeHtml(target)}">${escapeHtml(label)}</a>`;
   });
 }

@@ -9,7 +9,7 @@ describe("Preview", () => {
       history: createWebHistory(),
       routes: [
         { path: "/", component: { template: "<div />" } },
-        { path: "/n/:path(.*)", name: "note", component: { template: "<div />" } },
+        { path: "/n/:id", name: "note", component: { template: "<div />" } },
       ],
     });
     await router.push("/");
@@ -18,7 +18,7 @@ describe("Preview", () => {
       props: { source: "see [[ideas/one]]" },
       global: { plugins: [router] },
     });
-    expect(wrapper.html()).toContain('href="/n/ideas/one"');
+    expect(wrapper.html()).toContain('href="/n/ideas%2Fone"');
     expect(wrapper.get("a").attributes("data-wiki")).toBe("ideas/one");
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, encodeNotePath, setUnauthorizedHandler } from "./api";
+import { api, ApiError, setUnauthorizedHandler } from "./api";
 
 afterEach(() => {
   setUnauthorizedHandler(null);
@@ -14,10 +14,6 @@ function jsonResponse(status: number, body: unknown) {
 }
 
 describe("api", () => {
-  it("encodes note paths", () => {
-    expect(encodeNotePath("a b/c")).toBe("a%20b/c");
-  });
-
   it("parses success and empty responses", async () => {
     const fetchMock = vi
       .fn()
@@ -69,8 +65,10 @@ describe("api", () => {
     const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       if (String(url).startsWith("/api/search")) return jsonResponse(200, []);
       if (String(url).startsWith("/api/assets")) return jsonResponse(200, { id: "1.png", url: "/api/assets/1.png", markdown: "![](/api/assets/1.png)" });
-      if (init?.method === "POST" && url === "/api/notes") return jsonResponse(201, { path: "x", content: "", modified_at: "" });
-      return jsonResponse(200, { path: "x", content: "c", modified_at: "" });
+      if (init?.method === "POST" && url === "/api/notes") {
+        return jsonResponse(201, { id: "x", title: "x", content: "", modified_at: "" });
+      }
+      return jsonResponse(200, { id: "x", title: "x", content: "c", modified_at: "" });
     });
     vi.stubGlobal("fetch", fetchMock);
     await api.login("a", "b");
@@ -79,15 +77,15 @@ describe("api", () => {
     await api.titleSearch("idea");
     await api.recentNotes();
     await api.favorites();
-    await api.favorite("ideas/one");
-    await api.unfavorite("ideas/one");
-    await api.getNote("ideas/one");
-    await api.putNote("ideas/one", "hi");
-    await api.createNote("ideas/two", "x");
+    await api.favorite("note-1");
+    await api.unfavorite("note-1");
+    await api.getNote("note-1");
+    await api.putNote("note-1", "hi");
+    await api.createNote("Two", "ideas", "x");
     await api.daily("2026-08-22");
     await api.putDaily("2026-08-22", "d");
     await api.search("q");
-    await api.backlinks("ideas/one");
+    await api.backlinks("note-1");
     await api.uploadAsset(new File(["x"], "a.png", { type: "image/png" }));
     expect(fetchMock).toHaveBeenCalled();
   });

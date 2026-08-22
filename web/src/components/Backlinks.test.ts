@@ -7,7 +7,7 @@ describe("Backlinks", () => {
   it("shows empty state and links", async () => {
     const router = createRouter({
       history: createWebHistory(),
-      routes: [{ path: "/n/:path(.*)", component: { template: "<div />" } }],
+      routes: [{ path: "/n/:id", component: { template: "<div />" } }],
     });
     await router.push("/");
     await router.isReady();
@@ -17,7 +17,7 @@ describe("Backlinks", () => {
     });
     expect(empty.text()).toContain("No backlinks");
     const filled = mount(Backlinks, {
-      props: { links: [{ path: "a", title: "A", modified_at: "" }] },
+      props: { links: [{ id: "a", title: "A", modified_at: "" }] },
       global: { plugins: [router] },
     });
     expect(filled.text()).toContain("A");

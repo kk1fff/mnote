@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import { api, ApiError, type NoteMeta } from "../api";
 import AppShell from "../components/AppShell.vue";
 import Backlinks from "../components/Backlinks.vue";
@@ -8,12 +8,12 @@ import Editor, { type RemoteCaret } from "../components/Editor.vue";
 import Preview from "../components/Preview.vue";
 import { clearDraft, loadDraft, saveDraft } from "../lib/drafts";
 import { threeWay } from "../lib/merge";
-import { isDailyPath, pathFromRouteParam } from "../lib/paths";
+import { noteIdFromRoute } from "../lib/paths";
 import { live, type LiveEvent } from "../live";
 
 const route = useRoute();
-const router = useRouter();
-const path = computed(() => pathFromRouteParam(route.params.path));
+const noteId = computed(() => noteIdFromRoute(route.params.id));
+const title = ref("");
 const content = ref("");
 const preview = ref(false);
 const status = ref("");
@@ -22,46 +22,45 @@ const remotes = ref<RemoteCaret[]>([]);
 const isFavorite = ref(false);
 const shell = ref<{ load: () => Promise<void> } | null>(null);
 let saveTimer: number | undefined;
-let loadedPath = "";
+let loadedId = "";
 let base = "";
 let rev = 0;
 let applyingRemote = false;
 let stopLive: (() => void) | undefined;
 
 async function load() {
-  const p = path.value;
-  if (!p) {
-    await router.replace("/");
+  const id = noteId.value;
+  if (!id) {
+    status.value = "Note not found";
     return;
   }
   status.value = "Loading…";
   remotes.value = [];
+  title.value = "";
   try {
-    const note = isDailyPath(p) ? await api.daily(p) : await api.getNote(p);
+    const note = await api.getNote(id);
     applyRemote(note.content);
-    loadedPath = note.path;
+    loadedId = note.id;
+    title.value = note.title;
     base = note.content;
     status.value = "Saved";
   } catch (err) {
-    if (err instanceof ApiError && err.status === 404) {
-      applyRemote(`# ${p}\n\n`);
-      loadedPath = p;
-      base = content.value;
-      status.value = "New note";
-    } else {
-      status.value = "Failed to load";
-      return;
-    }
+    status.value = err instanceof ApiError && err.status === 404 ? "Note not found" : "Failed to load";
+    return;
   }
-  const draft = loadDraft(p);
+  const draft = loadDraft(id);
   if (draft && draft.local !== content.value) {
     const merged = threeWay(draft.base, draft.local, content.value);
     applyRemote(merged.content);
     status.value = merged.conflict ? "Conflict — keep both, then save" : "Restored local draft";
   }
-  live.open(p, content.value);
-  links.value = await api.backlinks(p).catch(() => []);
-  isFavorite.value = await api.favorites().then((notes) => notes.some((note) => note.path === p)).catch(() => false);
+  live.connect();
+  live.open(id, content.value);
+  links.value = await api.backlinks(id).catch(() => []);
+  isFavorite.value = await api
+    .favorites()
+    .then((notes) => notes.some((note) => note.id === id))
+    .catch(() => false);
 }
 
 function applyRemote(next: string) {
@@ -73,44 +72,44 @@ function applyRemote(next: string) {
 }
 
 function onLive(event: LiveEvent) {
-  const p = loadedPath || path.value;
+  const id = loadedId || noteId.value;
   if (event.type === "status") {
-    if (!event.connected && loadedPath) {
-      saveDraft(loadedPath, base, content.value);
+    if (!event.connected && loadedId) {
+      saveDraft(loadedId, base, content.value);
       status.value = "Offline — draft saved";
     }
     return;
   }
-  if (event.type === "opened" && event.path === p) {
+  if (event.type === "opened" && event.path === id) {
     rev = event.rev;
     const merged = threeWay(base, content.value, event.content);
     applyRemote(merged.content);
     if (merged.content !== event.content) {
-      live.push(p, event.content, merged.content);
+      live.push(id, event.content, merged.content);
     } else {
       base = event.content;
-      clearDraft(p);
+      clearDraft(id);
     }
     if (merged.conflict) status.value = "Conflict — keep both, then save";
     remotes.value = [];
     return;
   }
-  if (event.type === "change" && event.path === p && event.client_id !== live.id) {
+  if (event.type === "change" && event.path === id && event.client_id !== live.id) {
     rev = event.rev;
     applyRemote(event.content);
     base = event.content;
-    clearDraft(p);
+    clearDraft(id);
     return;
   }
-  if (event.type === "resync" && event.path === p) {
+  if (event.type === "resync" && event.path === id) {
     rev = event.rev;
     const merged = threeWay(base, content.value, event.content);
     applyRemote(merged.content);
     if (merged.content !== event.content) {
-      live.push(p, event.content, merged.content);
+      live.push(id, event.content, merged.content);
     } else {
       base = event.content;
-      if (!event.conflict) clearDraft(p);
+      if (!event.conflict) clearDraft(id);
     }
     if (event.conflict || merged.conflict) {
       remotes.value = [];
@@ -137,11 +136,11 @@ function onLive(event: LiveEvent) {
 }
 
 function onLiveChange(change: { from: number; to: number; insert: string; content: string }) {
-  const p = loadedPath || path.value;
-  if (!p) return;
-  saveDraft(p, base, change.content);
+  const id = loadedId || noteId.value;
+  if (!id) return;
+  saveDraft(id, base, change.content);
   if (live.connected) {
-    live.change(p, rev, change.content, change.from, change.to, change.insert);
+    live.change(id, rev, change.content, change.from, change.to, change.insert);
     rev += 1;
   } else {
     status.value = "Offline — draft saved";
@@ -149,32 +148,28 @@ function onLiveChange(change: { from: number; to: number; insert: string; conten
 }
 
 async function save() {
-  const p = loadedPath || path.value;
-  if (!p) return;
+  const id = loadedId || noteId.value;
+  if (!id) return;
   status.value = "Saving…";
   try {
-    if (isDailyPath(p)) {
-      await api.putDaily(p, content.value);
-    } else {
-      await api.putNote(p, content.value);
-    }
+    await api.putNote(id, content.value);
     base = content.value;
-    clearDraft(p);
+    clearDraft(id);
     status.value = "Saved";
-    links.value = await api.backlinks(p).catch(() => []);
+    links.value = await api.backlinks(id).catch(() => []);
     await shell.value?.load();
   } catch {
-    saveDraft(p, base, content.value);
+    saveDraft(id, base, content.value);
     status.value = "Save failed — draft kept";
   }
 }
 
 async function toggleFavorite() {
-  const p = loadedPath || path.value;
-  if (!p) return;
+  const id = loadedId || noteId.value;
+  if (!id) return;
   try {
-    if (isFavorite.value) await api.unfavorite(p);
-    else await api.favorite(p);
+    if (isFavorite.value) await api.unfavorite(id);
+    else await api.favorite(id);
     isFavorite.value = !isFavorite.value;
   } catch {
     status.value = "Could not update favorite";
@@ -196,20 +191,30 @@ function onKey(event: KeyboardEvent) {
   }
 }
 
-watch(path, () => {
+live.connect();
+stopLive = live.on(onLive);
+
+watch(noteId, () => {
   void load();
 }, { immediate: true });
 
 watch(content, () => {
-  if (!loadedPath || applyingRemote) return;
-  status.value = live.connected ? "Editing" : "Offline — draft saved";
-  saveDraft(loadedPath, base, content.value);
+  if (!loadedId || applyingRemote) return;
+  saveDraft(loadedId, base, content.value);
+  if (live.connected) {
+    status.value = "Editing";
+    window.clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(() => {
+      status.value = "Saved";
+    }, 800);
+    return;
+  }
+  status.value = "Offline — draft saved";
   queueSave();
 });
 
 onMounted(() => {
   live.connect();
-  stopLive = live.on(onLive);
 });
 
 onBeforeUnmount(() => {
@@ -223,7 +228,7 @@ onBeforeUnmount(() => {
     <main class="main">
       <header class="bar">
         <button type="button" class="nav-toggle" @click="toggle">Menu</button>
-        <h1>{{ path }}</h1>
+        <h1>{{ title || "Note" }}</h1>
         <div class="actions">
           <span class="muted">{{ status }}</span>
           <button type="button" :aria-pressed="isFavorite" @click="toggleFavorite">

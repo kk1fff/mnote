@@ -14,7 +14,7 @@ function emptyDraft(): Draft {
 }
 
 function insert(draft: Draft, parts: string[], note: NoteMeta) {
-  if (parts.length === 1) {
+  if (parts.length === 0) {
     draft.notes.push(note);
     return;
   }
@@ -41,7 +41,7 @@ function flatten(draft: Draft, prefix: string): TreeNode[] {
     });
   const notes = draft.notes
     .slice()
-    .sort((a, b) => a.title.localeCompare(b.title) || a.path.localeCompare(b.path))
+    .sort((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id))
     .map((note) => ({ kind: "note" as const, name: note.title, note }));
   return [...folders, ...notes];
 }
@@ -49,8 +49,7 @@ function flatten(draft: Draft, prefix: string): TreeNode[] {
 export function noteTree(notes: NoteMeta[]): TreeNode[] {
   const root = emptyDraft();
   for (const note of notes) {
-    const parts = note.path.split("/").filter(Boolean);
-    if (!parts.length) continue;
+    const parts = (note.folder ?? "").split("/").filter(Boolean);
     insert(root, parts, note);
   }
   return flatten(root, "");

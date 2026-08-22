@@ -11,14 +11,11 @@ export type LiveEvent =
 
 type Handler = (event: LiveEvent) => void;
 
-function clientId(): string {
-  const key = "mnote:client_id";
-  let id = sessionStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    sessionStorage.setItem(key, id);
+function newClientId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
   }
-  return id;
+  return `c-${Math.random().toString(36).slice(2)}`;
 }
 
 class Live {
@@ -29,7 +26,7 @@ class Live {
   private retry: number | undefined;
   private closed = false;
   connected = false;
-  id = "";
+  id = newClientId();
 
   on(handler: Handler): () => void {
     this.handlers.add(handler);
@@ -40,7 +37,10 @@ class Live {
 
   connect() {
     this.closed = false;
-    this.id = typeof sessionStorage === "undefined" ? "test" : clientId();
+    if (!this.id) this.id = newClientId();
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
     this.openSocket();
   }
 
@@ -48,8 +48,9 @@ class Live {
     this.closed = true;
     window.clearInterval(this.ping);
     window.clearTimeout(this.retry);
-    this.ws?.close();
+    const ws = this.ws;
     this.ws = null;
+    ws?.close();
     this.setConnected(false);
   }
 
@@ -76,6 +77,7 @@ class Live {
     const ws = new WebSocket(`${proto}://${location.host}/api/live`);
     this.ws = ws;
     ws.onopen = () => {
+      if (this.ws !== ws) return;
       this.setConnected(true);
       this.send({ type: "hello", client_id: this.id });
       if (this.openPath) this.send({ type: "open", ...this.openPath });
@@ -100,6 +102,8 @@ class Live {
       }
     };
     ws.onclose = () => {
+      if (this.ws !== ws) return;
+      this.ws = null;
       this.setConnected(false);
       if (this.closed) return;
       window.clearTimeout(this.retry);

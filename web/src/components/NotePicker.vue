@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api, ApiError, type NoteMeta } from "../api";
-import { normalizeNotePath, noteHref } from "../lib/paths";
+import { noteFolderLabel, noteHref, parseCreateQuery } from "../lib/paths";
 
 const emit = defineEmits<{ created: [] }>();
 const router = useRouter();
@@ -18,16 +18,27 @@ let searchTimer: number | undefined;
 let searchId = 0;
 
 const trimmed = computed(() => query.value.trim());
-const folderQuery = computed(() => (trimmed.value.endsWith("/") ? trimmed.value.toLowerCase() : ""));
+const folderQuery = computed(() => (trimmed.value.endsWith("/") ? trimmed.value.slice(0, -1).toLowerCase() : ""));
 const shown = computed(() => {
   if (!folderQuery.value) return results.value;
-  return results.value.filter((note) => note.path.toLowerCase().startsWith(folderQuery.value));
+  const prefix = folderQuery.value;
+  return results.value.filter((note) => {
+    const folder = (note.folder ?? "").toLowerCase();
+    return folder === prefix || folder.startsWith(`${prefix}/`);
+  });
 });
-const createPath = computed(() => (folderQuery.value ? null : normalizeNotePath(query.value)));
-const canCreate = computed(
-  () => !!createPath.value && !results.value.some((note) => note.path === createPath.value),
-);
-const createLabel = computed(() => createPath.value ?? trimmed.value);
+const createDraft = computed(() => (folderQuery.value ? null : parseCreateQuery(query.value)));
+const canCreate = computed(() => {
+  if (!createDraft.value) return false;
+  const title = createDraft.value.title.toLowerCase();
+  return !results.value.some((note) => note.title.toLowerCase() === title);
+});
+const createLabel = computed(() => {
+  if (!createDraft.value) return trimmed.value;
+  return createDraft.value.folder
+    ? `${createDraft.value.folder}/${createDraft.value.title}`
+    : createDraft.value.title;
+});
 const maxIndex = computed(() => {
   if (shown.value.length && canCreate.value) return shown.value.length;
   if (shown.value.length) return shown.value.length - 1;
@@ -54,23 +65,18 @@ function clampSelected() {
 
 async function select(note: NoteMeta) {
   close();
-  await router.push(noteHref(note.path));
+  await router.push(noteHref(note.id));
 }
 
 async function create() {
-  if (!canCreate.value || !createPath.value) return;
+  if (!canCreate.value || !createDraft.value) return;
   error.value = "";
   try {
-    await api.createNote(createPath.value);
+    const note = await api.createNote(createDraft.value.title, createDraft.value.folder);
     emit("created");
     close();
-    await router.push(noteHref(createPath.value));
+    await router.push(noteHref(note.id));
   } catch (err) {
-    if (err instanceof ApiError && err.status === 409) {
-      await router.push(noteHref(createPath.value));
-      close();
-      return;
-    }
     error.value = err instanceof ApiError ? err.code : "Could not create note";
   }
 }
@@ -159,10 +165,10 @@ defineExpose({ show });
       <p v-if="error" class="error picker-message">{{ error }}</p>
       <template v-else>
         <ul v-if="shown.length" class="picker-results">
-          <li v-for="(note, index) in shown" :key="note.path">
+          <li v-for="(note, index) in shown" :key="note.id">
             <button type="button" :class="{ active: selected === index }" @click="select(note)">
               <span>{{ note.title }}</span>
-              <small>{{ note.path }}</small>
+              <small v-if="noteFolderLabel(note)">{{ noteFolderLabel(note) }}</small>
             </button>
           </li>
         </ul>
@@ -170,7 +176,7 @@ defineExpose({ show });
           No notes in {{ trimmed }}
         </p>
         <p v-else-if="!trimmed" class="muted picker-message">
-          Type a title or path to search or create a note
+          Type a title to search or create a note
         </p>
         <button
           v-if="canCreate"

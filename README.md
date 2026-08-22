@@ -118,16 +118,16 @@ Then open http://localhost:3000.
 | GET | `/api/auth/me` | current user |
 | POST | `/api/auth/password` | `{ password }` |
 | GET | `/api/notes` | list |
-| POST | `/api/notes` | `{ path, content? }` |
+| POST | `/api/notes` | `{ title, folder?, content? }` |
 | GET/PUT | `/api/notes/daily/:date` | daily note |
-| GET/PUT | `/api/notes/:path` | page |
+| GET/PUT | `/api/notes/:id` | page |
 | GET | `/api/notes/recent` | recently opened notes |
-| GET | `/api/notes/title-search?q=` | search notes by file name, then path |
+| GET | `/api/notes/title-search?q=` | search notes by title, then folder |
 | GET | `/api/favorites` | favorite notes |
-| PUT/DELETE | `/api/favorites/:path` | favorite a note |
+| PUT/DELETE | `/api/favorites/:id` | favorite a note |
 | GET | `/api/search?q=` | search |
-| GET | `/api/backlinks/:path` | backlinks |
+| GET | `/api/backlinks/:id` | backlinks |
 | POST | `/api/assets` | multipart field `file` |
 | GET | `/api/assets/:id` | image |
 
-Wiki links use `[[path]]` or `[[path|label]]`. Daily notes live at the vault root as `YYYY-MM-DD.md`.
+Wiki links use `[[title]]` or `[[title|label]]`. Titles are unique. Daily notes are titled `YYYY-MM-DD`. File names stay on the server.

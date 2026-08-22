@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, type NoteMeta } from "../api";
-import { decodeNotePath, todayPath } from "../lib/paths";
+import { noteIdFromRoute } from "../lib/paths";
 import { noteTree } from "../lib/tree";
 import { currentUser, logout } from "../session";
 import NoteTree from "./NoteTree.vue";
@@ -14,8 +14,8 @@ const route = useRoute();
 const router = useRouter();
 
 const tree = computed(() => noteTree(notes.value));
-const activePath = computed(() =>
-  route.path.startsWith("/n/") ? decodeNotePath(route.path.slice(3)) : "",
+const activeId = computed(() =>
+  route.name === "note" || route.path.startsWith("/n/") ? noteIdFromRoute(route.params.id) : "",
 );
 
 async function load() {
@@ -60,14 +60,14 @@ defineExpose({ load });
     </form>
     <button class="new-note-button" type="button" @click="emit('open-picker')">New note</button>
     <nav class="shortcuts" aria-label="Quick access">
-      <RouterLink :to="`/n/${todayPath()}`">Today</RouterLink>
+      <RouterLink to="/today">Today</RouterLink>
       <RouterLink to="/recent">Recent</RouterLink>
       <RouterLink to="/favorites">Favorites</RouterLink>
     </nav>
     <div class="note-library">
       <p class="section-label">Notes</p>
       <div class="note-tree">
-        <NoteTree :nodes="tree" :active-path="activePath" :collapsed="collapsed" @toggle="toggle" />
+        <NoteTree :nodes="tree" :active-id="activeId" :collapsed="collapsed" @toggle="toggle" />
       </div>
     </div>
     <div class="sidebar-footer">

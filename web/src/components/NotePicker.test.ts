@@ -20,7 +20,7 @@ async function openPicker() {
     history: createWebHistory(),
     routes: [
       { path: "/", component: { template: "<div />" } },
-      { path: "/n/:path(.*)", component: { template: "<div />" } },
+      { path: "/n/:id", component: { template: "<div />" } },
     ],
   });
   await router.push("/");
@@ -41,52 +41,54 @@ describe("NotePicker", () => {
   it("keeps create available when a partial match exists", async () => {
     vi.useFakeTimers();
     vi.mocked(api.titleSearch).mockResolvedValue([
-      { path: "work/plan", title: "Plan", modified_at: "" },
+      { id: "p1", title: "Plan", folder: "work", modified_at: "" },
     ]);
     const { wrapper } = await openPicker();
-    await wrapper.get("input").setValue("plan");
+    await wrapper.get("input").setValue("pla");
     await vi.advanceTimersByTimeAsync(120);
     await flushPromises();
-    expect(wrapper.text()).toContain("work/plan");
-    expect(wrapper.text()).toContain("Create “plan”");
+    expect(wrapper.text()).toContain("Plan");
+    expect(wrapper.text()).toContain("work");
+    expect(wrapper.text()).toContain("Create “pla”");
     expect(wrapper.text()).toMatch(/⌘↵ create|Ctrl\+↵ create/);
   });
 
-  it("hides create for an exact path and creates with the shortcut", async () => {
+  it("hides create for an exact title and creates with the shortcut", async () => {
     vi.useFakeTimers();
     vi.mocked(api.titleSearch).mockResolvedValue([
-      { path: "work/plan", title: "Plan", modified_at: "" },
+      { id: "p1", title: "Plan", folder: "work", modified_at: "" },
     ]);
     vi.mocked(api.createNote).mockResolvedValue({
-      path: "plan",
+      id: "new1",
+      title: "plan",
       content: "",
       modified_at: "",
     });
     const { wrapper, router } = await openPicker();
-    await wrapper.get("input").setValue("work/plan");
+    await wrapper.get("input").setValue("Plan");
     await vi.advanceTimersByTimeAsync(120);
     await flushPromises();
-    expect(wrapper.text()).not.toContain("Create “work/plan”");
+    expect(wrapper.text()).not.toContain("Create “Plan”");
 
-    await wrapper.get("input").setValue("plan");
+    await wrapper.get("input").setValue("draft");
     await vi.advanceTimersByTimeAsync(120);
     await flushPromises();
     await wrapper.get("input").trigger("keydown", { key: "Enter", metaKey: true });
     await flushPromises();
-    expect(api.createNote).toHaveBeenCalledWith("plan");
-    expect(router.currentRoute.value.path).toBe("/n/plan");
+    expect(api.createNote).toHaveBeenCalledWith("draft", "");
+    expect(router.currentRoute.value.path).toBe("/n/new1");
   });
 
   it("treats a trailing slash as folder browse", async () => {
     vi.useFakeTimers();
     vi.mocked(api.titleSearch).mockResolvedValue([
-      { path: "ideas/one", title: "One", modified_at: "" },
+      { id: "o1", title: "One", folder: "ideas", modified_at: "" },
     ]);
     const { wrapper } = await openPicker();
     await wrapper.get("input").setValue("ideas/");
     await vi.advanceTimersByTimeAsync(120);
     await flushPromises();
-    expect(wrapper.text()).toContain("ideas/one");
+    expect(wrapper.text()).toContain("One");
     expect(wrapper.text()).toContain("Type a name to create in ideas/");
     expect(wrapper.find(".picker-create").exists()).toBe(false);
     expect(wrapper.text()).not.toMatch(/⌘↵ create|Ctrl\+↵ create/);

@@ -1,15 +1,25 @@
-export function todayPath(now = new Date()): string {
+export function todayDate(now = new Date()): string {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
-export function isDailyPath(path: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(path);
+export function noteHref(id: string): string {
+  return `/n/${encodeURIComponent(id)}`;
 }
 
-export function normalizeNotePath(raw: string): string | null {
+export function noteIdFromRoute(param: unknown): string {
+  const raw = Array.isArray(param) ? param[0] : param;
+  if (raw == null || raw === "") return "";
+  try {
+    return decodeURIComponent(String(raw));
+  } catch {
+    return String(raw);
+  }
+}
+
+export function parseCreateQuery(raw: string): { title: string; folder: string } | null {
   const trimmed = raw.trim().replace(/^\/+/, "").replace(/\.md$/i, "");
   if (!trimmed || trimmed.includes("\\") || trimmed.includes("\0") || trimmed.length > 200) {
     return null;
@@ -21,27 +31,11 @@ export function normalizeNotePath(raw: string): string | null {
   if (!parts.length || parts.some((part) => part === ".." || part.includes("\0"))) {
     return null;
   }
-  return parts.join("/");
+  const title = parts[parts.length - 1];
+  const folder = parts.slice(0, -1).join("/");
+  return { title, folder };
 }
 
-export function noteHref(path: string): string {
-  return `/n/${path
-    .split("/")
-    .map((part) => encodeURIComponent(part))
-    .join("/")}`;
-}
-
-export function decodeNotePath(raw: string): string {
-  return raw
-    .split("/")
-    .filter(Boolean)
-    .map((part) => decodeURIComponent(part))
-    .join("/");
-}
-
-export function pathFromRouteParam(param: unknown): string {
-  if (Array.isArray(param)) {
-    return param.map((part) => decodeURIComponent(String(part))).filter(Boolean).join("/");
-  }
-  return decodeNotePath(String(param ?? ""));
+export function noteFolderLabel(note: { folder?: string }): string {
+  return note.folder ?? "";
 }

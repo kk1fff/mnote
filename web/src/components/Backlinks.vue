@@ -23,8 +23,8 @@ const open = ref(true);
     <div v-if="open" id="backlinks-content" class="backlinks-content">
       <p v-if="!links.length" class="muted">No backlinks</p>
       <ul v-else>
-        <li v-for="link in links" :key="link.path">
-          <RouterLink :to="noteHref(link.path)">{{ link.title }}</RouterLink>
+        <li v-for="link in links" :key="link.id">
+          <RouterLink :to="noteHref(link.id)">{{ link.title }}</RouterLink>
         </li>
       </ul>
     </div>

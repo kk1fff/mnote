@@ -1,5 +1,6 @@
 use axum::body::Body;
 use axum::http::{header, Method, Request, StatusCode};
+use http_body_util::BodyExt;
 use futures_util::{SinkExt, StreamExt};
 use mnote::{api, db, AppState};
 use serde_json::{json, Value};
@@ -82,6 +83,27 @@ async fn live_relays_between_same_user() {
     let alice = login_cookie(api::router(state.clone()), "alice").await;
     let bob = login_cookie(api::router(state.clone()), "bob").await;
 
+    let created = api::router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/notes")
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::COOKIE, format!("mnote_session={alice}"))
+                .body(Body::from(
+                    json!({ "title": "One", "folder": "ideas", "content": "hello" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created_body: Value = serde_json::from_slice(
+        &created.into_body().collect().await.unwrap().to_bytes(),
+    )
+    .unwrap();
+    let note_id = created_body["id"].as_str().unwrap();
+
     let mut a = connect(addr, &alice).await;
     let mut b = connect(addr, &alice).await;
     let mut c = connect(addr, &bob).await;
@@ -100,17 +122,17 @@ async fn live_relays_between_same_user() {
     assert_eq!(next_json(&mut c).await["type"], "welcome");
 
     a.send(Message::Text(
-        r#"{"type":"open","path":"ideas/one","content":"hello"}"#.into(),
+        format!(r#"{{"type":"open","path":"{note_id}","content":"hello"}}"#).into(),
     ))
     .await
     .unwrap();
     b.send(Message::Text(
-        r#"{"type":"open","path":"ideas/one","content":"hello"}"#.into(),
+        format!(r#"{{"type":"open","path":"{note_id}","content":"hello"}}"#).into(),
     ))
     .await
     .unwrap();
     c.send(Message::Text(
-        r#"{"type":"open","path":"ideas/one","content":"hello"}"#.into(),
+        format!(r#"{{"type":"open","path":"{note_id}","content":"hello"}}"#).into(),
     ))
     .await
     .unwrap();
@@ -122,7 +144,10 @@ async fn live_relays_between_same_user() {
     assert_eq!(next_json(&mut c).await["type"], "peers");
 
     a.send(Message::Text(
-        r#"{"type":"change","path":"ideas/one","rev":0,"content":"hello!","from":5,"to":5,"insert":"!"}"#.into(),
+        format!(
+            r#"{{"type":"change","path":"{note_id}","rev":0,"content":"hello!","from":5,"to":5,"insert":"!"}}"#
+        )
+        .into(),
     ))
     .await
     .unwrap();
@@ -133,6 +158,111 @@ async fn live_relays_between_same_user() {
 
     let wait = tokio::time::timeout(std::time::Duration::from_millis(80), c.next()).await;
     assert!(wait.is_err(), "other user must not see the change");
+}
+
+#[tokio::test]
+async fn live_keeps_peers_after_http_put_and_stale_reconnect() {
+    let dir = TempDir::new().unwrap();
+    let state = AppState::open(dir.path()).unwrap();
+    db::create_user(&state, "alice", Some("password1")).unwrap();
+    db::set_password(&state, "alice", "password1", false).unwrap();
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let app = api::router(state.clone());
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    let alice = login_cookie(api::router(state.clone()), "alice").await;
+    let created = api::router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/notes")
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::COOKIE, format!("mnote_session={alice}"))
+                .body(Body::from(
+                    json!({ "title": "Time", "content": "hello" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created_body: Value = serde_json::from_slice(
+        &created.into_body().collect().await.unwrap().to_bytes(),
+    )
+    .unwrap();
+    let note_id = created_body["id"].as_str().unwrap();
+
+    let mut stale = connect(addr, &alice).await;
+    let mut a = connect(addr, &alice).await;
+    let mut b = connect(addr, &alice).await;
+
+    stale
+        .send(Message::Text(
+            r#"{"type":"hello","client_id":"a"}"#.into(),
+        ))
+        .await
+        .unwrap();
+    a.send(Message::Text(r#"{"type":"hello","client_id":"a"}"#.into()))
+        .await
+        .unwrap();
+    b.send(Message::Text(r#"{"type":"hello","client_id":"b"}"#.into()))
+        .await
+        .unwrap();
+    assert_eq!(next_json(&mut stale).await["type"], "welcome");
+    assert_eq!(next_json(&mut a).await["type"], "welcome");
+    assert_eq!(next_json(&mut b).await["type"], "welcome");
+
+    drop(stale);
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    a.send(Message::Text(
+        format!(r#"{{"type":"open","path":"{note_id}","content":"hello"}}"#).into(),
+    ))
+    .await
+    .unwrap();
+    b.send(Message::Text(
+        format!(r#"{{"type":"open","path":"{note_id}","content":"hello"}}"#).into(),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(next_json(&mut a).await["type"], "opened");
+    assert_eq!(next_json(&mut a).await["type"], "peers");
+    assert_eq!(next_json(&mut b).await["type"], "opened");
+    assert_eq!(next_json(&mut b).await["type"], "peers");
+
+    let put = api::router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method(Method::PUT)
+                .uri(format!("/api/notes/{note_id}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::COOKIE, format!("mnote_session={alice}"))
+                .body(Body::from(json!({ "content": "stale" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(put.status(), StatusCode::OK);
+
+    let no_resync = tokio::time::timeout(std::time::Duration::from_millis(80), b.next()).await;
+    assert!(no_resync.is_err(), "http put must not resync live peers");
+
+    a.send(Message::Text(
+        format!(
+            r#"{{"type":"change","path":"{note_id}","rev":0,"content":"hello!","from":5,"to":5,"insert":"!"}}"#
+        )
+        .into(),
+    ))
+    .await
+    .unwrap();
+    let change = next_json(&mut b).await;
+    assert_eq!(change["type"], "change");
+    assert_eq!(change["insert"], "!");
+    assert_eq!(change["client_id"], "a");
 }
 
 #[tokio::test]

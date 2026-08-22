@@ -35,8 +35,8 @@ watch(() => route.query.q, run);
       <p v-if="error" class="error results">{{ error }}</p>
       <p v-else-if="!hits.length" class="muted results">No matches</p>
       <ul class="results">
-        <li v-for="hit in hits" :key="hit.path">
-          <RouterLink :to="noteHref(hit.path)">{{ hit.title }}</RouterLink>
+        <li v-for="hit in hits" :key="hit.id">
+          <RouterLink :to="noteHref(hit.id)">{{ hit.title }}</RouterLink>
           <p>{{ hit.snippet }}</p>
         </li>
       </ul>

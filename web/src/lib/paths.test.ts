@@ -1,37 +1,24 @@
 import { describe, expect, it } from "vitest";
-import {
-  decodeNotePath,
-  isDailyPath,
-  normalizeNotePath,
-  noteHref,
-  pathFromRouteParam,
-  todayPath,
-} from "./paths";
+import { noteHref, noteIdFromRoute, parseCreateQuery, todayDate } from "./paths";
 
 describe("paths", () => {
   it("formats today as YYYY-MM-DD", () => {
-    expect(todayPath(new Date("2026-08-22T15:00:00"))).toBe("2026-08-22");
+    expect(todayDate(new Date("2026-08-22T15:00:00"))).toBe("2026-08-22");
   });
 
-  it("detects daily notes", () => {
-    expect(isDailyPath("2026-08-22")).toBe(true);
-    expect(isDailyPath("ideas/one")).toBe(false);
+  it("parses create queries", () => {
+    expect(parseCreateQuery(" /ideas/one.md ")).toEqual({ title: "one", folder: "ideas" });
+    expect(parseCreateQuery("a / b")).toEqual({ title: "b", folder: "a" });
+    expect(parseCreateQuery("plan")).toEqual({ title: "plan", folder: "" });
+    expect(parseCreateQuery("../x")).toBeNull();
+    expect(parseCreateQuery("")).toBeNull();
   });
 
-  it("normalizes note paths", () => {
-    expect(normalizeNotePath(" /ideas/one.md ")).toBe("ideas/one");
-    expect(normalizeNotePath("a / b")).toBe("a/b");
-    expect(normalizeNotePath("../x")).toBeNull();
-    expect(normalizeNotePath("")).toBeNull();
-  });
-
-  it("encodes and decodes note paths", () => {
-    expect(noteHref("ideas/one")).toBe("/n/ideas/one");
-    expect(noteHref("a b/c")).toBe("/n/a%20b/c");
-    expect(decodeNotePath("/ideas/one")).toBe("ideas/one");
-    expect(decodeNotePath("a%20b/c")).toBe("a b/c");
-    expect(pathFromRouteParam(["ideas", "one"])).toBe("ideas/one");
-    expect(pathFromRouteParam("ideas/one")).toBe("ideas/one");
-    expect(pathFromRouteParam(undefined)).toBe("");
+  it("encodes note ids", () => {
+    expect(noteHref("abc")).toBe("/n/abc");
+    expect(noteHref("a b")).toBe("/n/a%20b");
+    expect(noteIdFromRoute("abc")).toBe("abc");
+    expect(noteIdFromRoute("a%20b")).toBe("a b");
+    expect(noteIdFromRoute(undefined)).toBe("");
   });
 });

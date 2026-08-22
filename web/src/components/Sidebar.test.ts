@@ -21,7 +21,7 @@ vi.mock("../session", () => ({
 describe("Sidebar", () => {
   it("lists notes and searches", async () => {
     vi.mocked(api.listNotes).mockResolvedValue([
-      { path: "ideas/one", title: "One", modified_at: "" },
+      { id: "o1", title: "One", folder: "ideas", modified_at: "" },
     ]);
     const router = createRouter({
       history: createWebHistory(),
@@ -30,7 +30,8 @@ describe("Sidebar", () => {
         { path: "/search", component: { template: "<div />" } },
         { path: "/login", component: { template: "<div />" } },
         { path: "/password", component: { template: "<div />" } },
-        { path: "/n/:path(.*)", component: { template: "<div />" } },
+        { path: "/n/:id", component: { template: "<div />" } },
+        { path: "/today", component: { template: "<div />" } },
       ],
     });
     await router.push("/");
@@ -55,7 +56,8 @@ describe("Sidebar", () => {
       history: createWebHistory(),
       routes: [
         { path: "/", component: { template: "<div />" } },
-        { path: "/n/:path(.*)", component: { template: "<div />" } },
+        { path: "/n/:id", component: { template: "<div />" } },
+        { path: "/today", component: { template: "<div />" } },
       ],
     });
     await router.push("/");

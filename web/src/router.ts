@@ -1,8 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { api, setUnauthorizedHandler } from "./api";
 import { currentUser, refreshSession } from "./session";
-import { todayPath } from "./lib/paths";
-
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -19,8 +17,9 @@ const router = createRouter({
       component: () => import("./views/CollectionView.vue"),
       props: { title: "Favorites", load: api.favorites },
     },
-    { path: "/n/:path(.*)", component: () => import("./views/NoteView.vue") },
-    { path: "/", redirect: () => `/n/${todayPath()}` },
+    { path: "/today", name: "today", component: () => import("./views/TodayView.vue") },
+    { path: "/n/:id", name: "note", component: () => import("./views/NoteView.vue") },
+    { path: "/", redirect: "/today" },
   ],
 });
 

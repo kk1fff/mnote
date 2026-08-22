@@ -20,6 +20,7 @@ describe("wiki", () => {
   it("turns wiki links into anchors", () => {
     const html = linkifyWiki("<p>see [[beta|B]]</p>");
     expect(html).toContain('href="/n/beta"');
+    expect(html).toContain('href="/n/beta"');
     expect(html).toContain("data-wiki=\"beta\"");
     expect(html).toContain(">B</a>");
   });

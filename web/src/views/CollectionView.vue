@@ -35,8 +35,8 @@ watch(() => props.load, refresh);
       <p v-if="error" class="error results">{{ error }}</p>
       <p v-else-if="!notes.length" class="muted results">No notes yet</p>
       <ul v-else class="results">
-        <li v-for="note in notes" :key="note.path">
-          <RouterLink :to="noteHref(note.path)">{{ note.title }}</RouterLink>
+        <li v-for="note in notes" :key="note.id">
+          <RouterLink :to="noteHref(note.id)">{{ note.title }}</RouterLink>
         </li>
       </ul>
     </main>

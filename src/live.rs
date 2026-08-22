@@ -143,10 +143,23 @@ impl LiveHub {
     }
 
     pub fn disconnect(&self, user_id: i64, client_id: &str) {
+        self.disconnect_conn(user_id, client_id, None);
+    }
+
+    pub fn disconnect_conn(&self, user_id: i64, client_id: &str, tx: Option<&Outbox>) {
         let mut inner = self.inner.lock().expect("live lock");
         let Some(user) = inner.users.get_mut(&user_id) else {
             return;
         };
+        if let Some(tx) = tx {
+            if user
+                .conns
+                .get(client_id)
+                .is_some_and(|c| !c.tx.same_channel(tx))
+            {
+                return;
+            }
+        }
         let path = user.conns.remove(client_id).and_then(|c| c.path);
         if let Some(path) = path {
             fanout(
@@ -317,6 +330,13 @@ impl LiveHub {
             && !user.conns.values().any(|c| c.path.as_deref() == Some(path))
         {
             return None;
+        }
+        if user
+            .conns
+            .values()
+            .any(|c| c.path.as_deref() == Some(path))
+        {
+            return user.notes.get(path).map(|b| b.rev);
         }
         let buf = user
             .notes
@@ -531,6 +551,36 @@ mod tests {
         assert!(drain(&mut b_rx)
             .iter()
             .any(|m| matches!(m, ServerMsg::Gone { client_id } if client_id == "a")));
+    }
+
+    #[test]
+    fn stale_disconnect_keeps_newer_conn() {
+        let hub = LiveHub::new();
+        let (old_tx, mut old_rx) = mpsc::unbounded_channel();
+        let (new_tx, mut new_rx) = mpsc::unbounded_channel();
+        hub.connect(1, "a", old_tx.clone());
+        hub.connect(1, "a", new_tx.clone());
+        drain(&mut old_rx);
+        drain(&mut new_rx);
+        hub.disconnect_conn(1, "a", Some(&old_tx));
+        hub.open(1, "a", "n", Some("x"), "x");
+        assert!(drain(&mut old_rx).is_empty());
+        assert!(drain(&mut new_rx)
+            .iter()
+            .any(|m| matches!(m, ServerMsg::Opened { .. })));
+    }
+
+    #[test]
+    fn http_replace_skips_active_session() {
+        let (hub, mut a_rx, mut b_rx) = pair();
+        drain(&mut a_rx);
+        drain(&mut b_rx);
+        hub.open(1, "a", "n", Some("x"), "x");
+        drain(&mut a_rx);
+        assert_eq!(hub.replace(1, "n", "stale"), Some(0));
+        assert!(drain(&mut a_rx).is_empty());
+        assert!(drain(&mut b_rx).is_empty());
+        assert_eq!(hub.rev(1, "n"), Some(0));
     }
 
     #[test]

@@ -29,11 +29,11 @@ pub fn router(state: AppState) -> Router {
         .route("/notes/daily/{date}", get(daily_note).put(put_daily_note))
         .route("/notes/recent", get(recent_notes))
         .route("/notes/title-search", get(search_titles))
-        .route("/notes/{*path}", get(get_note).put(put_note))
+        .route("/notes/{id}", get(get_note).put(put_note))
         .route("/favorites", get(favorites))
-        .route("/favorites/{*path}", put(favorite).delete(unfavorite))
+        .route("/favorites/{id}", put(favorite).delete(unfavorite))
         .route("/search", get(search_notes))
-        .route("/backlinks/{*path}", get(backlinks))
+        .route("/backlinks/{id}", get(backlinks))
         .route("/assets", post(upload_asset))
         .route("/assets/{id}", get(get_asset));
 
@@ -181,7 +181,8 @@ async fn list_notes(
 
 #[derive(Deserialize)]
 struct CreateNote {
-    path: String,
+    title: String,
+    folder: Option<String>,
     content: Option<String>,
 }
 
@@ -189,18 +190,28 @@ async fn create_note(
     State(state): State<AppState>,
     Auth(user): Auth,
     Json(body): Json<CreateNote>,
-) -> Result<(StatusCode, Json<notes::Note>), AppError> {
+) -> Result<Response, AppError> {
     require_ready(&user)?;
     let vault = state.vault_dir(&user.username);
-    let path = notes::normalize_note_path(&body.path)?;
-    if notes::get_note(&vault, &path).is_ok() {
-        return Err(AppError::Conflict("note already exists".into()));
+    match notes::create_note(
+        &vault,
+        &body.title,
+        body.folder.as_deref().unwrap_or(""),
+        body.content.as_deref(),
+    ) {
+        Ok(note) => {
+            state.live.replace(user.id, &note.id, &note.content);
+            Ok((StatusCode::CREATED, Json(note)).into_response())
+        }
+        Err(err) => {
+            if let Some(id) = notes::conflict_id(&err) {
+                if let Ok(note) = notes::get_note(&vault, id) {
+                    return Ok((StatusCode::CONFLICT, Json(note)).into_response());
+                }
+            }
+            Err(err)
+        }
     }
-    let title = path.rsplit('/').next().unwrap_or(path.as_str());
-    let content = body.content.unwrap_or_else(|| format!("# {title}\n\n"));
-    let note = notes::put_note(&vault, &path, &content)?;
-    state.live.replace(user.id, &path, &note.content);
-    Ok((StatusCode::CREATED, Json(note)))
 }
 
 async fn daily_note(
@@ -210,7 +221,7 @@ async fn daily_note(
 ) -> Result<Json<notes::Note>, AppError> {
     require_ready(&user)?;
     let note = notes::get_or_create_daily(&state.vault_dir(&user.username), &date)?;
-    db::record_note_open(&state, user.id, &note.path)?;
+    db::record_note_open(&state, user.id, &note.id)?;
     Ok(Json(note))
 }
 
@@ -221,9 +232,9 @@ async fn put_daily_note(
     Json(body): Json<UpdateNote>,
 ) -> Result<Json<notes::Note>, AppError> {
     require_ready(&user)?;
-    let date = notes::parse_daily_date(&date)?;
-    let note = notes::put_note(&state.vault_dir(&user.username), &date, &body.content)?;
-    state.live.replace(user.id, &date, &note.content);
+    let note = notes::get_or_create_daily(&state.vault_dir(&user.username), &date)?;
+    let note = notes::put_note(&state.vault_dir(&user.username), &note.id, &body.content)?;
+    state.live.replace(user.id, &note.id, &note.content);
     Ok(Json(note))
 }
 
@@ -235,18 +246,17 @@ struct UpdateNote {
 async fn get_note(
     State(state): State<AppState>,
     Auth(user): Auth,
-    Path(path): Path<String>,
+    Path(id): Path<String>,
 ) -> Result<Json<notes::Note>, AppError> {
     require_ready(&user)?;
-    let note = notes::get_note(&state.vault_dir(&user.username), &path)?;
-    db::record_note_open(&state, user.id, &note.path)?;
+    let note = notes::get_note(&state.vault_dir(&user.username), &id)?;
+    db::record_note_open(&state, user.id, &note.id)?;
     Ok(Json(note))
 }
 
-fn metas_for_paths(vault: &std::path::Path, paths: Vec<String>) -> Vec<notes::NoteMeta> {
-    paths
-        .into_iter()
-        .filter_map(|path| notes::note_meta(vault, &path).ok())
+fn metas_for_ids(vault: &std::path::Path, ids: Vec<String>) -> Vec<notes::NoteMeta> {
+    ids.into_iter()
+        .filter_map(|id| notes::note_meta(vault, &id).ok())
         .collect()
 }
 
@@ -256,7 +266,7 @@ async fn recent_notes(
 ) -> Result<Json<Vec<notes::NoteMeta>>, AppError> {
     require_ready(&user)?;
     let vault = state.vault_dir(&user.username);
-    Ok(Json(metas_for_paths(
+    Ok(Json(metas_for_ids(
         &vault,
         db::recent_paths(&state, user.id)?,
     )))
@@ -268,7 +278,7 @@ async fn favorites(
 ) -> Result<Json<Vec<notes::NoteMeta>>, AppError> {
     require_ready(&user)?;
     let vault = state.vault_dir(&user.username);
-    Ok(Json(metas_for_paths(
+    Ok(Json(metas_for_ids(
         &vault,
         db::favorite_paths(&state, user.id)?,
     )))
@@ -277,48 +287,45 @@ async fn favorites(
 async fn favorite(
     State(state): State<AppState>,
     Auth(user): Auth,
-    Path(path): Path<String>,
+    Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
     require_ready(&user)?;
-    let path = notes::normalize_note_path(&path)?;
-    notes::get_note(&state.vault_dir(&user.username), &path)?;
-    db::set_favorite(&state, user.id, &path, true)?;
+    notes::get_note(&state.vault_dir(&user.username), &id)?;
+    db::set_favorite(&state, user.id, &id, true)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 async fn unfavorite(
     State(state): State<AppState>,
     Auth(user): Auth,
-    Path(path): Path<String>,
+    Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
     require_ready(&user)?;
-    let path = notes::normalize_note_path(&path)?;
-    db::set_favorite(&state, user.id, &path, false)?;
+    db::set_favorite(&state, user.id, &id, false)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 async fn put_note(
     State(state): State<AppState>,
     Auth(user): Auth,
-    Path(path): Path<String>,
+    Path(id): Path<String>,
     Json(body): Json<UpdateNote>,
 ) -> Result<Json<notes::Note>, AppError> {
     require_ready(&user)?;
-    let path = notes::normalize_note_path(&path)?;
-    let note = notes::put_note(&state.vault_dir(&user.username), &path, &body.content)?;
-    state.live.replace(user.id, &path, &note.content);
+    let note = notes::put_note(&state.vault_dir(&user.username), &id, &body.content)?;
+    state.live.replace(user.id, &note.id, &note.content);
     Ok(Json(note))
 }
 
 async fn backlinks(
     State(state): State<AppState>,
     Auth(user): Auth,
-    Path(path): Path<String>,
+    Path(id): Path<String>,
 ) -> Result<Json<Vec<notes::NoteMeta>>, AppError> {
     require_ready(&user)?;
     Ok(Json(notes::backlinks(
         &state.vault_dir(&user.username),
-        &path,
+        &id,
     )?))
 }
 
@@ -414,7 +421,7 @@ async fn live_socket(mut socket: WebSocket, state: AppState, user: User) {
         }
     }
     if !client_id.is_empty() {
-        state.live.disconnect(user.id, &client_id);
+        state.live.disconnect_conn(user.id, &client_id, Some(&tx));
     }
 }
 
@@ -444,7 +451,7 @@ fn handle_live_text(
                 return;
             }
             if !client_id.is_empty() && client_id != id {
-                state.live.disconnect(user.id, client_id);
+                state.live.disconnect_conn(user.id, client_id, Some(tx));
             }
             *client_id = id.to_string();
             state.live.connect(user.id, client_id, tx.clone());
@@ -455,14 +462,14 @@ fn handle_live_text(
                 error: "hello first".into(),
             });
         }
-        ClientMsg::Open { path, content } => match notes::normalize_note_path(&path) {
-            Ok(path) => {
-                let disk = notes::get_note(&state.vault_dir(&user.username), &path)
+        ClientMsg::Open { path, content } => match notes::normalize_note_id(&path) {
+            Ok(id) => {
+                let disk = notes::get_note(&state.vault_dir(&user.username), &id)
                     .ok()
                     .map(|n| n.content);
                 state
                     .live
-                    .open(user.id, client_id, &path, disk.as_deref(), &content);
+                    .open(user.id, client_id, &id, disk.as_deref(), &content);
             }
             Err(err) => {
                 let _ = tx.send(ServerMsg::Error {
@@ -480,13 +487,13 @@ fn handle_live_text(
             from,
             to,
             insert,
-        } => match notes::normalize_note_path(&path) {
-            Ok(path) => {
+        } => match notes::normalize_note_id(&path) {
+            Ok(id) => {
                 if let Some(persist) = state.live.change(
                     user.id,
                     client_id,
                     live::Change {
-                        path,
+                        path: id,
                         rev,
                         content,
                         from,
@@ -507,9 +514,9 @@ fn handle_live_text(
             path,
             base,
             content,
-        } => match notes::normalize_note_path(&path) {
-            Ok(path) => {
-                if let Some(persist) = state.live.push(user.id, client_id, &path, &base, &content) {
+        } => match notes::normalize_note_id(&path) {
+            Ok(id) => {
+                if let Some(persist) = state.live.push(user.id, client_id, &id, &base, &content) {
                     schedule_persist(state.clone(), user.clone(), persist);
                 }
             }

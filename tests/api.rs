@@ -247,15 +247,16 @@ async fn daily_crud_list_search_backlinks() {
         .call(h.authed(Method::GET, "/api/notes/daily/2026-08-22", &cookie, None))
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["path"], "2026-08-22");
+    assert_eq!(body["title"], "2026-08-22");
     assert!(body["content"].as_str().unwrap().contains("2026-08-22"));
+    let daily_id = body["id"].as_str().unwrap().to_string();
 
     let (status, _, _) = h
         .call(h.authed(
             Method::PUT,
             "/api/notes/daily/2026-08-22",
             &cookie,
-            Some(json!({ "content": "# 2026-08-22\n\nsee [[ideas/one]]\n" })),
+            Some(json!({ "content": "# 2026-08-22\n\nsee [[One]]\n" })),
         ))
         .await;
     assert_eq!(status, StatusCode::OK);
@@ -265,35 +266,38 @@ async fn daily_crud_list_search_backlinks() {
             Method::POST,
             "/api/notes",
             &cookie,
-            Some(json!({ "path": "ideas/one", "content": "# One\n\nhello searchterm\n" })),
+            Some(json!({ "title": "One", "folder": "ideas", "content": "# One\n\nhello searchterm\n" })),
         ))
         .await;
     assert_eq!(status, StatusCode::CREATED);
-    assert_eq!(body["path"], "ideas/one");
+    assert_eq!(body["title"], "One");
+    assert_eq!(body["folder"], "ideas");
+    let one_id = body["id"].as_str().unwrap().to_string();
 
-    let (status, _, _) = h
+    let (status, _, body) = h
         .call(h.authed(
             Method::POST,
             "/api/notes",
             &cookie,
-            Some(json!({ "path": "ideas/one" })),
+            Some(json!({ "title": "one" })),
         ))
         .await;
     assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["id"], one_id);
 
     let (status, _, body) = h
         .call(h.authed(
             Method::POST,
             "/api/notes",
             &cookie,
-            Some(json!({ "path": "work/plan" })),
+            Some(json!({ "title": "plan", "folder": "work" })),
         ))
         .await;
     assert_eq!(status, StatusCode::CREATED);
-    assert!(body["content"].as_str().unwrap().starts_with("# plan\n"));
+    assert_eq!(body["title"], "plan");
 
     let (status, _, body) = h
-        .call(h.authed(Method::GET, "/api/notes/ideas/one", &cookie, None))
+        .call(h.authed(Method::GET, &format!("/api/notes/{one_id}"), &cookie, None))
         .await;
     assert_eq!(status, StatusCode::OK);
     assert!(body["content"].as_str().unwrap().contains("searchterm"));
@@ -308,24 +312,29 @@ async fn daily_crud_list_search_backlinks() {
         .call(h.authed(Method::GET, "/api/search?q=searchterm", &cookie, None))
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body[0]["path"], "ideas/one");
+    assert_eq!(body[0]["id"], one_id);
 
     let (status, _, body) = h
         .call(h.authed(Method::GET, "/api/notes/title-search?q=one", &cookie, None))
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body[0]["path"], "ideas/one");
+    assert_eq!(body[0]["id"], one_id);
 
     let (status, _, body) = h
-        .call(h.authed(Method::GET, "/api/backlinks/ideas/one", &cookie, None))
+        .call(h.authed(
+            Method::GET,
+            &format!("/api/backlinks/{one_id}"),
+            &cookie,
+            None,
+        ))
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body[0]["path"], "2026-08-22");
+    assert_eq!(body[0]["id"], daily_id);
 
     let (status, _, _) = h
         .call(h.authed(
             Method::PUT,
-            "/api/notes/ideas/one",
+            &format!("/api/notes/{one_id}"),
             &cookie,
             Some(json!({ "content": "# One\n\nupdated\n" })),
         ))
@@ -339,16 +348,18 @@ async fn isolation_and_traversal() {
     let alice = h.login("alice", "password1").await;
     let bob = h.login("bob", "password1").await;
 
-    h.call(h.authed(
-        Method::PUT,
-        "/api/notes/secret",
-        &alice,
-        Some(json!({ "content": "alice only" })),
-    ))
-    .await;
+    let (_, _, created) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &alice,
+            Some(json!({ "title": "secret", "content": "alice only" })),
+        ))
+        .await;
+    let secret_id = created["id"].as_str().unwrap();
 
     let (status, _, _) = h
-        .call(h.authed(Method::GET, "/api/notes/secret", &bob, None))
+        .call(h.authed(Method::GET, &format!("/api/notes/{secret_id}"), &bob, None))
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 
@@ -374,34 +385,40 @@ async fn favorites_and_recent_notes_are_per_user() {
     let alice = h.login("alice", "password1").await;
     let bob = h.login("bob", "password1").await;
 
-    let (status, _, _) = h
+    let (status, _, body) = h
         .call(h.authed(
             Method::POST,
             "/api/notes",
             &alice,
-            Some(json!({ "path": "ideas/one", "content": "# One\n" })),
+            Some(json!({ "title": "One", "folder": "ideas", "content": "# One\n" })),
         ))
         .await;
     assert_eq!(status, StatusCode::CREATED);
+    let one_id = body["id"].as_str().unwrap().to_string();
     let (status, _, _) = h
-        .call(h.authed(Method::GET, "/api/notes/ideas/one", &alice, None))
+        .call(h.authed(Method::GET, &format!("/api/notes/{one_id}"), &alice, None))
         .await;
     assert_eq!(status, StatusCode::OK);
 
     let (status, _, _) = h
-        .call(h.authed(Method::PUT, "/api/favorites/ideas/one", &alice, None))
+        .call(h.authed(
+            Method::PUT,
+            &format!("/api/favorites/{one_id}"),
+            &alice,
+            None,
+        ))
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
     let (status, _, body) = h
         .call(h.authed(Method::GET, "/api/favorites", &alice, None))
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body[0]["path"], "ideas/one");
+    assert_eq!(body[0]["id"], one_id);
     let (status, _, body) = h
         .call(h.authed(Method::GET, "/api/notes/recent", &alice, None))
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body[0]["path"], "ideas/one");
+    assert_eq!(body[0]["id"], one_id);
 
     let (status, _, body) = h
         .call(h.authed(Method::GET, "/api/favorites", &bob, None))
@@ -409,7 +426,12 @@ async fn favorites_and_recent_notes_are_per_user() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, json!([]));
     let (status, _, _) = h
-        .call(h.authed(Method::DELETE, "/api/favorites/ideas/one", &alice, None))
+        .call(h.authed(
+            Method::DELETE,
+            &format!("/api/favorites/{one_id}"),
+            &alice,
+            None,
+        ))
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 }

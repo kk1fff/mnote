@@ -53,32 +53,37 @@ describe("NoteView", () => {
     live.connected = false;
   });
 
-  it("loads a daily note and saves edits", async () => {
-    vi.mocked(api.daily).mockResolvedValue({
-      path: "2026-08-22",
+  it("loads a note and saves edits", async () => {
+    vi.mocked(api.getNote).mockResolvedValue({
+      id: "n1",
+      title: "2026-08-22",
       content: "# 2026-08-22\n\n",
       modified_at: "",
     });
-    vi.mocked(api.putDaily).mockResolvedValue({
-      path: "2026-08-22",
+    vi.mocked(api.putNote).mockResolvedValue({
+      id: "n1",
+      title: "2026-08-22",
       content: "edited",
       modified_at: "",
     });
     const router = createRouter({
       history: createWebHistory(),
-      routes: [{ path: "/n/:path(.*)", component: NoteView }],
+      routes: [
+        { path: "/n/:id", component: NoteView },
+        { path: "/today", component: { template: "<div />" } },
+      ],
     });
-    await router.push("/n/2026-08-22");
+    await router.push("/n/n1");
     await router.isReady();
     const wrapper = mount(NoteView, {
       global: { plugins: [router] },
     });
     await flushPromises();
-    expect(api.daily).toHaveBeenCalledWith("2026-08-22");
+    expect(api.getNote).toHaveBeenCalledWith("n1");
     await wrapper.get(".fake-editor").setValue("edited");
     await wrapper.get('[data-testid="save"]').trigger("click");
     await flushPromises();
-    expect(api.putDaily).toHaveBeenCalled();
+    expect(api.putNote).toHaveBeenCalledWith("n1", "edited");
     await wrapper.get('[data-testid="preview-toggle"]').trigger("click");
     expect(wrapper.find(".preview").exists()).toBe(true);
   });
@@ -86,21 +91,27 @@ describe("NoteView", () => {
   it("autosaves after idle while live is connected", async () => {
     vi.useFakeTimers();
     live.connected = true;
-    vi.mocked(api.daily).mockResolvedValue({
-      path: "2026-08-22",
+    vi.mocked(api.putNote).mockClear();
+    vi.mocked(api.getNote).mockResolvedValue({
+      id: "n1",
+      title: "2026-08-22",
       content: "# 2026-08-22\n\n",
       modified_at: "",
     });
-    vi.mocked(api.putDaily).mockResolvedValue({
-      path: "2026-08-22",
+    vi.mocked(api.putNote).mockResolvedValue({
+      id: "n1",
+      title: "2026-08-22",
       content: "edited",
       modified_at: "",
     });
     const router = createRouter({
       history: createWebHistory(),
-      routes: [{ path: "/n/:path(.*)", component: NoteView }],
+      routes: [
+        { path: "/n/:id", component: NoteView },
+        { path: "/today", component: { template: "<div />" } },
+      ],
     });
-    await router.push("/n/2026-08-22");
+    await router.push("/n/n1");
     await router.isReady();
     const wrapper = mount(NoteView, { global: { plugins: [router] } });
     await flushPromises();
@@ -108,21 +119,26 @@ describe("NoteView", () => {
     expect(wrapper.text()).toContain("Editing");
     await vi.advanceTimersByTimeAsync(800);
     await flushPromises();
-    expect(api.putDaily).toHaveBeenCalled();
+    expect(api.putNote).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain("Saved");
   });
 
-  it("opens a missing page as a new note", async () => {
+  it("shows an error when a note is missing", async () => {
     const { ApiError } = await import("../api");
     vi.mocked(api.getNote).mockRejectedValue(new ApiError(404, "not_found"));
     const router = createRouter({
       history: createWebHistory(),
-      routes: [{ path: "/n/:path(.*)", component: NoteView }],
+      routes: [
+        { path: "/n/:id", component: NoteView },
+        { path: "/today", component: NoteView },
+      ],
     });
-    await router.push("/n/ideas/one");
+    await router.push("/n/missing");
     await router.isReady();
-    mount(NoteView, { global: { plugins: [router] } });
+    const wrapper = mount(NoteView, { global: { plugins: [router] } });
     await flushPromises();
-    expect(api.getNote).toHaveBeenCalledWith("ideas/one");
+    expect(api.getNote).toHaveBeenCalledWith("missing");
+    expect(router.currentRoute.value.path).toBe("/n/missing");
+    expect(wrapper.text()).toContain("Note not found");
   });
 });
