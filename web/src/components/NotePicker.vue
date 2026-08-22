@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api, ApiError, type NoteMeta } from "../api";
 import { normalizeNotePath, noteHref } from "../lib/paths";
@@ -10,20 +10,46 @@ const query = ref("");
 const results = ref<NoteMeta[]>([]);
 const open = ref(false);
 const error = ref("");
+const selected = ref(0);
 const input = ref<HTMLInputElement | null>(null);
+const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const createShortcut = mac ? "⌘↵" : "Ctrl+↵";
 let searchTimer: number | undefined;
 let searchId = 0;
+
+const trimmed = computed(() => query.value.trim());
+const folderQuery = computed(() => (trimmed.value.endsWith("/") ? trimmed.value.toLowerCase() : ""));
+const shown = computed(() => {
+  if (!folderQuery.value) return results.value;
+  return results.value.filter((note) => note.path.toLowerCase().startsWith(folderQuery.value));
+});
+const createPath = computed(() => (folderQuery.value ? null : normalizeNotePath(query.value)));
+const canCreate = computed(
+  () => !!createPath.value && !results.value.some((note) => note.path === createPath.value),
+);
+const createLabel = computed(() => createPath.value ?? trimmed.value);
+const maxIndex = computed(() => {
+  if (shown.value.length && canCreate.value) return shown.value.length;
+  if (shown.value.length) return shown.value.length - 1;
+  return canCreate.value ? 0 : -1;
+});
 
 function show() {
   open.value = true;
   query.value = "";
   results.value = [];
   error.value = "";
+  selected.value = 0;
   void nextTick(() => input.value?.focus());
 }
 
 function close() {
   open.value = false;
+}
+
+function clampSelected() {
+  selected.value = Math.min(Math.max(selected.value, 0), Math.max(maxIndex.value, 0));
+  if (maxIndex.value < 0) selected.value = -1;
 }
 
 async function select(note: NoteMeta) {
@@ -32,20 +58,16 @@ async function select(note: NoteMeta) {
 }
 
 async function create() {
-  const path = normalizeNotePath(query.value);
-  if (!path) {
-    error.value = "Enter a note name or path";
-    return;
-  }
+  if (!canCreate.value || !createPath.value) return;
   error.value = "";
   try {
-    await api.createNote(path);
+    await api.createNote(createPath.value);
     emit("created");
     close();
-    await router.push(noteHref(path));
+    await router.push(noteHref(createPath.value));
   } catch (err) {
     if (err instanceof ApiError && err.status === 409) {
-      await router.push(noteHref(path));
+      await router.push(noteHref(createPath.value));
       close();
       return;
     }
@@ -54,26 +76,64 @@ async function create() {
 }
 
 function submit() {
-  if (results.value.length) void select(results.value[0]);
-  else void create();
+  if (selected.value >= 0 && selected.value < shown.value.length) {
+    void select(shown.value[selected.value]);
+    return;
+  }
+  if (canCreate.value) void create();
+}
+
+function onKey(event: KeyboardEvent) {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    close();
+    return;
+  }
+  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+    event.preventDefault();
+    void create();
+    return;
+  }
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    if (maxIndex.value >= 0) selected.value = Math.min(selected.value + 1, maxIndex.value);
+    return;
+  }
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    selected.value = Math.max(selected.value - 1, 0);
+  }
 }
 
 watch(query, () => {
   window.clearTimeout(searchTimer);
   const requestId = ++searchId;
-  const q = query.value.trim();
+  error.value = "";
+  const q = trimmed.value;
   if (!q) {
     results.value = [];
+    selected.value = -1;
     return;
   }
   searchTimer = window.setTimeout(async () => {
     try {
       const notes = await api.titleSearch(q);
-      if (requestId === searchId) results.value = notes;
+      if (requestId === searchId) {
+        results.value = notes;
+        selected.value = 0;
+        clampSelected();
+      }
     } catch {
-      if (requestId === searchId) results.value = [];
+      if (requestId === searchId) {
+        results.value = [];
+        selected.value = canCreate.value ? 0 : -1;
+      }
     }
   }, 120);
+});
+
+watch([shown, canCreate], () => {
+  if (selected.value > maxIndex.value || selected.value < 0) clampSelected();
 });
 
 defineExpose({ show });
@@ -82,27 +142,48 @@ defineExpose({ show });
 <template>
   <div v-if="open" class="picker-scrim" @click.self="close">
     <section class="note-picker" role="dialog" aria-modal="true" aria-label="Open or create note">
-      <form @submit.prevent="submit">
+      <form class="picker-field" @submit.prevent="submit">
+        <div class="picker-mirror" aria-hidden="true">
+          <span class="picker-spacer">{{ query }}</span>
+          <span v-if="canCreate" class="picker-hint"> {{ createShortcut }} create</span>
+        </div>
         <input
           ref="input"
           v-model="query"
           type="search"
           placeholder="Search or create a note"
           aria-label="Search or create a note"
-          @keydown.esc.prevent="close"
+          @keydown="onKey"
         />
       </form>
       <p v-if="error" class="error picker-message">{{ error }}</p>
-      <ul v-else-if="results.length" class="picker-results">
-        <li v-for="note in results" :key="note.path">
-          <button type="button" @click="select(note)">
-            <span>{{ note.title }}</span>
-            <small>{{ note.path }}</small>
-          </button>
-        </li>
-      </ul>
-      <p v-else-if="query.trim()" class="picker-message">Create “{{ query.trim() }}”</p>
-      <p v-else class="muted picker-message">Type a title or path to search or create a note</p>
+      <template v-else>
+        <ul v-if="shown.length" class="picker-results">
+          <li v-for="(note, index) in shown" :key="note.path">
+            <button type="button" :class="{ active: selected === index }" @click="select(note)">
+              <span>{{ note.title }}</span>
+              <small>{{ note.path }}</small>
+            </button>
+          </li>
+        </ul>
+        <p v-else-if="folderQuery && trimmed" class="muted picker-message">
+          No notes in {{ trimmed }}
+        </p>
+        <p v-else-if="!trimmed" class="muted picker-message">
+          Type a title or path to search or create a note
+        </p>
+        <button
+          v-if="canCreate"
+          type="button"
+          class="picker-create"
+          :class="{ active: selected === shown.length || !shown.length }"
+          @click="create"
+        >
+          <span>Create “{{ createLabel }}”</span>
+          <small>{{ createShortcut }}</small>
+        </button>
+        <p v-else-if="folderQuery" class="muted picker-message">Type a name to create in {{ trimmed }}</p>
+      </template>
     </section>
   </div>
 </template>
