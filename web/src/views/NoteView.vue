@@ -204,7 +204,7 @@ watch(content, () => {
   if (!loadedPath || applyingRemote) return;
   status.value = live.connected ? "Editing" : "Offline — draft saved";
   saveDraft(loadedPath, base, content.value);
-  if (!live.connected) queueSave();
+  queueSave();
 });
 
 onMounted(() => {

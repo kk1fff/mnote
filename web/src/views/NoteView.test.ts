@@ -1,7 +1,8 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
+import { live } from "../live";
 import NoteView from "./NoteView.vue";
 
 vi.mock("../api", async () => {
@@ -47,6 +48,11 @@ vi.mock("../components/Editor.vue", () => ({
 }));
 
 describe("NoteView", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    live.connected = false;
+  });
+
   it("loads a daily note and saves edits", async () => {
     vi.mocked(api.daily).mockResolvedValue({
       path: "2026-08-22",
@@ -75,6 +81,35 @@ describe("NoteView", () => {
     expect(api.putDaily).toHaveBeenCalled();
     await wrapper.get('[data-testid="preview-toggle"]').trigger("click");
     expect(wrapper.find(".preview").exists()).toBe(true);
+  });
+
+  it("autosaves after idle while live is connected", async () => {
+    vi.useFakeTimers();
+    live.connected = true;
+    vi.mocked(api.daily).mockResolvedValue({
+      path: "2026-08-22",
+      content: "# 2026-08-22\n\n",
+      modified_at: "",
+    });
+    vi.mocked(api.putDaily).mockResolvedValue({
+      path: "2026-08-22",
+      content: "edited",
+      modified_at: "",
+    });
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [{ path: "/n/:path(.*)", component: NoteView }],
+    });
+    await router.push("/n/2026-08-22");
+    await router.isReady();
+    const wrapper = mount(NoteView, { global: { plugins: [router] } });
+    await flushPromises();
+    await wrapper.get(".fake-editor").setValue("edited");
+    expect(wrapper.text()).toContain("Editing");
+    await vi.advanceTimersByTimeAsync(800);
+    await flushPromises();
+    expect(api.putDaily).toHaveBeenCalled();
+    expect(wrapper.text()).toContain("Saved");
   });
 
   it("opens a missing page as a new note", async () => {
