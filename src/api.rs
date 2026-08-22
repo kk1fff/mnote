@@ -155,17 +155,12 @@ async fn change_password(
     State(state): State<AppState>,
     Auth(user): Auth,
     Json(body): Json<PasswordBody>,
-) -> Result<Response, AppError> {
-    db::replace_password(&state, &user.username, &body.password)?;
-    let token = db::create_session(&state, user.id)?;
-    let mut res = Json(MeBody {
+) -> Result<Json<MeBody>, AppError> {
+    db::replace_password(&state, &user.username, body.password.trim())?;
+    Ok(Json(MeBody {
         username: user.username,
         must_change_password: false,
-    })
-    .into_response();
-    res.headers_mut()
-        .insert(SET_COOKIE, session_cookie(&token, false));
-    Ok(res)
+    }))
 }
 
 async fn list_notes(

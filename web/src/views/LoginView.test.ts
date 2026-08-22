@@ -65,4 +65,14 @@ describe("LoginView", () => {
     await flushPromises();
     expect(wrapper.text()).toContain("Invalid username or password");
   });
+
+  it("shows a server-down message when the API is unreachable", async () => {
+    login.mockRejectedValue(new TypeError("Failed to fetch"));
+    const { wrapper } = await make();
+    await wrapper.get('input[name="username"]').setValue("alice");
+    await wrapper.get('input[name="password"]').setValue("password1");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Can't reach the server");
+  });
 });

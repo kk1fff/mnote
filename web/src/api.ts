@@ -52,7 +52,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     return undefined as T;
   }
   const text = await res.text();
-  const data = text ? (JSON.parse(text) as unknown) : null;
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text) as unknown;
+    } catch {
+      throw new ApiError(res.status, "request_failed");
+    }
+  }
   if (!res.ok) {
     const code =
       data && typeof data === "object" && "error" in data

@@ -209,7 +209,7 @@ async fn must_change_password_blocks_notes() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["error"], "choose a different password");
 
-    let (status, headers, _) = h
+    let (status, _, _) = h
         .call(h.authed(
             Method::POST,
             "/api/auth/password",
@@ -218,9 +218,22 @@ async fn must_change_password_blocks_notes() {
         ))
         .await;
     assert_eq!(status, StatusCode::OK);
-    let cookie = session_cookie(&headers);
     let (status, _, _) = h
         .call(h.authed(Method::GET, "/api/notes", &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _, _) = h
+        .call(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/auth/login")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "username": "cara", "password": "newpass12" }).to_string(),
+                ))
+                .unwrap(),
+        )
         .await;
     assert_eq!(status, StatusCode::OK);
 }
@@ -406,7 +419,7 @@ async fn change_password_and_short_rejected() {
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 
-    let (status, headers, _) = h
+    let (status, _, _) = h
         .call(h.authed(
             Method::POST,
             "/api/auth/password",
@@ -415,10 +428,9 @@ async fn change_password_and_short_rejected() {
         ))
         .await;
     assert_eq!(status, StatusCode::OK);
-    let new_cookie = session_cookie(&headers);
     assert!(!h.login("alice", "newerpass").await.is_empty());
     let (status, _, _) = h
-        .call(h.authed(Method::GET, "/api/auth/me", &new_cookie, None))
+        .call(h.authed(Method::GET, "/api/auth/me", &cookie, None))
         .await;
     assert_eq!(status, StatusCode::OK);
 }

@@ -21,7 +21,7 @@ async function submit() {
     return;
   }
   try {
-    const me = await api.changePassword(password.value);
+    const me = await api.changePassword(password.value.trim());
     currentUser.value = me;
     await router.replace("/");
   } catch (err) {

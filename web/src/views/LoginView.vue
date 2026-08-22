@@ -13,7 +13,7 @@ const router = useRouter();
 async function submit() {
   error.value = "";
   try {
-    const me = await login(username.value.trim(), password.value);
+    const me = await login(username.value.trim(), password.value.trim());
     if (me.must_change_password) {
       await router.replace("/password");
       return;
@@ -21,7 +21,10 @@ async function submit() {
     const next = typeof route.query.next === "string" ? route.query.next : "/";
     await router.replace(next);
   } catch (err) {
-    error.value = err instanceof ApiError ? "Invalid username or password" : "Login failed";
+    error.value =
+      err instanceof ApiError && err.status === 401
+        ? "Invalid username or password"
+        : "Can't reach the server. Is mnote serve running on :3000?";
   }
 }
 </script>

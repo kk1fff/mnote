@@ -105,6 +105,7 @@ pub fn list_users(state: &AppState) -> Result<Vec<UserSummary>, AppError> {
 pub fn reset_password(state: &AppState, username: &str) -> Result<String, AppError> {
     let password = generate_password();
     set_password(state, username, &password, true)?;
+    delete_user_sessions(state, username)?;
     Ok(password)
 }
 
@@ -160,6 +161,14 @@ pub fn set_password(
     if n == 0 {
         return Err(AppError::NotFound);
     }
+    Ok(())
+}
+
+pub fn delete_user_sessions(state: &AppState, username: &str) -> Result<(), AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
     conn.execute(
         "DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE username = ?1)",
         params![username],
@@ -168,6 +177,8 @@ pub fn set_password(
 }
 
 pub fn authenticate(state: &AppState, username: &str, password: &str) -> Result<User, AppError> {
+    let username = username.trim();
+    let password = password.trim();
     let conn = state
         .db
         .lock()

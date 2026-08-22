@@ -41,6 +41,16 @@ describe("api", () => {
     expect(err).toMatchObject({ status: 401, code: "unauthorized" });
   });
 
+  it("throws ApiError on non-json error bodies", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("<html>502</html>", { status: 502 })),
+    );
+    const err = await api.me().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 502, code: "request_failed" });
+  });
+
   it("covers remaining endpoints", async () => {
     const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       if (String(url).startsWith("/api/search")) return jsonResponse(200, []);
