@@ -26,7 +26,7 @@ export async function loginFresh(page: Page, username: string) {
 }
 
 export async function openPicker(page: Page) {
-  await page.getByRole("button", { name: "New note" }).click();
+  await page.getByRole("button", { name: "Go to…" }).click();
   await expect(page.getByTestId("picker")).toBeVisible();
 }
 

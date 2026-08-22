@@ -9,7 +9,6 @@ import { currentUser, logout } from "../session";
 import NoteTree from "./NoteTree.vue";
 
 const notes = ref<NoteMeta[]>([]);
-const q = ref("");
 const collapsed = ref(new Set<string>());
 const route = useRoute();
 const router = useRouter();
@@ -39,12 +38,6 @@ function onLive(event: LiveEvent) {
 
 async function load() {
   notes.value = await api.listNotes();
-}
-
-function search() {
-  const query = q.value.trim();
-  if (!query) return;
-  void router.push({ path: "/search", query: { q: query } });
 }
 
 function toggle(path: string) {
@@ -82,10 +75,7 @@ defineExpose({ load });
       <strong>mnote</strong>
       <span>{{ currentUser?.username }}</span>
     </div>
-    <form class="search" @submit.prevent="search">
-      <input v-model="q" type="search" placeholder="Search notes" aria-label="Search notes" />
-    </form>
-    <button class="new-note-button" type="button" @click="emit('open-picker')">New note</button>
+    <button class="new-note-button" type="button" @click="emit('open-picker')">Go to…</button>
     <nav class="shortcuts" aria-label="Quick access">
       <RouterLink to="/today">Today</RouterLink>
       <RouterLink to="/recent">Recent</RouterLink>

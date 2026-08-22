@@ -155,21 +155,6 @@ test("recent lists an opened note", async ({ page }) => {
   await expect(page.locator(".results")).toContainText(title);
 });
 
-test("sidebar search finds note body", async ({ page }) => {
-  await page.goto("/");
-  await page.waitForURL(/\/n\//);
-  const title = uid("Srch");
-  const needle = uid("needle");
-  await createNote(page, title);
-  await typeInEditor(page, needle);
-  await page.getByTestId("save").click();
-  await expect(page.getByTestId("note-status")).toHaveText("Saved");
-  await page.getByLabel("Search notes").fill(needle);
-  await page.getByLabel("Search notes").press("Enter");
-  await page.waitForURL(new RegExp(`/search\\?q=${encodeURIComponent(needle)}`));
-  await expect(page.getByRole("main")).toContainText(title);
-});
-
 test("tree collapse and open a note", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);

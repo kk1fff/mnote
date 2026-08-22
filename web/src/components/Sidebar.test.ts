@@ -35,7 +35,7 @@ vi.mock("../session", () => ({
 }));
 
 describe("Sidebar", () => {
-  it("lists notes and searches", async () => {
+  it("lists notes and signs out", async () => {
     vi.mocked(api.listNotes).mockResolvedValue([
       { id: "o1", title: "One", folder: "ideas", modified_at: "" },
     ]);
@@ -56,10 +56,7 @@ describe("Sidebar", () => {
     await flushPromises();
     expect(wrapper.text()).toContain("ideas");
     expect(wrapper.text()).toContain("One");
-    await wrapper.get('input[type="search"]').setValue("hello");
-    await wrapper.get("form.search").trigger("submit");
-    await flushPromises();
-    expect(router.currentRoute.value.fullPath).toBe("/search?q=hello");
+    expect(wrapper.get(".new-note-button").text()).toBe("Go to…");
     await wrapper.get(".sidebar-footer button.linkish").trigger("click");
     await flushPromises();
     expect(logout).toHaveBeenCalled();
