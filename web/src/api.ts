@@ -94,6 +94,10 @@ export const api = {
       body: JSON.stringify({ password }),
     }),
   listNotes: () => request<NoteMeta[]>("/api/notes"),
+  recentNotes: () => request<NoteMeta[]>("/api/notes/recent"),
+  favorites: () => request<NoteMeta[]>("/api/favorites"),
+  favorite: (path: string) => request<void>(`/api/favorites/${encodeNotePath(path)}`, { method: "PUT" }),
+  unfavorite: (path: string) => request<void>(`/api/favorites/${encodeNotePath(path)}`, { method: "DELETE" }),
   getNote: (path: string) => request<Note>(`/api/notes/${encodeNotePath(path)}`),
   putNote: (path: string, content: string) =>
     request<Note>(`/api/notes/${encodeNotePath(path)}`, {

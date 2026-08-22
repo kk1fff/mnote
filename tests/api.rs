@@ -363,6 +363,52 @@ async fn isolation_and_traversal() {
 }
 
 #[tokio::test]
+async fn favorites_and_recent_notes_are_per_user() {
+    let h = Harness::new();
+    let alice = h.login("alice", "password1").await;
+    let bob = h.login("bob", "password1").await;
+
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &alice,
+            Some(json!({ "path": "ideas/one", "content": "# One\n" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _, _) = h
+        .call(h.authed(Method::GET, "/api/notes/ideas/one", &alice, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _, _) = h
+        .call(h.authed(Method::PUT, "/api/favorites/ideas/one", &alice, None))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/favorites", &alice, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body[0]["path"], "ideas/one");
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/notes/recent", &alice, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body[0]["path"], "ideas/one");
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/favorites", &bob, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!([]));
+    let (status, _, _) = h
+        .call(h.authed(Method::DELETE, "/api/favorites/ideas/one", &alice, None))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
 async fn assets() {
     let h = Harness::new();
     let cookie = h.login("alice", "password1").await;

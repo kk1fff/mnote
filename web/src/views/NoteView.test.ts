@@ -15,6 +15,9 @@ vi.mock("../api", async () => {
       putNote: vi.fn(),
       putDaily: vi.fn(),
       backlinks: vi.fn().mockResolvedValue([]),
+      favorites: vi.fn().mockResolvedValue([]),
+      favorite: vi.fn(),
+      unfavorite: vi.fn(),
       logout: vi.fn(),
     },
   };

@@ -19,6 +19,7 @@ const preview = ref(false);
 const status = ref("");
 const links = ref<NoteMeta[]>([]);
 const remotes = ref<RemoteCaret[]>([]);
+const isFavorite = ref(false);
 const shell = ref<{ load: () => Promise<void> } | null>(null);
 let saveTimer: number | undefined;
 let loadedPath = "";
@@ -60,6 +61,7 @@ async function load() {
   }
   live.open(p, content.value);
   links.value = await api.backlinks(p).catch(() => []);
+  isFavorite.value = await api.favorites().then((notes) => notes.some((note) => note.path === p)).catch(() => false);
 }
 
 function applyRemote(next: string) {
@@ -167,6 +169,18 @@ async function save() {
   }
 }
 
+async function toggleFavorite() {
+  const p = loadedPath || path.value;
+  if (!p) return;
+  try {
+    if (isFavorite.value) await api.unfavorite(p);
+    else await api.favorite(p);
+    isFavorite.value = !isFavorite.value;
+  } catch {
+    status.value = "Could not update favorite";
+  }
+}
+
 function queueSave() {
   window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
@@ -212,6 +226,9 @@ onBeforeUnmount(() => {
         <h1>{{ path }}</h1>
         <div class="actions">
           <span class="muted">{{ status }}</span>
+          <button type="button" :aria-pressed="isFavorite" @click="toggleFavorite">
+            {{ isFavorite ? "Unfavorite" : "Favorite" }}
+          </button>
           <button type="button" data-testid="preview-toggle" @click="preview = !preview">
             {{ preview ? "Source" : "Preview" }}
           </button>

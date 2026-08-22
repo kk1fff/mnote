@@ -80,14 +80,48 @@ button.linkish {
   margin-bottom: 1rem;
 }
 
-.sidebar nav {
+.sidebar .brand span {
+  color: #78716c;
+  font-size: 0.9rem;
+}
+
+.new-note-button {
+  width: 100%;
+  margin-top: 0.6rem;
+}
+
+.sidebar .shortcuts,
+.sidebar-footer {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   margin: 0.75rem 0 1rem;
 }
 
+.sidebar-footer {
+  margin: 1rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid #d6d3d1;
+}
+
+.note-library {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.section-label {
+  margin: 0 0 0.35rem;
+  color: #78716c;
+  font-size: 0.75rem;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .note-tree {
+  flex: 1;
   min-height: 0;
   overflow: auto;
 }

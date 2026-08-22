@@ -10,7 +10,7 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, COOKIE, SET_COOKIE};
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -27,7 +27,10 @@ pub fn router(state: AppState) -> Router {
         .route("/live", get(live_ws))
         .route("/notes", get(list_notes).post(create_note))
         .route("/notes/daily/{date}", get(daily_note).put(put_daily_note))
+        .route("/notes/recent", get(recent_notes))
         .route("/notes/{*path}", get(get_note).put(put_note))
+        .route("/favorites", get(favorites))
+        .route("/favorites/{*path}", put(favorite).delete(unfavorite))
         .route("/search", get(search_notes))
         .route("/backlinks/{*path}", get(backlinks))
         .route("/assets", post(upload_asset))
@@ -205,10 +208,9 @@ async fn daily_note(
     Path(date): Path<String>,
 ) -> Result<Json<notes::Note>, AppError> {
     require_ready(&user)?;
-    Ok(Json(notes::get_or_create_daily(
-        &state.vault_dir(&user.username),
-        &date,
-    )?))
+    let note = notes::get_or_create_daily(&state.vault_dir(&user.username), &date)?;
+    db::record_note_open(&state, user.id, &note.path)?;
+    Ok(Json(note))
 }
 
 async fn put_daily_note(
@@ -235,10 +237,63 @@ async fn get_note(
     Path(path): Path<String>,
 ) -> Result<Json<notes::Note>, AppError> {
     require_ready(&user)?;
-    Ok(Json(notes::get_note(
-        &state.vault_dir(&user.username),
-        &path,
-    )?))
+    let note = notes::get_note(&state.vault_dir(&user.username), &path)?;
+    db::record_note_open(&state, user.id, &note.path)?;
+    Ok(Json(note))
+}
+
+fn metas_for_paths(vault: &std::path::Path, paths: Vec<String>) -> Vec<notes::NoteMeta> {
+    paths
+        .into_iter()
+        .filter_map(|path| notes::note_meta(vault, &path).ok())
+        .collect()
+}
+
+async fn recent_notes(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+) -> Result<Json<Vec<notes::NoteMeta>>, AppError> {
+    require_ready(&user)?;
+    let vault = state.vault_dir(&user.username);
+    Ok(Json(metas_for_paths(
+        &vault,
+        db::recent_paths(&state, user.id)?,
+    )))
+}
+
+async fn favorites(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+) -> Result<Json<Vec<notes::NoteMeta>>, AppError> {
+    require_ready(&user)?;
+    let vault = state.vault_dir(&user.username);
+    Ok(Json(metas_for_paths(
+        &vault,
+        db::favorite_paths(&state, user.id)?,
+    )))
+}
+
+async fn favorite(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(path): Path<String>,
+) -> Result<StatusCode, AppError> {
+    require_ready(&user)?;
+    let path = notes::normalize_note_path(&path)?;
+    notes::get_note(&state.vault_dir(&user.username), &path)?;
+    db::set_favorite(&state, user.id, &path, true)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn unfavorite(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(path): Path<String>,
+) -> Result<StatusCode, AppError> {
+    require_ready(&user)?;
+    let path = notes::normalize_note_path(&path)?;
+    db::set_favorite(&state, user.id, &path, false)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn put_note(

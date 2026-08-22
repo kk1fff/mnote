@@ -76,6 +76,10 @@ describe("api", () => {
     await api.login("a", "b");
     await api.changePassword("password1");
     await api.listNotes();
+    await api.recentNotes();
+    await api.favorites();
+    await api.favorite("ideas/one");
+    await api.unfavorite("ideas/one");
     await api.getNote("ideas/one");
     await api.putNote("ideas/one", "hi");
     await api.createNote("ideas/two", "x");

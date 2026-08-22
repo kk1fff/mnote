@@ -38,6 +38,15 @@ pub fn init(conn: &rusqlite::Connection) -> Result<(), AppError> {
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             expires_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS user_note_state (
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            path TEXT NOT NULL,
+            favorite INTEGER NOT NULL DEFAULT 0,
+            last_opened_at TEXT,
+            PRIMARY KEY (user_id, path)
+        );
+        CREATE INDEX IF NOT EXISTS user_note_state_recent_idx
+            ON user_note_state (user_id, last_opened_at DESC);
         ",
     )?;
     Ok(())
@@ -276,6 +285,84 @@ pub fn keep_only_session(state: &AppState, user_id: i64, token: &str) -> Result<
         params![user_id, token_hash],
     )?;
     Ok(())
+}
+
+pub fn record_note_open(state: &AppState, user_id: i64, path: &str) -> Result<(), AppError> {
+    let now = Utc::now().to_rfc3339();
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    conn.execute(
+        "INSERT INTO user_note_state (user_id, path, last_opened_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(user_id, path) DO UPDATE SET last_opened_at = excluded.last_opened_at",
+        params![user_id, path, now],
+    )?;
+    Ok(())
+}
+
+pub fn set_favorite(
+    state: &AppState,
+    user_id: i64,
+    path: &str,
+    favorite: bool,
+) -> Result<(), AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    if favorite {
+        conn.execute(
+            "INSERT INTO user_note_state (user_id, path, favorite) VALUES (?1, ?2, 1)
+             ON CONFLICT(user_id, path) DO UPDATE SET favorite = 1",
+            params![user_id, path],
+        )?;
+    } else {
+        conn.execute(
+            "UPDATE user_note_state SET favorite = 0 WHERE user_id = ?1 AND path = ?2",
+            params![user_id, path],
+        )?;
+        conn.execute(
+            "DELETE FROM user_note_state
+             WHERE user_id = ?1 AND path = ?2 AND favorite = 0 AND last_opened_at IS NULL",
+            params![user_id, path],
+        )?;
+    }
+    Ok(())
+}
+
+pub fn favorite_paths(state: &AppState, user_id: i64) -> Result<Vec<String>, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    let mut stmt = conn.prepare(
+        "SELECT path FROM user_note_state
+         WHERE user_id = ?1 AND favorite = 1
+         ORDER BY last_opened_at DESC, path",
+    )?;
+    let paths = stmt
+        .query_map(params![user_id], |row| row.get(0))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)?;
+    Ok(paths)
+}
+
+pub fn recent_paths(state: &AppState, user_id: i64) -> Result<Vec<String>, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    let mut stmt = conn.prepare(
+        "SELECT path FROM user_note_state
+         WHERE user_id = ?1 AND last_opened_at IS NOT NULL
+         ORDER BY last_opened_at DESC LIMIT 20",
+    )?;
+    let paths = stmt
+        .query_map(params![user_id], |row| row.get(0))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)?;
+    Ok(paths)
 }
 
 #[cfg(test)]

@@ -121,6 +121,9 @@ Then open http://localhost:3000.
 | POST | `/api/notes` | `{ path, content? }` |
 | GET/PUT | `/api/notes/daily/:date` | daily note |
 | GET/PUT | `/api/notes/:path` | page |
+| GET | `/api/notes/recent` | recently opened notes |
+| GET | `/api/favorites` | favorite notes |
+| PUT/DELETE | `/api/favorites/:path` | favorite a note |
 | GET | `/api/search?q=` | search |
 | GET | `/api/backlinks/:path` | backlinks |
 | POST | `/api/assets` | multipart field `file` |

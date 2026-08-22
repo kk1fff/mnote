@@ -43,7 +43,7 @@ describe("Sidebar", () => {
     await wrapper.get("form.search").trigger("submit");
     await flushPromises();
     expect(router.currentRoute.value.fullPath).toBe("/search?q=hello");
-    await wrapper.get("nav button.linkish").trigger("click");
+    await wrapper.get(".sidebar-footer button.linkish").trigger("click");
     await flushPromises();
     expect(logout).toHaveBeenCalled();
     expect(router.currentRoute.value.path).toBe("/login");
@@ -67,6 +67,7 @@ describe("Sidebar", () => {
     await router.isReady();
     const wrapper = mount(Sidebar, { global: { plugins: [router] } });
     await flushPromises();
+    await wrapper.get(".new-note-button").trigger("click");
     await wrapper.get('input[aria-label="New note path"]').setValue("ideas/one");
     await wrapper.get("form.new-note").trigger("submit");
     await flushPromises();

@@ -12,6 +12,7 @@ const q = ref("");
 const newPath = ref("");
 const createError = ref("");
 const collapsed = ref(new Set<string>());
+const creating = ref(false);
 const route = useRoute();
 const router = useRouter();
 
@@ -46,6 +47,7 @@ async function create() {
     }
   }
   newPath.value = "";
+  creating.value = false;
   await load();
   await router.push(noteHref(path));
 }
@@ -76,19 +78,27 @@ defineExpose({ load });
       <span>{{ currentUser?.username }}</span>
     </div>
     <form class="search" @submit.prevent="search">
-      <input v-model="q" type="search" placeholder="Search" />
+      <input v-model="q" type="search" placeholder="Search notes" aria-label="Search notes" />
     </form>
-    <form class="new-note" @submit.prevent="create">
+    <button class="new-note-button" type="button" @click="creating = !creating">New note</button>
+    <form v-if="creating" class="new-note" @submit.prevent="create">
       <input v-model="newPath" placeholder="New note (ideas/one)" aria-label="New note path" />
     </form>
     <p v-if="createError" class="error">{{ createError }}</p>
-    <nav>
+    <nav class="shortcuts" aria-label="Quick access">
       <RouterLink :to="`/n/${todayPath()}`">Today</RouterLink>
-      <RouterLink to="/password">Password</RouterLink>
-      <button type="button" class="linkish" @click="signOut">Log out</button>
+      <RouterLink to="/recent">Recent</RouterLink>
+      <RouterLink to="/favorites">Favorites</RouterLink>
     </nav>
-    <div class="note-tree">
-      <NoteTree :nodes="tree" :active-path="activePath" :collapsed="collapsed" @toggle="toggle" />
+    <div class="note-library">
+      <p class="section-label">Notes</p>
+      <div class="note-tree">
+        <NoteTree :nodes="tree" :active-path="activePath" :collapsed="collapsed" @toggle="toggle" />
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <RouterLink to="/password">Account</RouterLink>
+      <button type="button" class="linkish" @click="signOut">Sign out</button>
     </div>
   </aside>
 </template>

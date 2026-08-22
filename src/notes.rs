@@ -135,6 +135,15 @@ pub fn get_note(vault: &Path, path: &str) -> Result<Note, AppError> {
     })
 }
 
+pub fn note_meta(vault: &Path, path: &str) -> Result<NoteMeta, AppError> {
+    let note = get_note(vault, path)?;
+    Ok(NoteMeta {
+        title: note_title(&note.path, &note.content),
+        path: note.path,
+        modified_at: note.modified_at,
+    })
+}
+
 pub fn put_note(vault: &Path, path: &str, content: &str) -> Result<Note, AppError> {
     ensure_vault(vault)?;
     let path = normalize_note_path(path)?;
