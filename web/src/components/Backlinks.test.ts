@@ -21,5 +21,8 @@ describe("Backlinks", () => {
       global: { plugins: [router] },
     });
     expect(filled.text()).toContain("A");
+    await filled.get("button").trigger("click");
+    expect(filled.text()).not.toContain("A");
+    expect(filled.get("button").attributes("aria-expanded")).toBe("false");
   });
 });

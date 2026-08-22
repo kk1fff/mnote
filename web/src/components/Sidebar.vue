@@ -87,6 +87,8 @@ defineExpose({ load });
       <RouterLink to="/password">Password</RouterLink>
       <button type="button" class="linkish" @click="signOut">Log out</button>
     </nav>
-    <NoteTree :nodes="tree" :active-path="activePath" :collapsed="collapsed" @toggle="toggle" />
+    <div class="note-tree">
+      <NoteTree :nodes="tree" :active-path="activePath" :collapsed="collapsed" @toggle="toggle" />
+    </div>
   </aside>
 </template>
