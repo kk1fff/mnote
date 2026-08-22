@@ -2,10 +2,10 @@
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, ApiError, type NoteMeta } from "../api";
+import AppShell from "../components/AppShell.vue";
 import Backlinks from "../components/Backlinks.vue";
 import Editor from "../components/Editor.vue";
 import Preview from "../components/Preview.vue";
-import Sidebar from "../components/Sidebar.vue";
 import { isDailyPath, pathFromRouteParam } from "../lib/paths";
 
 const route = useRoute();
@@ -15,7 +15,7 @@ const content = ref("");
 const preview = ref(false);
 const status = ref("");
 const links = ref<NoteMeta[]>([]);
-const sidebar = ref<{ load: () => Promise<void> } | null>(null);
+const shell = ref<{ load: () => Promise<void> } | null>(null);
 let saveTimer: number | undefined;
 let loadedPath = "";
 
@@ -56,7 +56,7 @@ async function save() {
     }
     status.value = "Saved";
     links.value = await api.backlinks(p).catch(() => []);
-    await sidebar.value?.load();
+    await shell.value?.load();
   } catch {
     status.value = "Save failed";
   }
@@ -89,10 +89,10 @@ watch(content, () => {
 </script>
 
 <template>
-  <div class="app-shell" @keydown="onKey">
-    <Sidebar ref="sidebar" />
+  <AppShell ref="shell" v-slot="{ toggle }" @keydown="onKey">
     <main class="main">
       <header class="bar">
+        <button type="button" class="nav-toggle" @click="toggle">Menu</button>
         <h1>{{ path }}</h1>
         <div class="actions">
           <span class="muted">{{ status }}</span>
@@ -106,5 +106,5 @@ watch(content, () => {
       <Editor v-else v-model="content" />
       <Backlinks :links="links" />
     </main>
-  </div>
+  </AppShell>
 </template>

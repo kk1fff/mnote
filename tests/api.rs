@@ -282,6 +282,17 @@ async fn daily_crud_list_search_backlinks() {
     assert_eq!(status, StatusCode::CONFLICT);
 
     let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &cookie,
+            Some(json!({ "path": "work/plan" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert!(body["content"].as_str().unwrap().starts_with("# plan\n"));
+
+    let (status, _, body) = h
         .call(h.authed(Method::GET, "/api/notes/ideas/one", &cookie, None))
         .await;
     assert_eq!(status, StatusCode::OK);
@@ -291,7 +302,7 @@ async fn daily_crud_list_search_backlinks() {
         .call(h.authed(Method::GET, "/api/notes", &cookie, None))
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body.as_array().unwrap().len(), 2);
+    assert_eq!(body.as_array().unwrap().len(), 3);
 
     let (status, _, body) = h
         .call(h.authed(Method::GET, "/api/search?q=searchterm", &cookie, None))

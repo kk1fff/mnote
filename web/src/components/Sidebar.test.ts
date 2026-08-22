@@ -9,7 +9,7 @@ vi.mock("../api", async () => {
   const actual = await vi.importActual<typeof import("../api")>("../api");
   return {
     ...actual,
-    api: { listNotes: vi.fn() },
+    api: { listNotes: vi.fn(), createNote: vi.fn() },
   };
 });
 
@@ -37,14 +37,40 @@ describe("Sidebar", () => {
     await router.isReady();
     const wrapper = mount(Sidebar, { global: { plugins: [router] } });
     await flushPromises();
+    expect(wrapper.text()).toContain("ideas");
     expect(wrapper.text()).toContain("One");
-    await wrapper.get("input").setValue("hello");
-    await wrapper.get("form").trigger("submit");
+    await wrapper.get('input[type="search"]').setValue("hello");
+    await wrapper.get("form.search").trigger("submit");
     await flushPromises();
     expect(router.currentRoute.value.fullPath).toBe("/search?q=hello");
-    await wrapper.get("button.linkish").trigger("click");
+    await wrapper.get("nav button.linkish").trigger("click");
     await flushPromises();
     expect(logout).toHaveBeenCalled();
     expect(router.currentRoute.value.path).toBe("/login");
+  });
+
+  it("creates a nested note", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([]);
+    vi.mocked(api.createNote).mockResolvedValue({
+      path: "ideas/one",
+      content: "# one\n\n",
+      modified_at: "",
+    });
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/", component: { template: "<div />" } },
+        { path: "/n/:path(.*)", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/");
+    await router.isReady();
+    const wrapper = mount(Sidebar, { global: { plugins: [router] } });
+    await flushPromises();
+    await wrapper.get('input[aria-label="New note path"]').setValue("ideas/one");
+    await wrapper.get("form.new-note").trigger("submit");
+    await flushPromises();
+    expect(api.createNote).toHaveBeenCalledWith("ideas/one");
+    expect(router.currentRoute.value.path).toBe("/n/ideas/one");
   });
 });

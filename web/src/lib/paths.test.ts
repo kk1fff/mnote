@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { decodeNotePath, isDailyPath, noteHref, pathFromRouteParam, todayPath } from "./paths";
+import {
+  decodeNotePath,
+  isDailyPath,
+  normalizeNotePath,
+  noteHref,
+  pathFromRouteParam,
+  todayPath,
+} from "./paths";
 
 describe("paths", () => {
   it("formats today as YYYY-MM-DD", () => {
@@ -9,6 +16,13 @@ describe("paths", () => {
   it("detects daily notes", () => {
     expect(isDailyPath("2026-08-22")).toBe(true);
     expect(isDailyPath("ideas/one")).toBe(false);
+  });
+
+  it("normalizes note paths", () => {
+    expect(normalizeNotePath(" /ideas/one.md ")).toBe("ideas/one");
+    expect(normalizeNotePath("a / b")).toBe("a/b");
+    expect(normalizeNotePath("../x")).toBeNull();
+    expect(normalizeNotePath("")).toBeNull();
   });
 
   it("encodes and decodes note paths", () => {

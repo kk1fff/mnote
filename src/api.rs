@@ -188,7 +188,8 @@ async fn create_note(
     if notes::get_note(&vault, &path).is_ok() {
         return Err(AppError::Conflict("note already exists".into()));
     }
-    let content = body.content.unwrap_or_else(|| format!("# {path}\n\n"));
+    let title = path.rsplit('/').next().unwrap_or(path.as_str());
+    let content = body.content.unwrap_or_else(|| format!("# {title}\n\n"));
     let note = notes::put_note(&vault, &path, &content)?;
     Ok((StatusCode::CREATED, Json(note)))
 }

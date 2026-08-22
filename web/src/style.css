@@ -14,6 +14,7 @@ body,
 #app {
   margin: 0;
   height: 100%;
+  height: 100dvh;
 }
 
 a {
@@ -29,6 +30,7 @@ a.active {
 button,
 input {
   font: inherit;
+  font-size: 1rem;
 }
 
 button {
@@ -53,9 +55,16 @@ button.linkish {
   height: 100%;
 }
 
+.nav-toggle,
+.nav-scrim {
+  display: none;
+}
+
 .sidebar {
   border-right: 1px solid #d6d3d1;
   padding: 1rem;
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-left: max(1rem, env(safe-area-inset-left));
   overflow: auto;
   background: #efe8db;
 }
@@ -87,7 +96,16 @@ button.linkish {
   margin: 0.35rem 0;
 }
 
+.sidebar .tree .tree {
+  padding-left: 0.85rem;
+}
+
+.sidebar .folder {
+  color: #57534e;
+}
+
 .search input,
+.new-note input,
 .card input {
   width: 100%;
   padding: 0.4rem 0.5rem;
@@ -107,8 +125,10 @@ button.linkish {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   padding: 0.75rem 1rem;
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+  padding-right: max(1rem, env(safe-area-inset-right));
   border-bottom: 1px solid #d6d3d1;
 }
 
@@ -165,6 +185,8 @@ button.linkish {
   min-height: 100%;
   display: grid;
   place-items: center;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
 }
 
 .card {
@@ -195,4 +217,78 @@ button.linkish {
 .results p {
   margin: 0.2rem 0 0;
   color: #57534e;
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
+    flex-shrink: 0;
+  }
+
+  .nav-scrim {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgb(28 25 23 / 35%);
+  }
+
+  .app-shell.nav-open .nav-scrim {
+    display: block;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 20;
+    width: min(18rem, 86vw);
+    transform: translateX(-100%);
+    transition: transform 0.16s ease;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .app-shell.nav-open .sidebar {
+    transform: none;
+  }
+
+  .bar {
+    flex-wrap: wrap;
+  }
+
+  .bar h1 {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .actions button {
+    min-height: 2.5rem;
+  }
+
+  .preview,
+  .results {
+    padding: 1rem;
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  }
+
+  .backlinks {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .card button {
+    min-height: 2.75rem;
+  }
 }

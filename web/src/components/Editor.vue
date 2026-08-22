@@ -66,9 +66,9 @@ onMounted(() => {
         }),
         EditorView.editable.of(!props.disabled),
         EditorView.theme({
-          "&": { height: "100%", fontSize: "15px" },
+          "&": { height: "100%", fontSize: "16px" },
           ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" },
-          ".cm-content": { padding: "16px 8px" },
+          ".cm-content": { padding: "16px 12px" },
           "&.cm-focused": { outline: "none" },
         }),
       ],

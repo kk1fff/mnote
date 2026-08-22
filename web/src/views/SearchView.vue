@@ -2,7 +2,7 @@
 import { onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { api, type SearchHit } from "../api";
-import Sidebar from "../components/Sidebar.vue";
+import AppShell from "../components/AppShell.vue";
 import { noteHref } from "../lib/paths";
 
 const route = useRoute();
@@ -26,14 +26,14 @@ watch(() => route.query.q, run);
 </script>
 
 <template>
-  <div class="app-shell">
-    <Sidebar />
+  <AppShell v-slot="{ toggle }">
     <main class="main">
       <header class="bar">
+        <button type="button" class="nav-toggle" @click="toggle">Menu</button>
         <h1>Search</h1>
       </header>
-      <p v-if="error" class="error">{{ error }}</p>
-      <p v-else-if="!hits.length" class="muted">No matches</p>
+      <p v-if="error" class="error results">{{ error }}</p>
+      <p v-else-if="!hits.length" class="muted results">No matches</p>
       <ul class="results">
         <li v-for="hit in hits" :key="hit.path">
           <RouterLink :to="noteHref(hit.path)">{{ hit.title }}</RouterLink>
@@ -41,5 +41,5 @@ watch(() => route.query.q, run);
         </li>
       </ul>
     </main>
-  </div>
+  </AppShell>
 </template>
