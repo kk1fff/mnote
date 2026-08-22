@@ -201,6 +201,7 @@ async fn create_note(
     ) {
         Ok(note) => {
             state.live.replace(user.id, &note.id, &note.content);
+            state.live.index(user.id, notes::to_meta(&note));
             Ok((StatusCode::CREATED, Json(note)).into_response())
         }
         Err(err) => {
@@ -222,6 +223,7 @@ async fn daily_note(
     require_ready(&user)?;
     let note = notes::get_or_create_daily(&state.vault_dir(&user.username), &date)?;
     db::record_note_open(&state, user.id, &note.id)?;
+    state.live.index(user.id, notes::to_meta(&note));
     Ok(Json(note))
 }
 

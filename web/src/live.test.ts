@@ -39,7 +39,11 @@ describe("live", () => {
     listeners.message?.({
       data: JSON.stringify({ type: "cursor", client_id: "b", from: 1, to: 2 }),
     });
+    listeners.message?.({
+      data: JSON.stringify({ type: "index", note: { id: "n1", title: "Time" } }),
+    });
     expect(events).toContain("cursor");
+    expect(events).toContain("index");
     stop();
   });
 

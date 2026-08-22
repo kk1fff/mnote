@@ -219,7 +219,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopLive?.();
-  live.disconnect();
 });
 </script>
 

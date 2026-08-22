@@ -1,4 +1,5 @@
 use crate::merge;
+use crate::notes::NoteMeta;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -72,6 +73,9 @@ pub enum ServerMsg {
     },
     Gone {
         client_id: String,
+    },
+    Index {
+        note: NoteMeta,
     },
     Error {
         error: String,
@@ -323,6 +327,14 @@ impl LiveHub {
         Some(persist)
     }
 
+    pub fn index(&self, user_id: i64, note: NoteMeta) {
+        let mut inner = self.inner.lock().expect("live lock");
+        let Some(user) = inner.users.get_mut(&user_id) else {
+            return;
+        };
+        fanout(user, "", None, ServerMsg::Index { note });
+    }
+
     pub fn replace(&self, user_id: i64, path: &str, content: &str) -> Option<u64> {
         let mut inner = self.inner.lock().expect("live lock");
         let user = inner.users.get_mut(&user_id)?;
@@ -551,6 +563,29 @@ mod tests {
         assert!(drain(&mut b_rx)
             .iter()
             .any(|m| matches!(m, ServerMsg::Gone { client_id } if client_id == "a")));
+    }
+
+    #[test]
+    fn index_reaches_every_conn() {
+        let (hub, mut a_rx, mut b_rx) = pair();
+        drain(&mut a_rx);
+        drain(&mut b_rx);
+        hub.index(
+            1,
+            NoteMeta {
+                id: "n1".into(),
+                title: "One".into(),
+                folder: "ideas".into(),
+                modified_at: "t".into(),
+            },
+        );
+        assert!(drain(&mut a_rx).iter().any(|m| matches!(
+            m,
+            ServerMsg::Index { note } if note.id == "n1" && note.title == "One"
+        )));
+        assert!(drain(&mut b_rx)
+            .iter()
+            .any(|m| matches!(m, ServerMsg::Index { note } if note.id == "n1")));
     }
 
     #[test]

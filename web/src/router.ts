@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { api, setUnauthorizedHandler } from "./api";
+import { live } from "./live";
 import { currentUser, refreshSession } from "./session";
 const router = createRouter({
   history: createWebHistory(),
@@ -40,6 +41,7 @@ router.beforeEach(async (to) => {
 
 setUnauthorizedHandler(() => {
   currentUser.value = null;
+  live.disconnect();
   if (router.currentRoute.value.path !== "/login") {
     void router.replace({
       path: "/login",

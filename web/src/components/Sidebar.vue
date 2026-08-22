@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, type NoteMeta } from "../api";
 import { noteIdFromRoute } from "../lib/paths";
 import { noteTree } from "../lib/tree";
+import { live, type LiveEvent } from "../live";
 import { currentUser, logout } from "../session";
 import NoteTree from "./NoteTree.vue";
 
@@ -17,6 +18,24 @@ const tree = computed(() => noteTree(notes.value));
 const activeId = computed(() =>
   route.name === "note" || route.path.startsWith("/n/") ? noteIdFromRoute(route.params.id) : "",
 );
+
+function upsert(note: NoteMeta) {
+  const i = notes.value.findIndex((n) => n.id === note.id);
+  if (i >= 0) {
+    const cur = notes.value[i];
+    if (cur.title === note.title && (cur.folder ?? "") === (note.folder ?? "")) return;
+    const next = notes.value.slice();
+    next[i] = note;
+    notes.value = next;
+    return;
+  }
+  notes.value = [...notes.value, note];
+}
+
+function onLive(event: LiveEvent) {
+  if (event.type === "index") upsert(event.note);
+  if (event.type === "status" && event.connected) void load();
+}
 
 async function load() {
   notes.value = await api.listNotes();
@@ -40,8 +59,16 @@ async function signOut() {
   await router.push("/login");
 }
 
+live.connect();
+const stopLive = live.on(onLive);
+
 onMounted(() => {
+  live.connect();
   void load();
+});
+
+onBeforeUnmount(() => {
+  stopLive();
 });
 
 const emit = defineEmits<{ "open-picker": [] }>();

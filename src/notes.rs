@@ -310,7 +310,7 @@ fn list_notes_internal(vault: &Path) -> Result<Vec<Note>, AppError> {
     Ok(notes)
 }
 
-fn to_meta(note: &Note) -> NoteMeta {
+pub fn to_meta(note: &Note) -> NoteMeta {
     NoteMeta {
         id: note.id.clone(),
         title: note.title.clone(),

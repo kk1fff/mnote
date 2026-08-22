@@ -266,6 +266,62 @@ async fn live_keeps_peers_after_http_put_and_stale_reconnect() {
 }
 
 #[tokio::test]
+async fn live_index_on_create() {
+    let dir = TempDir::new().unwrap();
+    let state = AppState::open(dir.path()).unwrap();
+    db::create_user(&state, "alice", Some("password1")).unwrap();
+    db::set_password(&state, "alice", "password1", false).unwrap();
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let app = api::router(state.clone());
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    let alice = login_cookie(api::router(state.clone()), "alice").await;
+    let mut a = connect(addr, &alice).await;
+    let mut b = connect(addr, &alice).await;
+    a.send(Message::Text(r#"{"type":"hello","client_id":"a"}"#.into()))
+        .await
+        .unwrap();
+    b.send(Message::Text(r#"{"type":"hello","client_id":"b"}"#.into()))
+        .await
+        .unwrap();
+    assert_eq!(next_json(&mut a).await["type"], "welcome");
+    assert_eq!(next_json(&mut b).await["type"], "welcome");
+
+    let created = api::router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/notes")
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::COOKIE, format!("mnote_session={alice}"))
+                .body(Body::from(
+                    json!({ "title": "Time", "folder": "ideas" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let body: Value = serde_json::from_slice(
+        &created.into_body().collect().await.unwrap().to_bytes(),
+    )
+    .unwrap();
+    let note_id = body["id"].as_str().unwrap();
+
+    let idx_a = next_json(&mut a).await;
+    let idx_b = next_json(&mut b).await;
+    assert_eq!(idx_a["type"], "index");
+    assert_eq!(idx_a["note"]["id"], note_id);
+    assert_eq!(idx_a["note"]["title"], "Time");
+    assert_eq!(idx_b["type"], "index");
+    assert_eq!(idx_b["note"]["id"], note_id);
+}
+
+#[tokio::test]
 async fn live_requires_auth() {
     let dir = TempDir::new().unwrap();
     let state = AppState::open(dir.path()).unwrap();

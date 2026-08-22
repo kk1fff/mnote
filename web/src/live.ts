@@ -1,3 +1,5 @@
+import type { NoteMeta } from "./api";
+
 export type LivePeer = { client_id: string; from: number; to: number };
 
 export type LiveEvent =
@@ -7,6 +9,7 @@ export type LiveEvent =
   | { type: "cursor"; client_id: string; from: number; to: number }
   | { type: "peers"; peers: LivePeer[] }
   | { type: "gone"; client_id: string }
+  | { type: "index"; note: NoteMeta }
   | { type: "status"; connected: boolean };
 
 type Handler = (event: LiveEvent) => void;
@@ -93,7 +96,8 @@ class Live {
           data.type === "resync" ||
           data.type === "cursor" ||
           data.type === "peers" ||
-          data.type === "gone"
+          data.type === "gone" ||
+          data.type === "index"
         ) {
           this.emit(data as LiveEvent);
         }
