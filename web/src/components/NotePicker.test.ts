@@ -11,6 +11,7 @@ vi.mock("../api", async () => {
     api: {
       titleSearch: vi.fn(),
       createNote: vi.fn(),
+      listNotes: vi.fn(),
     },
   };
 });
@@ -36,6 +37,7 @@ describe("NotePicker", () => {
     vi.useRealTimers();
     vi.mocked(api.titleSearch).mockReset();
     vi.mocked(api.createNote).mockReset();
+    vi.mocked(api.listNotes).mockReset();
   });
 
   it("keeps create available when a partial match exists", async () => {
@@ -92,5 +94,23 @@ describe("NotePicker", () => {
     expect(wrapper.text()).toContain("Type a name to create in ideas/");
     expect(wrapper.find(".picker-create").exists()).toBe(false);
     expect(wrapper.text()).not.toMatch(/⌘↵ create|Ctrl\+↵ create/);
+  });
+
+  it("enters folder search and fills the folder prefix", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([
+      { id: "o1", title: "One", folder: "ideas", modified_at: "" },
+    ]);
+    const { wrapper } = await openPicker();
+    expect(wrapper.get('[data-testid="picker-search-folder"]').text()).toContain("Search folder");
+    await wrapper.get('[data-testid="picker-search-folder"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("ideas");
+    await wrapper.get("input").trigger("keydown", { key: "Escape" });
+    expect(wrapper.find('[data-testid="picker"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="picker-search-folder"]').exists()).toBe(true);
+    await wrapper.get('[data-testid="picker-search-folder"]').trigger("click");
+    await flushPromises();
+    await wrapper.get(".picker-results button").trigger("click");
+    expect((wrapper.get("input").element as HTMLInputElement).value).toBe("ideas/");
   });
 });

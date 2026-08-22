@@ -81,6 +81,7 @@ describe("api", () => {
     await api.unfavorite("note-1");
     await api.getNote("note-1");
     await api.putNote("note-1", "hi");
+    await api.patchNote("note-1", { title: "Renamed", folder: "ideas" });
     await api.createNote("Two", "ideas", "x");
     await api.daily("2026-08-22");
     await api.putDaily("2026-08-22", "d");

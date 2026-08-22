@@ -8,6 +8,8 @@ const emit = defineEmits<{ created: [] }>();
 const router = useRouter();
 const query = ref("");
 const results = ref<NoteMeta[]>([]);
+const folders = ref<string[]>([]);
+const folderMode = ref(false);
 const open = ref(false);
 const error = ref("");
 const selected = ref(0);
@@ -19,6 +21,7 @@ let searchId = 0;
 
 const trimmed = computed(() => query.value.trim());
 const folderQuery = computed(() => (trimmed.value.endsWith("/") ? trimmed.value.slice(0, -1).toLowerCase() : ""));
+const searchFolderRow = computed(() => !folderMode.value && !trimmed.value);
 const shown = computed(() => {
   if (!folderQuery.value) return results.value;
   const prefix = folderQuery.value;
@@ -27,7 +30,13 @@ const shown = computed(() => {
     return folder === prefix || folder.startsWith(`${prefix}/`);
   });
 });
-const createDraft = computed(() => (folderQuery.value ? null : parseCreateQuery(query.value)));
+const folderHits = computed(() => {
+  const q = trimmed.value.toLowerCase();
+  return folders.value.filter((folder) => !q || folder.toLowerCase().includes(q));
+});
+const createDraft = computed(() =>
+  folderMode.value || folderQuery.value ? null : parseCreateQuery(query.value),
+);
 const canCreate = computed(() => {
   if (!createDraft.value) return false;
   const title = createDraft.value.title.toLowerCase();
@@ -39,16 +48,21 @@ const createLabel = computed(() => {
     ? `${createDraft.value.folder}/${createDraft.value.title}`
     : createDraft.value.title;
 });
+const noteOffset = computed(() => (searchFolderRow.value ? 1 : 0));
+const createIndex = computed(() =>
+  canCreate.value ? shown.value.length + noteOffset.value : -1,
+);
 const maxIndex = computed(() => {
-  if (shown.value.length && canCreate.value) return shown.value.length;
-  if (shown.value.length) return shown.value.length - 1;
-  return canCreate.value ? 0 : -1;
+  if (folderMode.value) return folderHits.value.length - 1;
+  return shown.value.length + noteOffset.value + (canCreate.value ? 1 : 0) - 1;
 });
 
 function show() {
   open.value = true;
   query.value = "";
   results.value = [];
+  folders.value = [];
+  folderMode.value = false;
   error.value = "";
   selected.value = 0;
   void nextTick(() => input.value?.focus());
@@ -56,6 +70,7 @@ function show() {
 
 function close() {
   open.value = false;
+  folderMode.value = false;
 }
 
 function clampSelected() {
@@ -81,9 +96,53 @@ async function create() {
   }
 }
 
+function folderPrefixes(folder: string): string[] {
+  const parts = folder.split("/").filter(Boolean);
+  const out: string[] = [];
+  for (let i = 0; i < parts.length; i++) out.push(parts.slice(0, i + 1).join("/"));
+  return out;
+}
+
+async function enterFolderMode() {
+  folderMode.value = true;
+  query.value = "";
+  results.value = [];
+  error.value = "";
+  selected.value = 0;
+  try {
+    const notes = await api.listNotes();
+    const found = new Set<string>();
+    for (const note of notes) {
+      for (const folder of folderPrefixes(note.folder ?? "")) found.add(folder);
+    }
+    folders.value = [...found].sort((a, b) => a.localeCompare(b));
+  } catch {
+    folders.value = [];
+  }
+  void nextTick(() => input.value?.focus());
+}
+
+function pickFolder(folder: string) {
+  folderMode.value = false;
+  query.value = `${folder}/`;
+  selected.value = 0;
+  void nextTick(() => input.value?.focus());
+}
+
 function submit() {
-  if (selected.value >= 0 && selected.value < shown.value.length) {
-    void select(shown.value[selected.value]);
+  if (folderMode.value) {
+    if (selected.value >= 0 && selected.value < folderHits.value.length) {
+      pickFolder(folderHits.value[selected.value]);
+    }
+    return;
+  }
+  if (searchFolderRow.value && selected.value === 0) {
+    void enterFolderMode();
+    return;
+  }
+  const index = selected.value - noteOffset.value;
+  if (index >= 0 && index < shown.value.length) {
+    void select(shown.value[index]);
     return;
   }
   if (canCreate.value) void create();
@@ -92,6 +151,12 @@ function submit() {
 function onKey(event: KeyboardEvent) {
   if (event.key === "Escape") {
     event.preventDefault();
+    if (folderMode.value) {
+      folderMode.value = false;
+      query.value = "";
+      selected.value = 0;
+      return;
+    }
     close();
     return;
   }
@@ -115,10 +180,15 @@ watch(query, () => {
   window.clearTimeout(searchTimer);
   const requestId = ++searchId;
   error.value = "";
+  if (folderMode.value) {
+    selected.value = 0;
+    clampSelected();
+    return;
+  }
   const q = trimmed.value;
   if (!q) {
     results.value = [];
-    selected.value = -1;
+    selected.value = searchFolderRow.value ? 0 : -1;
     return;
   }
   searchTimer = window.setTimeout(async () => {
@@ -132,13 +202,13 @@ watch(query, () => {
     } catch {
       if (requestId === searchId) {
         results.value = [];
-        selected.value = canCreate.value ? 0 : -1;
+        selected.value = canCreate.value ? createIndex.value : searchFolderRow.value ? 0 : -1;
       }
     }
   }, 120);
 });
 
-watch([shown, canCreate], () => {
+watch([shown, canCreate, folderMode, folderHits], () => {
   if (selected.value > maxIndex.value || selected.value < 0) clampSelected();
 });
 
@@ -147,7 +217,7 @@ defineExpose({ show });
 
 <template>
   <div v-if="open" class="picker-scrim" @click.self="close">
-    <section class="note-picker" role="dialog" aria-modal="true" aria-label="Open or create note">
+    <section class="note-picker" data-testid="picker" role="dialog" aria-modal="true" aria-label="Open or create note">
       <form class="picker-field" @submit.prevent="submit">
         <div class="picker-mirror" aria-hidden="true">
           <span class="picker-spacer">{{ query }}</span>
@@ -157,16 +227,37 @@ defineExpose({ show });
           ref="input"
           v-model="query"
           type="search"
-          placeholder="Search or create a note"
+          :placeholder="folderMode ? 'Search folders' : 'Search or create a note'"
+          data-testid="picker-input"
           aria-label="Search or create a note"
           @keydown="onKey"
         />
       </form>
       <p v-if="error" class="error picker-message">{{ error }}</p>
+      <template v-else-if="folderMode">
+        <ul v-if="folderHits.length" class="picker-results">
+          <li v-for="(folder, index) in folderHits" :key="folder">
+            <button type="button" :class="{ active: selected === index }" @click="pickFolder(folder)">
+              <span>{{ folder }}</span>
+            </button>
+          </li>
+        </ul>
+        <p v-else class="muted picker-message">No folders yet</p>
+      </template>
       <template v-else>
+        <button
+          v-if="searchFolderRow"
+          type="button"
+          data-testid="picker-search-folder"
+          class="picker-create"
+          :class="{ active: selected === 0 }"
+          @click="enterFolderMode"
+        >
+          <span>Search folder</span>
+        </button>
         <ul v-if="shown.length" class="picker-results">
           <li v-for="(note, index) in shown" :key="note.id">
-            <button type="button" :class="{ active: selected === index }" @click="select(note)">
+            <button type="button" :class="{ active: selected === index + noteOffset }" @click="select(note)">
               <span>{{ note.title }}</span>
               <small v-if="noteFolderLabel(note)">{{ noteFolderLabel(note) }}</small>
             </button>
@@ -181,8 +272,9 @@ defineExpose({ show });
         <button
           v-if="canCreate"
           type="button"
+          data-testid="picker-create"
           class="picker-create"
-          :class="{ active: selected === shown.length || !shown.length }"
+          :class="{ active: selected === createIndex }"
           @click="create"
         >
           <span>Create “{{ createLabel }}”</span>

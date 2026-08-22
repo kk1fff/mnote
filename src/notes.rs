@@ -101,6 +101,13 @@ pub fn parse_daily_date(date: &str) -> Result<String, AppError> {
         .map_err(|_| AppError::BadRequest("date must be YYYY-MM-DD".into()))
 }
 
+fn title_first_char_ok(title: &str) -> bool {
+    title
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_alphabetic() || c.is_ascii_digit() || matches!(c, '[' | '{' | '('))
+}
+
 pub fn normalize_title(raw: &str) -> Result<String, AppError> {
     let title = raw.trim();
     if title.is_empty() {
@@ -111,6 +118,11 @@ pub fn normalize_title(raw: &str) -> Result<String, AppError> {
     }
     if title.contains('\n') || title.contains('\r') || title.contains('\0') {
         return Err(AppError::BadRequest("invalid title".into()));
+    }
+    if !title_first_char_ok(title) {
+        return Err(AppError::BadRequest(
+            "title must start with a letter, digit, or [, {, (".into(),
+        ));
     }
     Ok(title.to_string())
 }
@@ -385,6 +397,45 @@ pub fn put_note(vault: &Path, id: &str, content: &str) -> Result<Note, AppError>
     get_note(vault, id)
 }
 
+pub fn update_meta(
+    vault: &Path,
+    id: &str,
+    title: Option<&str>,
+    folder: Option<&str>,
+) -> Result<Note, AppError> {
+    let mut note = get_note(vault, id)?;
+    let new_title = match title {
+        Some(raw) => normalize_title(raw)?,
+        None => note.title.clone(),
+    };
+    let new_folder = match folder {
+        Some(raw) => normalize_folder(raw)?,
+        None => note.folder.clone(),
+    };
+    if new_title == note.title && new_folder == note.folder {
+        return Ok(note);
+    }
+    if title_key(&new_title) != title_key(&note.title) {
+        if let Some(existing) = find_by_title(vault, &new_title)? {
+            if existing.id != note.id {
+                return Err(AppError::Conflict(format!("title_exists:{}", existing.id)));
+            }
+        }
+    }
+    let old_path = note.file_path.clone();
+    note.title = new_title;
+    note.folder = new_folder;
+    note.file_path = allocate_file_path(vault, &note.folder, &note.title, Some(&note.id));
+    write_note(vault, &note)?;
+    if old_path != note.file_path {
+        let old = note_file(vault, &old_path);
+        if old.exists() {
+            std::fs::remove_file(old)?;
+        }
+    }
+    get_note(vault, id)
+}
+
 pub fn get_or_create_daily(vault: &Path, date: &str) -> Result<Note, AppError> {
     let date = parse_daily_date(date)?;
     if let Some(existing) = find_by_title(vault, &date)? {
@@ -622,7 +673,13 @@ mod tests {
         assert_eq!(slugify("Q: what next?"), "q-what-next");
         assert_eq!(slugify("***"), "untitled");
         assert_eq!(normalize_title("  Plan  ").unwrap(), "Plan");
+        assert_eq!(normalize_title("[draft]").unwrap(), "[draft]");
+        assert_eq!(normalize_title("{x}").unwrap(), "{x}");
+        assert_eq!(normalize_title("(note)").unwrap(), "(note)");
+        assert_eq!(normalize_title("Été").unwrap(), "Été");
         assert!(normalize_title("").is_err());
+        assert!(normalize_title("***").is_err());
+        assert!(normalize_title("-dash").is_err());
     }
 
     #[test]
@@ -645,6 +702,20 @@ mod tests {
         let again = get_or_create_daily(vault, "2026-08-22").unwrap();
         assert_eq!(again.id, daily.id);
         assert_eq!(list_notes(vault).unwrap().len(), 2);
+
+        let renamed = update_meta(vault, &note.id, Some("Two"), None).unwrap();
+        assert_eq!(renamed.title, "Two");
+        assert_eq!(renamed.folder, "ideas");
+        assert_eq!(renamed.content, "hi");
+        assert!(get_note(vault, &note.id).is_ok());
+        let moved = update_meta(vault, &note.id, None, Some("work")).unwrap();
+        assert_eq!(moved.folder, "work");
+        assert_eq!(moved.title, "Two");
+        let conflict = update_meta(vault, &daily.id, Some("two"), None).unwrap_err();
+        assert!(conflict_id(&conflict).is_some());
+        assert!(update_meta(vault, &note.id, Some("***"), None).is_err());
+        let same = update_meta(vault, &note.id, Some("Two"), Some("work")).unwrap();
+        assert_eq!(same.id, note.id);
     }
 
     #[test]

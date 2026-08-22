@@ -121,6 +121,11 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ content }),
     }),
+  patchNote: (id: string, meta: { title?: string; folder?: string }) =>
+    request<Note>(`/api/notes/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(meta),
+    }),
   createNote: async (title: string, folder?: string, content?: string) => {
     try {
       return await request<Note>("/api/notes", {

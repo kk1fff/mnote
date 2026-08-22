@@ -14,6 +14,7 @@ vi.mock("../api", async () => {
       daily: vi.fn(),
       getNote: vi.fn(),
       putNote: vi.fn(),
+      patchNote: vi.fn(),
       putDaily: vi.fn(),
       backlinks: vi.fn().mockResolvedValue([]),
       favorites: vi.fn().mockResolvedValue([]),
@@ -140,5 +141,41 @@ describe("NoteView", () => {
     expect(api.getNote).toHaveBeenCalledWith("missing");
     expect(router.currentRoute.value.path).toBe("/n/missing");
     expect(wrapper.text()).toContain("Note not found");
+  });
+
+  it("renames from the header", async () => {
+    vi.mocked(api.getNote).mockResolvedValue({
+      id: "n1",
+      title: "Old",
+      folder: "ideas",
+      content: "hi",
+      modified_at: "",
+    });
+    vi.mocked(api.patchNote).mockResolvedValue({
+      id: "n1",
+      title: "New",
+      folder: "work",
+      content: "hi",
+      modified_at: "",
+    });
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/n/:id", component: NoteView },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/n/n1");
+    await router.isReady();
+    const wrapper = mount(NoteView, { global: { plugins: [router] } });
+    await flushPromises();
+    await wrapper.get('[data-testid="note-title"]').trigger("click");
+    await wrapper.get('[data-testid="note-title-input"]').setValue("New");
+    await wrapper.get('[data-testid="note-folder-input"]').setValue("work");
+    await wrapper.get(".note-meta-form").trigger("submit");
+    await flushPromises();
+    expect(api.patchNote).toHaveBeenCalledWith("n1", { title: "New", folder: "work" });
+    expect(wrapper.get('[data-testid="note-title"]').text()).toBe("New");
+    expect(wrapper.get('[data-testid="note-folder"]').text()).toBe("work");
   });
 });

@@ -39,11 +39,11 @@ async function submit() {
       </p>
       <label>
         New password
-        <input v-model="password" type="password" autocomplete="new-password" required />
+        <input v-model="password" type="password" name="new-password" autocomplete="new-password" required />
       </label>
       <label>
         Confirm
-        <input v-model="confirm" type="password" autocomplete="new-password" required />
+        <input v-model="confirm" type="password" name="confirm-password" autocomplete="new-password" required />
       </label>
       <p v-if="error" class="error">{{ error }}</p>
       <button type="submit">Save</button>

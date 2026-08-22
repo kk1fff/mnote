@@ -284,12 +284,46 @@ button.linkish {
   border-bottom: 1px solid #d6d3d1;
 }
 
+.note-heading {
+  min-width: 0;
+  flex: 1;
+}
+
 .bar h1 {
   font-size: 1.1rem;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.note-folder {
+  margin: 0;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.note-meta-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.note-meta-form input {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: 1.1rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 6px;
+  padding: 0.15rem 0.4rem;
+  background: #fff;
+}
+
+.note-meta-form input + input {
+  font-size: 0.85rem;
 }
 
 .actions {
@@ -446,7 +480,8 @@ button.linkish {
     flex-wrap: wrap;
   }
 
-  .bar h1 {
+  .bar h1,
+  .note-heading {
     flex: 1;
     min-width: 0;
   }

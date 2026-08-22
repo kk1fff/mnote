@@ -14,6 +14,10 @@ import { live, type LiveEvent } from "../live";
 const route = useRoute();
 const noteId = computed(() => noteIdFromRoute(route.params.id));
 const title = ref("");
+const folder = ref("");
+const draftTitle = ref("");
+const draftFolder = ref("");
+const editingMeta = ref(false);
 const content = ref("");
 const preview = ref(false);
 const status = ref("");
@@ -35,15 +39,18 @@ async function load() {
     return;
   }
   status.value = "Loading…";
-  remotes.value = [];
-  title.value = "";
-  try {
-    const note = await api.getNote(id);
-    applyRemote(note.content);
-    loadedId = note.id;
-    title.value = note.title;
-    base = note.content;
-    status.value = "Saved";
+    remotes.value = [];
+    title.value = "";
+    folder.value = "";
+    editingMeta.value = false;
+    try {
+      const note = await api.getNote(id);
+      applyRemote(note.content);
+      loadedId = note.id;
+      title.value = note.title;
+      folder.value = note.folder ?? "";
+      base = note.content;
+      status.value = "Saved";
   } catch (err) {
     status.value = err instanceof ApiError && err.status === 404 ? "Note not found" : "Failed to load";
     return;
@@ -133,6 +140,10 @@ function onLive(event: LiveEvent) {
   if (event.type === "gone") {
     remotes.value = remotes.value.filter((r) => r.id !== event.client_id);
   }
+  if (event.type === "index" && event.note.id === id && !editingMeta.value) {
+    title.value = event.note.title;
+    folder.value = event.note.folder ?? "";
+  }
 }
 
 function onLiveChange(change: { from: number; to: number; insert: string; content: string }) {
@@ -161,6 +172,38 @@ async function save() {
   } catch {
     saveDraft(id, base, content.value);
     status.value = "Save failed — draft kept";
+  }
+}
+
+function beginMeta() {
+  if (!loadedId) return;
+  draftTitle.value = title.value;
+  draftFolder.value = folder.value;
+  editingMeta.value = true;
+}
+
+function cancelMeta() {
+  editingMeta.value = false;
+}
+
+async function saveMeta() {
+  const id = loadedId || noteId.value;
+  if (!id || !editingMeta.value) return;
+  const nextTitle = draftTitle.value.trim();
+  const nextFolder = draftFolder.value.trim().replace(/^\/+|\/+$/g, "");
+  if (nextTitle === title.value && nextFolder === folder.value) {
+    editingMeta.value = false;
+    return;
+  }
+  try {
+    const note = await api.patchNote(id, { title: nextTitle, folder: nextFolder });
+    title.value = note.title;
+    folder.value = note.folder ?? "";
+    editingMeta.value = false;
+    status.value = "Saved";
+    await shell.value?.load();
+  } catch (err) {
+    status.value = err instanceof ApiError ? err.code : "Could not rename";
   }
 }
 
@@ -227,10 +270,34 @@ onBeforeUnmount(() => {
     <main class="main">
       <header class="bar">
         <button type="button" class="nav-toggle" @click="toggle">Menu</button>
-        <h1>{{ title || "Note" }}</h1>
+        <div class="note-heading">
+          <form v-if="editingMeta" class="note-meta-form" @submit.prevent="saveMeta">
+            <input
+              v-model="draftTitle"
+              data-testid="note-title-input"
+              aria-label="Note title"
+              @keydown.enter.prevent="saveMeta"
+              @keydown.escape.prevent="cancelMeta"
+            />
+            <input
+              v-model="draftFolder"
+              data-testid="note-folder-input"
+              aria-label="Note folder"
+              placeholder="Folder"
+              @keydown.enter.prevent="saveMeta"
+              @keydown.escape.prevent="cancelMeta"
+            />
+          </form>
+          <template v-else>
+            <h1 data-testid="note-title" @click="beginMeta">{{ title || "Note" }}</h1>
+            <p class="muted note-folder" data-testid="note-folder" @click="beginMeta">
+              {{ folder || "No folder" }}
+            </p>
+          </template>
+        </div>
         <div class="actions">
-          <span class="muted">{{ status }}</span>
-          <button type="button" :aria-pressed="isFavorite" @click="toggleFavorite">
+          <span class="muted" data-testid="note-status">{{ status }}</span>
+          <button type="button" data-testid="favorite" :aria-pressed="isFavorite" @click="toggleFavorite">
             {{ isFavorite ? "Unfavorite" : "Favorite" }}
           </button>
           <button type="button" data-testid="preview-toggle" @click="preview = !preview">

@@ -322,6 +322,69 @@ async fn live_index_on_create() {
 }
 
 #[tokio::test]
+async fn live_index_on_patch() {
+    let dir = TempDir::new().unwrap();
+    let state = AppState::open(dir.path()).unwrap();
+    db::create_user(&state, "alice", Some("password1")).unwrap();
+    db::set_password(&state, "alice", "password1", false).unwrap();
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let app = api::router(state.clone());
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    let alice = login_cookie(api::router(state.clone()), "alice").await;
+    let created = api::router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/notes")
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::COOKIE, format!("mnote_session={alice}"))
+                .body(Body::from(json!({ "title": "Old" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let body: Value = serde_json::from_slice(
+        &created.into_body().collect().await.unwrap().to_bytes(),
+    )
+    .unwrap();
+    let note_id = body["id"].as_str().unwrap().to_string();
+
+    let mut a = connect(addr, &alice).await;
+    a.send(Message::Text(r#"{"type":"hello","client_id":"a"}"#.into()))
+        .await
+        .unwrap();
+    assert_eq!(next_json(&mut a).await["type"], "welcome");
+
+    let patched = api::router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method(Method::PATCH)
+                .uri(format!("/api/notes/{note_id}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::COOKIE, format!("mnote_session={alice}"))
+                .body(Body::from(
+                    json!({ "title": "New", "folder": "ideas" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(patched.status(), StatusCode::OK);
+
+    let idx = next_json(&mut a).await;
+    assert_eq!(idx["type"], "index");
+    assert_eq!(idx["note"]["id"], note_id);
+    assert_eq!(idx["note"]["title"], "New");
+    assert_eq!(idx["note"]["folder"], "ideas");
+}
+
+#[tokio::test]
 async fn live_requires_auth() {
     let dir = TempDir::new().unwrap();
     let state = AppState::open(dir.path()).unwrap();

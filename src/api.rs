@@ -29,7 +29,7 @@ pub fn router(state: AppState) -> Router {
         .route("/notes/daily/{date}", get(daily_note).put(put_daily_note))
         .route("/notes/recent", get(recent_notes))
         .route("/notes/title-search", get(search_titles))
-        .route("/notes/{id}", get(get_note).put(put_note))
+        .route("/notes/{id}", get(get_note).put(put_note).patch(patch_note))
         .route("/favorites", get(favorites))
         .route("/favorites/{id}", put(favorite).delete(unfavorite))
         .route("/search", get(search_notes))
@@ -316,6 +316,29 @@ async fn put_note(
     require_ready(&user)?;
     let note = notes::put_note(&state.vault_dir(&user.username), &id, &body.content)?;
     state.live.replace(user.id, &note.id, &note.content);
+    Ok(Json(note))
+}
+
+#[derive(Deserialize)]
+struct PatchNote {
+    title: Option<String>,
+    folder: Option<String>,
+}
+
+async fn patch_note(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(id): Path<String>,
+    Json(body): Json<PatchNote>,
+) -> Result<Json<notes::Note>, AppError> {
+    require_ready(&user)?;
+    let note = notes::update_meta(
+        &state.vault_dir(&user.username),
+        &id,
+        body.title.as_deref(),
+        body.folder.as_deref(),
+    )?;
+    state.live.index(user.id, notes::to_meta(&note));
     Ok(Json(note))
 }
 

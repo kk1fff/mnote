@@ -40,7 +40,7 @@ cd web && npm run dev
 
 cargo test
 cargo clippy --all-targets -- -D warnings
-cd web && npm test && npm run typecheck
+cd web && npm test && npm run typecheck && npm run test:e2e
 ```
 
 API is Rust (`src/`). Web is Vue + Vite (`web/`). Vite proxies `/api` to `127.0.0.1:3000`.

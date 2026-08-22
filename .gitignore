@@ -10,6 +10,11 @@
 /web/dist/
 /web/coverage/
 /web/.vite/
+/web/e2e/.auth/
+/web/test-results/
+/web/playwright-report/
+/web/blob-report/
+/web/playwright/.cache/
 
 .env
 .env.*

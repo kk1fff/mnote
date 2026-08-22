@@ -77,7 +77,7 @@ defineExpose({ load });
 </script>
 
 <template>
-  <aside class="sidebar">
+  <aside class="sidebar" data-testid="sidebar">
     <div class="brand">
       <strong>mnote</strong>
       <span>{{ currentUser?.username }}</span>

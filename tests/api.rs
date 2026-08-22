@@ -558,3 +558,80 @@ async fn missing_note_and_asset_errors() {
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn patch_renames_and_moves() {
+    let h = Harness::new();
+    let cookie = h.login("alice", "password1").await;
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &cookie,
+            Some(json!({ "title": "Alpha", "folder": "ideas", "content": "hi" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let id = body["id"].as_str().unwrap().to_string();
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::PATCH,
+            &format!("/api/notes/{id}"),
+            &cookie,
+            Some(json!({ "title": "Beta", "folder": "work" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["title"], "Beta");
+    assert_eq!(body["folder"], "work");
+    assert_eq!(body["content"], "hi");
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, &format!("/api/notes/{id}"), &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["title"], "Beta");
+    assert_eq!(body["folder"], "work");
+
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &cookie,
+            Some(json!({ "title": "Other" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::PATCH,
+            &format!("/api/notes/{id}"),
+            &cookie,
+            Some(json!({ "title": "other" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(body["error"].as_str().unwrap().starts_with("title_exists:"));
+
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::PATCH,
+            &format!("/api/notes/{id}"),
+            &cookie,
+            Some(json!({ "title": "***" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &cookie,
+            Some(json!({ "title": "-nope" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
