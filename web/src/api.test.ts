@@ -1,0 +1,65 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { api, ApiError, encodeNotePath } from "./api";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function jsonResponse(status: number, body: unknown) {
+  return new Response(body === undefined ? null : JSON.stringify(body), {
+    status,
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+  });
+}
+
+describe("api", () => {
+  it("encodes note paths", () => {
+    expect(encodeNotePath("a b/c")).toBe("a%20b/c");
+  });
+
+  it("parses success and empty responses", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { ok: true }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(api.health()).resolves.toEqual({ ok: true });
+    await expect(api.logout()).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/health",
+      expect.objectContaining({ credentials: "include" }),
+    );
+  });
+
+  it("throws ApiError from json error bodies", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => jsonResponse(401, { error: "unauthorized" })),
+    );
+    const err = await api.me().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 401, code: "unauthorized" });
+  });
+
+  it("covers remaining endpoints", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).startsWith("/api/search")) return jsonResponse(200, []);
+      if (String(url).startsWith("/api/assets")) return jsonResponse(200, { id: "1.png", url: "/api/assets/1.png", markdown: "![](/api/assets/1.png)" });
+      if (init?.method === "POST" && url === "/api/notes") return jsonResponse(201, { path: "x", content: "", modified_at: "" });
+      return jsonResponse(200, { path: "x", content: "c", modified_at: "" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await api.login("a", "b");
+    await api.changePassword("password1");
+    await api.listNotes();
+    await api.getNote("ideas/one");
+    await api.putNote("ideas/one", "hi");
+    await api.createNote("ideas/two", "x");
+    await api.daily("2026-08-22");
+    await api.putDaily("2026-08-22", "d");
+    await api.search("q");
+    await api.backlinks("ideas/one");
+    await api.uploadAsset(new File(["x"], "a.png", { type: "image/png" }));
+    expect(fetchMock).toHaveBeenCalled();
+  });
+});

@@ -1,0 +1,198 @@
+:root {
+  color: #1c1917;
+  background: #f5f0e8;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+}
+
+a {
+  color: #1d4ed8;
+  text-decoration: none;
+}
+
+a:hover,
+a.active {
+  text-decoration: underline;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  background: #1c1917;
+  color: #f5f0e8;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+button.linkish {
+  background: none;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  height: 100%;
+}
+
+.sidebar {
+  border-right: 1px solid #d6d3d1;
+  padding: 1rem;
+  overflow: auto;
+  background: #efe8db;
+}
+
+.sidebar .brand {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.sidebar ul,
+.results,
+.backlinks ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar li,
+.results li,
+.backlinks li {
+  margin: 0.35rem 0;
+}
+
+.search input,
+.card input {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+}
+
+.bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #d6d3d1;
+}
+
+.bar h1 {
+  font-size: 1.1rem;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.editor,
+.preview {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.preview {
+  padding: 1rem 1.5rem 2rem;
+}
+
+.preview img {
+  max-width: 100%;
+}
+
+.backlinks {
+  border-top: 1px solid #d6d3d1;
+  padding: 0.75rem 1rem 1rem;
+}
+
+.backlinks h2 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.4rem;
+}
+
+.muted {
+  color: #78716c;
+}
+
+.error {
+  color: #b91c1c;
+}
+
+.auth {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.card {
+  width: min(360px, 92vw);
+  background: #fff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgb(28 25 23 / 8%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.card h1 {
+  margin: 0 0 0.4rem;
+}
+
+.card label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.results {
+  padding: 1rem 1.5rem;
+}
+
+.results p {
+  margin: 0.2rem 0 0;
+  color: #57534e;
+}

@@ -1,0 +1,12 @@
+services:
+  mnote:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      MNOTE_PUBLIC_URL: http://localhost:3000
+    volumes:
+      - mnote-data:/data
+
+volumes:
+  mnote-data:
