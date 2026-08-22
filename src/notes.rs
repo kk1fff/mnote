@@ -262,6 +262,61 @@ pub fn search(vault: &Path, query: &str) -> Result<Vec<SearchHit>, AppError> {
     Ok(hits)
 }
 
+fn path_search_rank(path: &str, needle: &str) -> Option<u8> {
+    let path = path.to_lowercase();
+    let name = path.rsplit('/').next().unwrap_or(path.as_str());
+    if name == needle {
+        return Some(0);
+    }
+    if name.starts_with(needle) {
+        return Some(1);
+    }
+    if name.contains(needle) {
+        return Some(2);
+    }
+    if path.starts_with(needle) {
+        return Some(3);
+    }
+    let mut folders: Vec<&str> = path.split('/').collect();
+    folders.pop();
+    let mut best = None;
+    for folder in folders {
+        let rank = if folder == needle {
+            4
+        } else if folder.starts_with(needle) {
+            5
+        } else if folder.contains(needle) {
+            6
+        } else {
+            continue;
+        };
+        best = Some(best.map_or(rank, |current: u8| current.min(rank)));
+    }
+    best
+}
+
+pub fn search_titles(vault: &Path, query: &str) -> Result<Vec<NoteMeta>, AppError> {
+    let q = query.trim();
+    if q.is_empty() {
+        return Err(AppError::BadRequest("query is empty".into()));
+    }
+    if q.len() > 200 {
+        return Err(AppError::BadRequest("query is too long".into()));
+    }
+    let needle = q.to_lowercase();
+    let mut hits: Vec<_> = list_notes(vault)?
+        .into_iter()
+        .filter_map(|note| path_search_rank(&note.path, &needle).map(|rank| (rank, note)))
+        .collect();
+    hits.sort_by(|(left_rank, left), (right_rank, right)| {
+        left_rank
+            .cmp(right_rank)
+            .then_with(|| right.modified_at.cmp(&left.modified_at))
+            .then_with(|| left.path.cmp(&right.path))
+    });
+    Ok(hits.into_iter().take(10).map(|(_, note)| note).collect())
+}
+
 pub fn snippet(content: &str, idx: usize, needle_len: usize) -> String {
     let chars: Vec<char> = content.chars().collect();
     if chars.is_empty() {
@@ -398,6 +453,28 @@ mod tests {
         assert!(search(vault, &"q".repeat(201)).is_err());
         assert!(extract_wiki_targets("[[../x]]").is_empty());
         assert!(normalize_note_path(&"a".repeat(201)).is_err());
+    }
+
+    #[test]
+    fn title_search_ranks_name_then_path() {
+        assert_eq!(path_search_rank("mybox", "mybo"), Some(1));
+        assert_eq!(path_search_rank("mybox/file1", "mybo"), Some(3));
+        assert_eq!(
+            path_search_rank("archived/mybox2020/file2", "mybo"),
+            Some(5)
+        );
+        assert_eq!(path_search_rank("other/file", "mybo"), None);
+
+        let dir = tempdir().unwrap();
+        let vault = dir.path();
+        put_note(vault, "archived/mybox2020/file2", "inner").unwrap();
+        put_note(vault, "mybox/file1", "prefix").unwrap();
+        put_note(vault, "mybox-note", "name").unwrap();
+        let hits = search_titles(vault, "mybo").unwrap();
+        assert_eq!(
+            hits.iter().map(|n| n.path.as_str()).collect::<Vec<_>>(),
+            ["mybox-note", "mybox/file1", "archived/mybox2020/file2"]
+        );
     }
 
     #[test]

@@ -37,5 +37,8 @@ describe("AppShell", () => {
     await router.push("/n/2026-08-22");
     await flushPromises();
     expect(wrapper.classes()).not.toContain("nav-open");
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "o", ctrlKey: true, shiftKey: true }));
+    await flushPromises();
+    expect(wrapper.find(".note-picker").exists()).toBe(true);
   });
 });

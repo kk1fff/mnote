@@ -94,6 +94,7 @@ export const api = {
       body: JSON.stringify({ password }),
     }),
   listNotes: () => request<NoteMeta[]>("/api/notes"),
+  titleSearch: (q: string) => request<NoteMeta[]>(`/api/notes/title-search?q=${encodeURIComponent(q)}`),
   recentNotes: () => request<NoteMeta[]>("/api/notes/recent"),
   favorites: () => request<NoteMeta[]>("/api/favorites"),
   favorite: (path: string) => request<void>(`/api/favorites/${encodeNotePath(path)}`, { method: "PUT" }),

@@ -28,6 +28,7 @@ pub fn router(state: AppState) -> Router {
         .route("/notes", get(list_notes).post(create_note))
         .route("/notes/daily/{date}", get(daily_note).put(put_daily_note))
         .route("/notes/recent", get(recent_notes))
+        .route("/notes/title-search", get(search_titles))
         .route("/notes/{*path}", get(get_note).put(put_note))
         .route("/favorites", get(favorites))
         .route("/favorites/{*path}", put(favorite).delete(unfavorite))
@@ -333,6 +334,18 @@ async fn search_notes(
 ) -> Result<Json<Vec<notes::SearchHit>>, AppError> {
     require_ready(&user)?;
     Ok(Json(notes::search(
+        &state.vault_dir(&user.username),
+        &query.q,
+    )?))
+}
+
+async fn search_titles(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Query(query): Query<SearchQuery>,
+) -> Result<Json<Vec<notes::NoteMeta>>, AppError> {
+    require_ready(&user)?;
+    Ok(Json(notes::search_titles(
         &state.vault_dir(&user.username),
         &query.q,
     )?))

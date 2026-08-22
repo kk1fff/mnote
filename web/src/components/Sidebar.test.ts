@@ -9,7 +9,7 @@ vi.mock("../api", async () => {
   const actual = await vi.importActual<typeof import("../api")>("../api");
   return {
     ...actual,
-    api: { listNotes: vi.fn(), createNote: vi.fn() },
+    api: { listNotes: vi.fn() },
   };
 });
 
@@ -49,13 +49,8 @@ describe("Sidebar", () => {
     expect(router.currentRoute.value.path).toBe("/login");
   });
 
-  it("creates a nested note", async () => {
+  it("opens the note picker", async () => {
     vi.mocked(api.listNotes).mockResolvedValue([]);
-    vi.mocked(api.createNote).mockResolvedValue({
-      path: "ideas/one",
-      content: "# one\n\n",
-      modified_at: "",
-    });
     const router = createRouter({
       history: createWebHistory(),
       routes: [
@@ -68,10 +63,6 @@ describe("Sidebar", () => {
     const wrapper = mount(Sidebar, { global: { plugins: [router] } });
     await flushPromises();
     await wrapper.get(".new-note-button").trigger("click");
-    await wrapper.get('input[aria-label="New note path"]').setValue("ideas/one");
-    await wrapper.get("form.new-note").trigger("submit");
-    await flushPromises();
-    expect(api.createNote).toHaveBeenCalledWith("ideas/one");
-    expect(router.currentRoute.value.path).toBe("/n/ideas/one");
+    expect(wrapper.emitted("open-picker")).toHaveLength(1);
   });
 });

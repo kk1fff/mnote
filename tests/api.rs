@@ -311,6 +311,12 @@ async fn daily_crud_list_search_backlinks() {
     assert_eq!(body[0]["path"], "ideas/one");
 
     let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/notes/title-search?q=one", &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body[0]["path"], "ideas/one");
+
+    let (status, _, body) = h
         .call(h.authed(Method::GET, "/api/backlinks/ideas/one", &cookie, None))
         .await;
     assert_eq!(status, StatusCode::OK);
