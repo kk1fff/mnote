@@ -21,7 +21,7 @@ There is no self-signup.
 1. Admin creates the account and sends the printed invite:
    ```bash
    cargo run -- --data data user add alice
-   # docker: docker compose exec mnote user add alice
+   # docker: docker compose exec mnote mnote user add alice
    ```
 2. The person logs in with that username and temporary password.
 3. If the password has never been set, or is still the temporary password (`must_change_password`), the app must send them to set a password. Notes stay locked until they choose a **different** password.

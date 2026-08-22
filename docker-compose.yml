@@ -1,6 +1,7 @@
 services:
   mnote:
     build: .
+    init: true
     ports:
       - "3000:3000"
     environment:

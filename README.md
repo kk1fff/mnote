@@ -103,7 +103,7 @@ One volume, `/data`:
 
 ```bash
 docker compose up --build -d
-docker compose exec mnote user add alice
+docker compose exec mnote mnote user add alice
 ```
 
 Then open http://localhost:3000.
