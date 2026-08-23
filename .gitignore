@@ -15,6 +15,7 @@
 /web/playwright-report/
 /web/blob-report/
 /web/playwright/.cache/
+/web/artifacts/
 
 .env
 .env.*

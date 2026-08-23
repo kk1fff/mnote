@@ -11,9 +11,6 @@ vi.mock("../api", async () => {
     ...actual,
     api: {
       listParked: vi.fn().mockResolvedValue([]),
-      recentNotes: vi.fn().mockResolvedValue([
-        { id: "n1", title: "Weekly", folder: "ideas", modified_at: "" },
-      ]),
       createParked: vi.fn().mockResolvedValue({
         id: 1,
         body: "milk",
@@ -45,12 +42,7 @@ describe("QuickView", () => {
     await wrapper.get('[data-testid="quick-body"]').setValue("milk");
     await wrapper.get('[data-testid="quick-form"]').trigger("submit");
     await flushPromises();
-    expect(api.createParked).toHaveBeenCalledWith({
-      body: "milk",
-      source_id: "n1",
-      source_title: "Weekly",
-      source_folder: "ideas",
-    });
+    expect(api.createParked).toHaveBeenCalledWith({ body: "milk" });
     expect(wrapper.get('[data-testid="quick-done"]').text()).toContain("1 waiting");
   });
 });

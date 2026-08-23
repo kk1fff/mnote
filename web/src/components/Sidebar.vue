@@ -5,9 +5,16 @@ import { api, type NoteMeta } from "../api";
 import { noteIdFromRoute } from "../lib/paths";
 import { noteTree } from "../lib/tree";
 import { live, type LiveEvent } from "../live";
-import { parkedItems, refreshParked } from "../parked";
+import { parkedItems, refreshParked, showParkCapture } from "../parked";
 import { currentUser, logout } from "../session";
+import { cycleTheme, themeMode } from "../theme";
 import NoteTree from "./NoteTree.vue";
+
+const themeLabel = computed(() => {
+  if (themeMode.value === "light") return "Light";
+  if (themeMode.value === "dark") return "Dark";
+  return "System";
+});
 
 const notes = ref<NoteMeta[]>([]);
 const collapsed = ref(new Set<string>());
@@ -66,7 +73,7 @@ onBeforeUnmount(() => {
   stopLive();
 });
 
-const emit = defineEmits<{ "open-picker": []; "open-parked": [] }>();
+const emit = defineEmits<{ "open-picker": []; "open-parked": []; close: [] }>();
 
 defineExpose({ load });
 </script>
@@ -74,13 +81,21 @@ defineExpose({ load });
 <template>
   <aside class="sidebar" data-testid="sidebar">
     <div class="brand">
-      <strong>mnote</strong>
-      <span>{{ currentUser?.username }}</span>
+      <div class="brand-copy">
+        <strong>mnote</strong>
+        <span>{{ currentUser?.username }}</span>
+      </div>
+      <button type="button" class="nav-close" aria-label="Close sidebar" @click="emit('close')">
+        Close
+      </button>
     </div>
     <button class="new-note-button" type="button" @click="emit('open-picker')">Go to…</button>
+    <button class="parked-button ghost" type="button" data-testid="sidebar-park" @click="showParkCapture({})">
+      Park
+    </button>
     <button
       v-if="parkedItems.length"
-      class="parked-button"
+      class="parked-button ghost"
       type="button"
       data-testid="parked-count"
       @click="emit('open-parked')"
@@ -99,6 +114,10 @@ defineExpose({ load });
       </div>
     </div>
     <div class="sidebar-footer">
+      <button type="button" class="theme-toggle" data-testid="theme-toggle" @click="cycleTheme">
+        <span>Appearance</span>
+        <span class="muted">{{ themeLabel }}</span>
+      </button>
       <RouterLink to="/password">Account</RouterLink>
       <button type="button" class="linkish" @click="signOut">Sign out</button>
     </div>

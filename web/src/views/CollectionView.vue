@@ -29,7 +29,7 @@ watch(() => props.load, refresh);
   <AppShell v-slot="{ toggle }">
     <main class="main">
       <header class="bar">
-        <button type="button" class="nav-toggle" @click="toggle">Menu</button>
+        <button type="button" class="nav-toggle ghost" @click="toggle">Menu</button>
         <h1>{{ title }}</h1>
       </header>
       <p v-if="error" class="error results">{{ error }}</p>

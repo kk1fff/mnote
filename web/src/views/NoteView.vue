@@ -30,6 +30,8 @@ const isFavorite = ref(false);
 const shell = ref<{ load: () => Promise<void> } | null>(null);
 const editor = ref<{ excerpt: () => string; revealExcerpt: (quote: string) => boolean } | null>(null);
 const history = ref<{ show: () => void } | null>(null);
+const actionsOpen = ref(false);
+const actionsEl = ref<HTMLElement | null>(null);
 let replacing = false;
 const parkShortcut = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘↵" : "Ctrl+↵";
 let saveTimer: number | undefined;
@@ -255,6 +257,20 @@ function queueSave() {
   }, 800);
 }
 
+function closeActions() {
+  actionsOpen.value = false;
+}
+
+function runAction(action: () => void) {
+  closeActions();
+  action();
+}
+
+function onDocClick(event: MouseEvent) {
+  if (!actionsOpen.value || !actionsEl.value) return;
+  if (!actionsEl.value.contains(event.target as Node)) closeActions();
+}
+
 function onKey(event: KeyboardEvent) {
   if ((event.metaKey || event.ctrlKey) && event.key === "s") {
     event.preventDefault();
@@ -287,6 +303,7 @@ watch(content, () => {
 
 onMounted(() => {
   live.connect();
+  document.addEventListener("click", onDocClick);
   setParkContext(() => {
     if (!loadedId) return null;
     return {
@@ -301,6 +318,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopLive?.();
   setParkContext(null);
+  document.removeEventListener("click", onDocClick);
 });
 </script>
 
@@ -308,11 +326,12 @@ onBeforeUnmount(() => {
   <AppShell ref="shell" v-slot="{ toggle }" @keydown="onKey">
     <main class="main">
       <header class="bar">
-        <button type="button" class="nav-toggle" @click="toggle">Menu</button>
+        <button type="button" class="nav-toggle ghost" @click="toggle">Menu</button>
         <div class="note-heading">
           <form v-if="editingMeta" class="note-meta-form" @submit.prevent="saveMeta">
             <input
               v-model="draftTitle"
+              class="title-input"
               data-testid="note-title-input"
               aria-label="Note title"
               @keydown.enter.prevent="saveMeta"
@@ -320,6 +339,7 @@ onBeforeUnmount(() => {
             />
             <input
               v-model="draftFolder"
+              class="folder-input"
               data-testid="note-folder-input"
               aria-label="Note folder"
               placeholder="Folder"
@@ -328,23 +348,44 @@ onBeforeUnmount(() => {
             />
           </form>
           <template v-else>
-            <h1 data-testid="note-title" @click="beginMeta">{{ title || "Note" }}</h1>
-            <p class="muted note-folder" data-testid="note-folder" @click="beginMeta">
+            <h1 data-testid="note-title" title="Rename note" @click="beginMeta">{{ title || "Note" }}</h1>
+            <p class="muted note-folder" data-testid="note-folder" title="Move note" @click="beginMeta">
               {{ folder || "No folder" }}
             </p>
           </template>
         </div>
-        <div class="actions">
-          <span class="muted" data-testid="note-status">{{ status }}</span>
-          <button type="button" data-testid="park" @click="showParkCapture()">Park {{ parkShortcut }}</button>
-          <button type="button" data-testid="favorite" :aria-pressed="isFavorite" @click="toggleFavorite">
-            {{ isFavorite ? "Unfavorite" : "Favorite" }}
+        <div ref="actionsEl" class="actions" :class="{ open: actionsOpen }">
+          <span class="muted note-status" data-testid="note-status">{{ status }}</span>
+          <button
+            type="button"
+            class="actions-more"
+            aria-label="More actions"
+            :aria-expanded="actionsOpen"
+            @click="actionsOpen = !actionsOpen"
+          >
+            More
           </button>
-          <button type="button" data-testid="preview-toggle" @click="preview = !preview">
-            {{ preview ? "Source" : "Preview" }}
-          </button>
-          <button type="button" data-testid="history" @click="history?.show()">History</button>
-          <button type="button" data-testid="save" @click="save">Save</button>
+          <div class="actions-menu">
+            <button type="button" class="ghost" data-testid="park" @click="runAction(() => showParkCapture())">
+              Park {{ parkShortcut }}
+            </button>
+            <button
+              type="button"
+              class="ghost"
+              data-testid="favorite"
+              :aria-pressed="isFavorite"
+              @click="runAction(() => void toggleFavorite())"
+            >
+              {{ isFavorite ? "Unfavorite" : "Favorite" }}
+            </button>
+            <button type="button" class="ghost" data-testid="preview-toggle" @click="runAction(() => (preview = !preview))">
+              {{ preview ? "Source" : "Preview" }}
+            </button>
+            <button type="button" class="ghost" data-testid="history" @click="runAction(() => history?.show())">
+              History
+            </button>
+            <button type="button" data-testid="save" @click="runAction(() => void save())">Save</button>
+          </div>
         </div>
       </header>
       <Preview v-if="preview" :source="content" />

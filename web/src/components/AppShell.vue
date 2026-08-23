@@ -50,7 +50,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 <template>
   <div class="app-shell" :class="{ 'nav-open': open }">
     <button class="nav-scrim" type="button" aria-label="Close menu" @click="open = false" />
-    <Sidebar ref="sidebar" @open-picker="picker?.show()" @open-parked="parked?.show()" />
+    <Sidebar
+      ref="sidebar"
+      @open-picker="picker?.show()"
+      @open-parked="parked?.show()"
+      @close="open = false"
+    />
     <slot :toggle="() => (open = !open)" />
     <NotePicker ref="picker" @created="sidebar?.load()" />
     <ParkCapture />

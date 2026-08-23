@@ -45,3 +45,29 @@ cd web && npm test && npm run typecheck && npm run test:e2e
 ```
 
 API is Rust (`src/`). Web is Vue + Vite (`web/`). Vite proxies `/api` to `127.0.0.1:3000`.
+
+## Visual review
+
+After any visual, CSS, layout, or theme change, capture screenshots and inspect them. Do not treat unit tests as enough.
+
+1. API on `:3000` and Vite on `:5173` must be running.
+2. Ensure a throwaway account exists:
+   ```bash
+   cargo run -- --data data user add visual --password password1
+   ```
+   Skip if it already exists. First run sets password `visualpass1`.
+3. Capture:
+   ```bash
+   cd web && npm run visual:review
+   ```
+4. Read every PNG in `web/artifacts/visual/` with the image Read tool. Fix issues, then recapture the affected screens.
+
+Required shots: login light/dark, note desktop light/dark, title editing, history, park capture, parked list/detail, mobile note, mobile More menu, mobile nav.
+
+Check all of the following:
+
+- Header height does not change when the title or folder becomes an input.
+- Mobile top bar stays one row (Menu, title, More). Actions must not wrap.
+- History and parked sheets have a fixed shell. Selecting a revision or parked item must not move the page underneath or resize the chrome.
+- Light and dark both keep editor, sidebar, and dialog text readable against their backgrounds.
+- Empty or short content still looks designed: no raw unstyled boxes, clipped buttons, or overlapping chrome.

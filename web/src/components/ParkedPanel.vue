@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, type Parked } from "../api";
 import { noteHref } from "../lib/paths";
@@ -26,9 +26,10 @@ function close() {
   selected.value = null;
 }
 
-function onKey(event: KeyboardEvent) {
-  if (event.key !== "Escape") return;
+function onWindowKey(event: KeyboardEvent) {
+  if (!open.value || event.key !== "Escape") return;
   event.preventDefault();
+  event.stopPropagation();
   if (selected.value) {
     selected.value = null;
     return;
@@ -72,49 +73,64 @@ async function openSource() {
   await router.push(noteHref(selected.value.source_id));
 }
 
+onMounted(() => window.addEventListener("keydown", onWindowKey, true));
+onBeforeUnmount(() => window.removeEventListener("keydown", onWindowKey, true));
+
 defineExpose({ show, open });
 </script>
 
 <template>
-  <div v-if="open" class="parked-panel" data-testid="parked-panel" @keydown="onKey">
-    <template v-if="!selected">
-      <header class="parked-panel-bar">
-        <strong>Parked</strong>
-        <button type="button" class="linkish" @click="close">Close</button>
-      </header>
-      <p v-if="!items.length" class="muted parked-empty">Nothing parked</p>
-      <ul v-else class="parked-list">
-        <li v-for="item in items" :key="item.id">
-          <button type="button" data-testid="parked-row" @click="selected = item">
-            <span>{{ item.body.split("\n")[0] }}</span>
-            <small>
-              {{ ageLabel(item.created_at) }}
-              <template v-if="item.source_title"> · while in {{ item.source_title }}</template>
-              <template v-else> · opened to dump</template>
-            </small>
+  <div v-if="open" class="sheet-scrim" @click.self="close">
+    <section
+      class="sheet parked-panel"
+      data-testid="parked-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Parked thoughts"
+    >
+      <template v-if="!selected">
+        <header class="parked-panel-bar">
+          <strong>Parked thoughts</strong>
+          <button type="button" class="linkish" @click="close">Close</button>
+        </header>
+        <p v-if="!items.length" class="muted parked-empty">Nothing parked</p>
+        <ul v-else class="parked-list">
+          <li v-for="item in items" :key="item.id">
+            <button type="button" data-testid="parked-row" @click="selected = item">
+              <span>{{ item.body.split("\n")[0] }}</span>
+              <small>
+                {{ ageLabel(item.created_at) }}
+                <template v-if="item.source_title"> · while in {{ item.source_title }}</template>
+                <template v-else> · opened to dump</template>
+              </small>
+            </button>
+          </li>
+        </ul>
+      </template>
+      <template v-else>
+        <header class="parked-panel-bar">
+          <button type="button" class="linkish" data-testid="parked-back" @click="selected = null">
+            ← all parked
           </button>
-        </li>
-      </ul>
-    </template>
-    <template v-else>
-      <header class="parked-panel-bar">
-        <button type="button" class="linkish" data-testid="parked-back" @click="selected = null">
-          ← all parked
-        </button>
-        <button type="button" class="linkish" @click="close">Close</button>
-      </header>
-      <p class="parked-body" data-testid="parked-detail">{{ selected.body }}</p>
-      <p class="muted">{{ ageLabel(selected.created_at) }}</p>
-      <p v-if="selected.source_title" class="muted">while in {{ selected.source_title }}</p>
-      <blockquote v-if="selected.excerpt" class="parked-excerpt">{{ selected.excerpt }}</blockquote>
-      <p v-if="error" class="error">{{ error }}</p>
-      <div class="parked-actions">
-        <button type="button" data-testid="parked-make-note" @click="makeNote">Make a note</button>
-        <button type="button" class="linkish" data-testid="parked-open-source" @click="openSource">
-          Open source
-        </button>
-        <button type="button" class="linkish" data-testid="parked-dismiss" @click="dismiss">Dismiss</button>
-      </div>
-    </template>
+          <button type="button" class="linkish" @click="close">Close</button>
+        </header>
+        <div class="parked-detail">
+          <p class="muted parked-meta">
+            {{ ageLabel(selected.created_at) }}
+            <template v-if="selected.source_title"> · while in {{ selected.source_title }}</template>
+          </p>
+          <p class="parked-body" data-testid="parked-detail">{{ selected.body }}</p>
+          <blockquote v-if="selected.excerpt" class="parked-excerpt">{{ selected.excerpt }}</blockquote>
+          <p v-if="error" class="error parked-empty">{{ error }}</p>
+          <div class="parked-actions">
+            <button type="button" data-testid="parked-make-note" @click="makeNote">Make a note</button>
+            <button type="button" class="linkish" data-testid="parked-open-source" @click="openSource">
+              Open source
+            </button>
+            <button type="button" class="linkish" data-testid="parked-dismiss" @click="dismiss">Dismiss</button>
+          </div>
+        </div>
+      </template>
+    </section>
   </div>
 </template>

@@ -174,6 +174,8 @@ describe("NoteView", () => {
     const wrapper = mount(NoteView, { global: { plugins: [router] } });
     await flushPromises();
     await wrapper.get('[data-testid="note-title"]').trigger("click");
+    expect(wrapper.get(".note-heading").element.tagName).toBe("DIV");
+    expect(wrapper.get(".note-meta-form").classes()).toContain("note-meta-form");
     await wrapper.get('[data-testid="note-title-input"]').setValue("New");
     await wrapper.get('[data-testid="note-folder-input"]').setValue("work");
     await wrapper.get(".note-meta-form").trigger("submit");

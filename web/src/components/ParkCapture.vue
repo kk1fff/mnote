@@ -88,9 +88,10 @@ defineExpose({ show, open });
         placeholder="Dump the thought"
         @keydown="onKey"
       />
-      <p v-if="ctx.source_title" class="muted park-from">
-        From {{ ctx.source_title }}<template v-if="ctx.excerpt">: “{{ ctx.excerpt }}”</template>
-      </p>
+      <div v-if="ctx.source_title" class="park-context">
+        <p class="muted park-from">From {{ ctx.source_title }}</p>
+        <blockquote v-if="ctx.excerpt">{{ ctx.excerpt }}</blockquote>
+      </div>
       <p v-if="error" class="error">{{ error }}</p>
       <div class="park-capture-actions">
         <button type="button" class="linkish" @click="close">Esc cancel</button>

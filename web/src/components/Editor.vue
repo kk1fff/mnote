@@ -171,9 +171,20 @@ onMounted(() => {
         }),
         EditorView.editable.of(!props.disabled),
         EditorView.theme({
-          "&": { height: "100%", fontSize: "16px" },
-          ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" },
-          ".cm-content": { padding: "16px 12px" },
+          "&": {
+            height: "100%",
+            fontSize: "16px",
+            backgroundColor: "transparent",
+            color: "var(--text)",
+          },
+          ".cm-scroller": { fontFamily: "var(--font-mono)" },
+          ".cm-content": {
+            padding: "1.1rem 1.25rem 2rem",
+            caretColor: "var(--text)",
+            color: "var(--text)",
+          },
+          ".cm-line": { color: "var(--text)" },
+          ".cm-placeholder": { color: "var(--text-muted)" },
           "&.cm-focused": { outline: "none" },
         }),
       ],

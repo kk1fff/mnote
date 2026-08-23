@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { api, type HistoryEntry, type HistoryRev, type Note } from "../api";
 import { ageLabel } from "../lib/excerpt";
 import Preview from "./Preview.vue";
@@ -22,6 +22,12 @@ const busy = ref(false);
 const previewSource = () =>
   selected.value === "now" ? props.current : (revision.value?.content ?? "");
 
+const previewMeta = () => {
+  if (selected.value === "now") return "Current version";
+  if (!revision.value) return "Loading version…";
+  return `${revision.value.title}${revision.value.folder ? ` · ${revision.value.folder}` : ""}`;
+};
+
 async function show() {
   error.value = "";
   confirming.value = false;
@@ -41,9 +47,10 @@ function close() {
   confirming.value = false;
 }
 
-function onKey(event: KeyboardEvent) {
-  if (event.key !== "Escape") return;
+function onWindowKey(event: KeyboardEvent) {
+  if (!open.value || event.key !== "Escape") return;
   event.preventDefault();
+  event.stopPropagation();
   if (confirming.value) {
     confirming.value = false;
     return;
@@ -87,57 +94,67 @@ async function restore() {
   }
 }
 
+onMounted(() => window.addEventListener("keydown", onWindowKey, true));
+onBeforeUnmount(() => window.removeEventListener("keydown", onWindowKey, true));
+
 defineExpose({ show, open });
 </script>
 
 <template>
-  <div v-if="open" class="history-panel" data-testid="history-panel" @keydown="onKey">
-    <header class="history-panel-bar">
-      <strong>History</strong>
-      <button type="button" class="linkish" @click="close">Close</button>
-    </header>
-    <div class="history-split">
-      <ul class="history-list">
-        <li>
-          <button
-            type="button"
-            data-testid="history-now"
-            :aria-current="selected === 'now' ? 'true' : undefined"
-            @click="select('now')"
-          >
-            <span>Now</span>
-            <small>current</small>
-          </button>
-        </li>
-        <li v-for="item in items" :key="item.rev">
-          <button
-            type="button"
-            data-testid="history-row"
-            :aria-current="selected === item.rev ? 'true' : undefined"
-            @click="select(item.rev)"
-          >
-            <span>{{ ageLabel(item.created_at) }}</span>
-            <small>{{ item.created_at }}</small>
-          </button>
-        </li>
-      </ul>
-      <div class="history-preview">
-        <p v-if="selected !== 'now' && revision" class="muted">
-          {{ revision.title }}{{ revision.folder ? ` · ${revision.folder}` : "" }}
-        </p>
-        <Preview :source="previewSource()" />
-        <p v-if="error" class="error">{{ error }}</p>
-        <div v-if="selected !== 'now'" class="history-actions">
-          <button
-            type="button"
-            data-testid="history-restore"
-            :disabled="busy || !revision"
-            @click="restore"
-          >
-            {{ confirming ? "Confirm restore" : "Restore" }}
-          </button>
+  <div v-if="open" class="sheet-scrim" @click.self="close">
+    <section
+      class="sheet history-panel"
+      data-testid="history-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label="History"
+    >
+      <header class="history-panel-bar">
+        <strong>History</strong>
+        <button type="button" class="linkish" @click="close">Close</button>
+      </header>
+      <div class="history-split">
+        <ul class="history-list">
+          <li>
+            <button
+              type="button"
+              data-testid="history-now"
+              :aria-current="selected === 'now' ? 'true' : undefined"
+              @click="select('now')"
+            >
+              <span>Now</span>
+              <small>current</small>
+            </button>
+          </li>
+          <li v-for="item in items" :key="item.rev">
+            <button
+              type="button"
+              data-testid="history-row"
+              :aria-current="selected === item.rev ? 'true' : undefined"
+              @click="select(item.rev)"
+            >
+              <span>{{ ageLabel(item.created_at) }}</span>
+              <small>{{ item.created_at }}</small>
+            </button>
+          </li>
+        </ul>
+        <div class="history-preview">
+          <p class="muted history-meta">{{ previewMeta() }}</p>
+          <Preview :source="previewSource()" />
+          <p v-if="error" class="error parked-empty">{{ error }}</p>
+          <div class="history-actions">
+            <button
+              v-if="selected !== 'now'"
+              type="button"
+              data-testid="history-restore"
+              :disabled="busy || !revision"
+              @click="restore"
+            >
+              {{ confirming ? "Confirm restore" : "Restore" }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
   </div>
 </template>

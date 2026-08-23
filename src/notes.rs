@@ -233,7 +233,10 @@ fn heading_title(content: &str) -> Option<String> {
 }
 
 fn parse_frontmatter(raw: &str) -> (HashMap<String, String>, String) {
-    let Some(rest) = raw.strip_prefix("---\n").or_else(|| raw.strip_prefix("---\r\n")) else {
+    let Some(rest) = raw
+        .strip_prefix("---\n")
+        .or_else(|| raw.strip_prefix("---\r\n"))
+    else {
         return (HashMap::new(), raw.to_string());
     };
     let Some(end) = rest.find("\n---\n").or_else(|| rest.find("\n---\r\n")) else {
@@ -777,6 +780,20 @@ pub fn search(vault: &Path, query: &str) -> Result<Vec<SearchHit>, AppError> {
     Ok(hits)
 }
 
+fn split_folder_title_query(q: &str) -> Option<(&str, &str)> {
+    if q.ends_with('/') {
+        return None;
+    }
+    let (folder, title) = q.rsplit_once('/')?;
+    let folder = folder.trim_matches('/');
+    let title = title.trim();
+    if folder.is_empty() || title.is_empty() {
+        None
+    } else {
+        Some((folder, title))
+    }
+}
+
 fn title_search_rank(title: &str, folder: &str, needle: &str) -> Option<u8> {
     let title = title.to_lowercase();
     let folder = folder.to_lowercase();
@@ -818,10 +835,18 @@ pub fn search_titles(vault: &Path, query: &str) -> Result<Vec<NoteMeta>, AppErro
         return Err(AppError::BadRequest("query is too long".into()));
     }
     let needle = q.to_lowercase();
+    let in_folder = split_folder_title_query(&needle);
     let folder_prefix = needle.ends_with('/');
     let mut hits: Vec<_> = list_notes_internal(vault)?
         .into_iter()
         .filter_map(|note| {
+            if let Some((folder, title)) = in_folder {
+                let note_folder = note.folder.to_lowercase();
+                if note_folder == folder || note_folder.starts_with(&format!("{folder}/")) {
+                    return title_search_rank(&note.title, "", title).map(|rank| (rank, note));
+                }
+                return None;
+            }
             if folder_prefix {
                 let prefix = needle.trim_end_matches('/');
                 let folder = note.folder.to_lowercase();
@@ -839,7 +864,11 @@ pub fn search_titles(vault: &Path, query: &str) -> Result<Vec<NoteMeta>, AppErro
             .then_with(|| right.modified_at.cmp(&left.modified_at))
             .then_with(|| left.title.cmp(&right.title))
     });
-    Ok(hits.into_iter().take(10).map(|(_, note)| to_meta(&note)).collect())
+    Ok(hits
+        .into_iter()
+        .take(10)
+        .map(|(_, note)| to_meta(&note))
+        .collect())
 }
 
 pub fn snippet(content: &str, idx: usize, needle_len: usize) -> String {
@@ -997,7 +1026,8 @@ mod tests {
     fn wiki_backlinks_and_search() {
         let dir = tempdir().unwrap();
         let vault = dir.path();
-        let alpha = create_note(vault, "alpha", "", Some("see [[beta|B]] and [[missing]]")).unwrap();
+        let alpha =
+            create_note(vault, "alpha", "", Some("see [[beta|B]] and [[missing]]")).unwrap();
         let beta = create_note(vault, "beta", "", Some("root")).unwrap();
         assert_eq!(extract_wiki_targets("see [[beta|B]]"), vec!["beta"]);
         let links = backlinks(vault, &beta.id).unwrap();
@@ -1032,6 +1062,24 @@ mod tests {
             hits.iter().map(|n| n.title.as_str()).collect::<Vec<_>>(),
             ["mybox-note", "file1", "file2"]
         );
+    }
+
+    #[test]
+    fn title_search_folder_slash_matches_title_in_folder() {
+        let dir = tempdir().unwrap();
+        let vault = dir.path();
+        create_note(vault, "Alpha", "ideas", Some("a")).unwrap();
+        create_note(vault, "Alpine", "other", Some("b")).unwrap();
+        create_note(vault, "Beta", "ideas", Some("c")).unwrap();
+        let hits = search_titles(vault, "ideas/alp").unwrap();
+        assert_eq!(
+            hits.iter()
+                .map(|n| (n.folder.as_str(), n.title.as_str()))
+                .collect::<Vec<_>>(),
+            [("ideas", "Alpha")]
+        );
+        let browse = search_titles(vault, "ideas/").unwrap();
+        assert_eq!(browse.len(), 2);
     }
 
     #[test]
@@ -1122,9 +1170,7 @@ mod tests {
         let hist = list_history(vault, &note.id).unwrap();
         assert_eq!(hist.len(), 1);
         assert_eq!(
-            get_history(vault, &note.id, &hist[0].rev)
-                .unwrap()
-                .content,
+            get_history(vault, &note.id, &hist[0].rev).unwrap().content,
             "session"
         );
     }

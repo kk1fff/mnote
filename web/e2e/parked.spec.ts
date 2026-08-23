@@ -47,7 +47,25 @@ test("quick dump and dismiss", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);
   await page.getByTestId("parked-count").click();
+  await expect(page.getByTestId("parked-row").filter({ hasText: dump })).toContainText(
+    "opened to dump",
+  );
   await page.getByTestId("parked-row").filter({ hasText: dump }).click();
   await page.getByTestId("parked-dismiss").click();
   await expect(page.getByTestId("parked-panel")).toHaveCount(0);
+});
+
+test("sidebar park has no source note", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await page.getByTestId("sidebar-park").click();
+  await expect(page.getByTestId("park-capture")).toBeVisible();
+  await expect(page.getByTestId("park-capture")).not.toContainText("From ");
+  const dump = uid("Loose");
+  await page.getByTestId("park-body").fill(dump);
+  await page.getByTestId("park-save").click();
+  await page.getByTestId("parked-count").click();
+  await expect(page.getByTestId("parked-row").filter({ hasText: dump })).toContainText(
+    "opened to dump",
+  );
 });

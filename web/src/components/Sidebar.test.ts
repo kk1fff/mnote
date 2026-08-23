@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { live, type LiveEvent } from "../live";
 import { logout } from "../session";
@@ -34,7 +34,17 @@ vi.mock("../session", () => ({
   logout: vi.fn().mockResolvedValue(undefined),
 }));
 
+const { showParkCapture } = vi.hoisted(() => ({ showParkCapture: vi.fn() }));
+vi.mock("../parked", async () => {
+  const actual = await vi.importActual<typeof import("../parked")>("../parked");
+  return { ...actual, showParkCapture };
+});
+
 describe("Sidebar", () => {
+  afterEach(() => {
+    showParkCapture.mockClear();
+  });
+
   it("lists notes and signs out", async () => {
     vi.mocked(api.listNotes).mockResolvedValue([
       { id: "o1", title: "One", folder: "ideas", modified_at: "" },
@@ -57,10 +67,31 @@ describe("Sidebar", () => {
     expect(wrapper.text()).toContain("ideas");
     expect(wrapper.text()).toContain("One");
     expect(wrapper.get(".new-note-button").text()).toBe("Go to…");
+    expect(wrapper.get('[data-testid="theme-toggle"]').text()).toContain("System");
+    await wrapper.get('[data-testid="theme-toggle"]').trigger("click");
+    expect(wrapper.get('[data-testid="theme-toggle"]').text()).toContain("Light");
     await wrapper.get(".sidebar-footer button.linkish").trigger("click");
     await flushPromises();
     expect(logout).toHaveBeenCalled();
     expect(router.currentRoute.value.path).toBe("/login");
+  });
+
+  it("opens park without a source note", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([]);
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/", component: { template: "<div />" } },
+        { path: "/n/:id", component: { template: "<div />" } },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/");
+    await router.isReady();
+    const wrapper = mount(Sidebar, { global: { plugins: [router] } });
+    await flushPromises();
+    await wrapper.get('[data-testid="sidebar-park"]').trigger("click");
+    expect(showParkCapture).toHaveBeenCalledWith({});
   });
 
   it("opens the note picker", async () => {

@@ -1,21 +1,16 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { RouterLink } from "vue-router";
-import { api, type NoteMeta } from "../api";
-import { noteHref } from "../lib/paths";
+import { api } from "../api";
 import { refreshParked, parkedItems } from "../parked";
 
 const body = ref("");
 const error = ref("");
 const done = ref(false);
-const last = ref<NoteMeta | null>(null);
 const input = ref<HTMLTextAreaElement | null>(null);
 
 onMounted(async () => {
   input.value?.focus();
   await refreshParked().catch(() => undefined);
-  const recent = await api.recentNotes().catch(() => []);
-  last.value = recent[0] ?? null;
 });
 
 async function park() {
@@ -26,12 +21,7 @@ async function park() {
   }
   error.value = "";
   try {
-    await api.createParked({
-      body: text,
-      source_id: last.value?.id,
-      source_title: last.value?.title,
-      source_folder: last.value?.folder,
-    });
+    await api.createParked({ body: text });
     await refreshParked();
     body.value = "";
     done.value = true;
@@ -58,10 +48,6 @@ async function park() {
         Parked. {{ parkedItems.length }} waiting.
       </p>
       <button type="submit">Park</button>
-      <p v-if="last" class="muted">
-        Last note:
-        <RouterLink :to="noteHref(last.id)">{{ last.title }}</RouterLink>
-      </p>
     </form>
   </main>
 </template>
