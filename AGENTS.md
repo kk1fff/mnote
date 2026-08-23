@@ -48,6 +48,8 @@ API is Rust (`src/`). Web is Vue + Vite (`web/`). Vite proxies `/api` to `127.0.
 
 ## Visual review
 
+If a change is visual (UI, CSS, layout, theme, or chrome), show a preview in the proposal before implementing. Match the existing design language: typography, spacing, color, radius, motion, and component patterns already in the app. Do not invent a parallel look.
+
 After any visual, CSS, layout, or theme change, capture screenshots and inspect them. Do not treat unit tests as enough.
 
 1. API on `:3000` and Vite on `:5173` must be running.
