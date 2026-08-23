@@ -2,14 +2,15 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api, ApiError, type NoteMeta } from "../api";
-import { noteFolderLabel, noteHref, parseCreateQuery } from "../lib/paths";
+import { buildPickerSections, pickerItems, type PickerItem } from "../lib/picker";
+import { noteFolderLabel, noteHref } from "../lib/paths";
 
 const emit = defineEmits<{ created: [] }>();
 const router = useRouter();
 const query = ref("");
 const results = ref<NoteMeta[]>([]);
 const folders = ref<string[]>([]);
-const folderMode = ref(false);
+const foldersReady = ref(false);
 const open = ref(false);
 const error = ref("");
 const selected = ref(0);
@@ -20,41 +21,22 @@ let searchTimer: number | undefined;
 let searchId = 0;
 
 const trimmed = computed(() => query.value.trim());
-const folderQuery = computed(() => (trimmed.value.endsWith("/") ? trimmed.value.slice(0, -1).toLowerCase() : ""));
-const searchFolderRow = computed(() => !folderMode.value && !trimmed.value);
-const shown = computed(() => {
-  if (!folderQuery.value) return results.value;
-  const prefix = folderQuery.value;
-  return results.value.filter((note) => {
-    const folder = (note.folder ?? "").toLowerCase();
-    return folder === prefix || folder.startsWith(`${prefix}/`);
-  });
-});
-const folderHits = computed(() => {
-  const q = trimmed.value.toLowerCase();
-  return folders.value.filter((folder) => !q || folder.toLowerCase().includes(q));
-});
-const createDraft = computed(() =>
-  folderMode.value || folderQuery.value ? null : parseCreateQuery(query.value),
+const bang = computed(() => trimmed.value.startsWith("!"));
+const folderQuery = computed(() => (trimmed.value.endsWith("/") ? trimmed.value.slice(0, -1) : ""));
+const sections = computed(() =>
+  buildPickerSections({ query: query.value, notes: results.value, folders: folders.value }),
 );
-const canCreate = computed(() => {
-  if (!createDraft.value) return false;
-  const title = createDraft.value.title.toLowerCase();
-  return !results.value.some((note) => note.title.toLowerCase() === title);
+const items = computed(() => pickerItems(sections.value));
+const createItem = computed(() => {
+  const item = items.value.find((entry) => entry.type === "create");
+  return item?.type === "create" ? item : undefined;
 });
-const createLabel = computed(() => {
-  if (!createDraft.value) return trimmed.value;
-  return createDraft.value.folder
-    ? `${createDraft.value.folder}/${createDraft.value.title}`
-    : createDraft.value.title;
-});
-const noteOffset = computed(() => (searchFolderRow.value ? 1 : 0));
-const createIndex = computed(() =>
-  canCreate.value ? shown.value.length + noteOffset.value : -1,
-);
-const maxIndex = computed(() => {
-  if (folderMode.value) return folderHits.value.length - 1;
-  return shown.value.length + noteOffset.value + (canCreate.value ? 1 : 0) - 1;
+const canCreate = computed(() => !!createItem.value);
+const maxIndex = computed(() => items.value.length - 1);
+const itemOffset = computed(() => {
+  const offsets = new Map<string, number>();
+  items.value.forEach((item, index) => offsets.set(item.key, index));
+  return offsets;
 });
 
 function show() {
@@ -62,7 +44,7 @@ function show() {
   query.value = "";
   results.value = [];
   folders.value = [];
-  folderMode.value = false;
+  foldersReady.value = false;
   error.value = "";
   selected.value = 0;
   void nextTick(() => input.value?.focus());
@@ -70,12 +52,15 @@ function show() {
 
 function close() {
   open.value = false;
-  folderMode.value = false;
 }
 
 function clampSelected() {
   selected.value = Math.min(Math.max(selected.value, 0), Math.max(maxIndex.value, 0));
   if (maxIndex.value < 0) selected.value = -1;
+}
+
+function indexOf(item: PickerItem): number {
+  return itemOffset.value.get(item.key) ?? -1;
 }
 
 async function select(note: NoteMeta) {
@@ -84,10 +69,10 @@ async function select(note: NoteMeta) {
 }
 
 async function create() {
-  if (!canCreate.value || !createDraft.value) return;
+  if (!createItem.value) return;
   error.value = "";
   try {
-    const note = await api.createNote(createDraft.value.title, createDraft.value.folder);
+    const note = await api.createNote(createItem.value.draft.title, createItem.value.draft.folder);
     emit("created");
     close();
     await router.push(noteHref(note.id));
@@ -103,12 +88,8 @@ function folderPrefixes(folder: string): string[] {
   return out;
 }
 
-async function enterFolderMode() {
-  folderMode.value = true;
-  query.value = "";
-  results.value = [];
-  error.value = "";
-  selected.value = 0;
+async function ensureFolders() {
+  if (foldersReady.value) return;
   try {
     const notes = await api.listNotes();
     const found = new Set<string>();
@@ -119,40 +100,39 @@ async function enterFolderMode() {
   } catch {
     folders.value = [];
   }
+  foldersReady.value = true;
+}
+
+function enterFolderMode() {
+  query.value = "!";
+  results.value = [];
+  error.value = "";
+  selected.value = 0;
   void nextTick(() => input.value?.focus());
 }
 
 function pickFolder(folder: string) {
-  folderMode.value = false;
   query.value = `${folder}/`;
   selected.value = 0;
   void nextTick(() => input.value?.focus());
 }
 
+function activate(item: PickerItem) {
+  if (item.type === "note") void select(item.note);
+  else if (item.type === "folder") pickFolder(item.path);
+  else if (item.type === "search-folder") enterFolderMode();
+  else void create();
+}
+
 function submit() {
-  if (folderMode.value) {
-    if (selected.value >= 0 && selected.value < folderHits.value.length) {
-      pickFolder(folderHits.value[selected.value]);
-    }
-    return;
-  }
-  if (searchFolderRow.value && selected.value === 0) {
-    void enterFolderMode();
-    return;
-  }
-  const index = selected.value - noteOffset.value;
-  if (index >= 0 && index < shown.value.length) {
-    void select(shown.value[index]);
-    return;
-  }
-  if (canCreate.value) void create();
+  const item = items.value[selected.value];
+  if (item) activate(item);
 }
 
 function onKey(event: KeyboardEvent) {
   if (event.key === "Escape") {
     event.preventDefault();
-    if (folderMode.value) {
-      folderMode.value = false;
+    if (bang.value) {
       query.value = "";
       selected.value = 0;
       return;
@@ -180,15 +160,17 @@ watch(query, () => {
   window.clearTimeout(searchTimer);
   const requestId = ++searchId;
   error.value = "";
-  if (folderMode.value) {
+  if (bang.value) {
+    results.value = [];
     selected.value = 0;
+    void ensureFolders();
     clampSelected();
     return;
   }
   const q = trimmed.value;
   if (!q) {
     results.value = [];
-    selected.value = searchFolderRow.value ? 0 : -1;
+    selected.value = 0;
     return;
   }
   searchTimer = window.setTimeout(async () => {
@@ -202,13 +184,13 @@ watch(query, () => {
     } catch {
       if (requestId === searchId) {
         results.value = [];
-        selected.value = canCreate.value ? createIndex.value : searchFolderRow.value ? 0 : -1;
+        selected.value = items.value.findIndex((item) => item.type === "create");
       }
     }
   }, 120);
 });
 
-watch([shown, canCreate, folderMode, folderHits], () => {
+watch(items, () => {
   if (selected.value > maxIndex.value || selected.value < 0) clampSelected();
 });
 
@@ -227,61 +209,70 @@ defineExpose({ show });
           ref="input"
           v-model="query"
           type="search"
-          :placeholder="folderMode ? 'Search folders' : 'Search or create a note'"
+          :placeholder="bang ? 'Search folders' : 'Search or create a note'"
           data-testid="picker-input"
           aria-label="Search or create a note"
           @keydown="onKey"
         />
       </form>
       <p v-if="error" class="error picker-message">{{ error }}</p>
-      <template v-else-if="folderMode">
-        <ul v-if="folderHits.length" class="picker-results">
-          <li v-for="(folder, index) in folderHits" :key="folder">
-            <button type="button" :class="{ active: selected === index }" @click="pickFolder(folder)">
-              <span>{{ folder }}</span>
-            </button>
-          </li>
-        </ul>
-        <p v-else class="muted picker-message">No folders yet</p>
-      </template>
-      <template v-else>
-        <button
-          v-if="searchFolderRow"
-          type="button"
-          data-testid="picker-search-folder"
-          class="picker-create"
-          :class="{ active: selected === 0 }"
-          @click="enterFolderMode"
+      <div v-else class="picker-body">
+        <section v-for="section in sections" :key="section.id" class="picker-section">
+          <p class="picker-section-title">{{ section.label }}</p>
+          <ul class="picker-results">
+            <li v-for="item in section.items" :key="item.key">
+              <button
+                v-if="item.type === 'note'"
+                type="button"
+                :class="{ active: selected === indexOf(item) }"
+                @click="select(item.note)"
+              >
+                <span>{{ item.note.title }}</span>
+                <small v-if="noteFolderLabel(item.note)">{{ noteFolderLabel(item.note) }}</small>
+              </button>
+              <button
+                v-else-if="item.type === 'folder'"
+                type="button"
+                :class="{ active: selected === indexOf(item) }"
+                @click="pickFolder(item.path)"
+              >
+                <span>{{ item.path }}</span>
+              </button>
+              <button
+                v-else-if="item.type === 'search-folder'"
+                type="button"
+                data-testid="picker-search-folder"
+                :class="{ active: selected === indexOf(item) }"
+                @click="enterFolderMode"
+              >
+                <span>Search folder</span>
+              </button>
+              <button
+                v-else
+                type="button"
+                data-testid="picker-create"
+                class="picker-create"
+                :class="{ active: selected === indexOf(item) }"
+                @click="create"
+              >
+                <span>Create “{{ item.label }}”</span>
+                <small>{{ createShortcut }}</small>
+              </button>
+            </li>
+          </ul>
+        </section>
+        <p v-if="bang && !sections.length" class="muted picker-message">No folders yet</p>
+        <p
+          v-else-if="!bang && folderQuery && trimmed && !sections.some((section) => section.id === 'note')"
+          class="muted picker-message"
         >
-          <span>Search folder</span>
-        </button>
-        <ul v-if="shown.length" class="picker-results">
-          <li v-for="(note, index) in shown" :key="note.id">
-            <button type="button" :class="{ active: selected === index + noteOffset }" @click="select(note)">
-              <span>{{ note.title }}</span>
-              <small v-if="noteFolderLabel(note)">{{ noteFolderLabel(note) }}</small>
-            </button>
-          </li>
-        </ul>
-        <p v-else-if="folderQuery && trimmed" class="muted picker-message">
           No notes in {{ trimmed }}
         </p>
-        <p v-else-if="!trimmed" class="muted picker-message">
-          Type a title to search or create a note
+        <p v-else-if="!trimmed" class="muted picker-message">Type a title to search or create a note</p>
+        <p v-if="!bang && folderQuery && !canCreate" class="muted picker-message">
+          Type a name to create in {{ trimmed }}
         </p>
-        <button
-          v-if="canCreate"
-          type="button"
-          data-testid="picker-create"
-          class="picker-create"
-          :class="{ active: selected === createIndex }"
-          @click="create"
-        >
-          <span>Create “{{ createLabel }}”</span>
-          <small>{{ createShortcut }}</small>
-        </button>
-        <p v-else-if="folderQuery" class="muted picker-message">Type a name to create in {{ trimmed }}</p>
-      </template>
+      </div>
     </section>
   </div>
 </template>

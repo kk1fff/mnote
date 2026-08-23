@@ -152,9 +152,19 @@ button.linkish {
   outline: 0;
 }
 
-.picker-results {
+.picker-body {
   max-height: min(24rem, 55vh);
   overflow: auto;
+}
+
+.picker-section-title {
+  margin: 0;
+  padding: 0.5rem 1rem 0.15rem;
+  color: #78716c;
+  font-size: 0.75rem;
+}
+
+.picker-results {
   list-style: none;
   padding: 0;
   margin: 0;

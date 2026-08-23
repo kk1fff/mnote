@@ -49,6 +49,8 @@ describe("NotePicker", () => {
     await wrapper.get("input").setValue("pla");
     await vi.advanceTimersByTimeAsync(120);
     await flushPromises();
+    expect(wrapper.text()).toContain("Note");
+    expect(wrapper.text()).toContain("Create");
     expect(wrapper.text()).toContain("Plan");
     expect(wrapper.text()).toContain("work");
     expect(wrapper.text()).toContain("Create “pla”");
@@ -101,6 +103,7 @@ describe("NotePicker", () => {
       { id: "o1", title: "One", folder: "ideas", modified_at: "" },
     ]);
     const { wrapper } = await openPicker();
+    expect(wrapper.text()).toContain("Folder");
     expect(wrapper.get('[data-testid="picker-search-folder"]').text()).toContain("Search folder");
     await wrapper.get('[data-testid="picker-search-folder"]').trigger("click");
     await flushPromises();
@@ -112,5 +115,37 @@ describe("NotePicker", () => {
     await flushPromises();
     await wrapper.get(".picker-results button").trigger("click");
     expect((wrapper.get("input").element as HTMLInputElement).value).toBe("ideas/");
+  });
+
+  it("treats ! as folder search without calling title search", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([
+      { id: "o1", title: "One", folder: "ideas", modified_at: "" },
+      { id: "o2", title: "Two", folder: "work", modified_at: "" },
+    ]);
+    const { wrapper } = await openPicker();
+    await wrapper.get("input").setValue("!");
+    await flushPromises();
+    expect(api.titleSearch).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("ideas");
+    expect(wrapper.text()).toContain("work");
+    await wrapper.get("input").setValue("!ide");
+    await flushPromises();
+    expect(wrapper.text()).toContain("ideas");
+    expect(wrapper.text()).not.toContain("work");
+    expect(api.titleSearch).not.toHaveBeenCalled();
+  });
+
+  it("searches titles inside a folder path", async () => {
+    vi.useFakeTimers();
+    vi.mocked(api.titleSearch).mockResolvedValue([
+      { id: "o1", title: "Alpha", folder: "ideas", modified_at: "" },
+    ]);
+    const { wrapper } = await openPicker();
+    await wrapper.get("input").setValue("ideas/alp");
+    await vi.advanceTimersByTimeAsync(120);
+    await flushPromises();
+    expect(api.titleSearch).toHaveBeenCalledWith("ideas/alp");
+    expect(wrapper.text()).toContain("Alpha");
+    expect(wrapper.text()).toContain("Create “ideas/alp”");
   });
 });

@@ -40,6 +40,21 @@ test("picker opens an existing title without create", async ({ page }) => {
   await expect(page).toHaveURL(url);
 });
 
+test("bang searches folders", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  const title = uid("Bang");
+  await createNote(page, `ideas/${title}`);
+  await openPicker(page);
+  await page.getByTestId("picker-input").fill("!");
+  await expect(page.getByTestId("picker")).toContainText("ideas");
+  await page.getByTestId("picker-input").fill("!ide");
+  await expect(page.getByTestId("picker")).toContainText("ideas");
+  await page.getByTestId("picker-input").press("Enter");
+  await expect(page.getByTestId("picker-input")).toHaveValue("ideas/");
+  await expect(page.getByTestId("picker")).toContainText(title);
+});
+
 test("trailing slash browses a folder", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);
