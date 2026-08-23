@@ -415,7 +415,12 @@ onBeforeUnmount(() => {
             :aria-expanded="actionsOpen"
             @click="actionsOpen = !actionsOpen"
           >
-            More
+            <span class="actions-more-label">More</span>
+            <svg class="actions-more-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <circle cx="3.5" cy="8" r="1.2" fill="currentColor" />
+              <circle cx="8" cy="8" r="1.2" fill="currentColor" />
+              <circle cx="12.5" cy="8" r="1.2" fill="currentColor" />
+            </svg>
           </button>
           <div class="actions-menu">
             <button type="button" class="ghost" data-testid="park" @click="runAction(() => showParkCapture())">

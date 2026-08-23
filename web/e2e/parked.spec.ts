@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { uid } from "./env";
-import { createNote, typeInEditor } from "./helpers";
+import { createNote, noteAction, typeInEditor } from "./helpers";
 
 test("park from a note and make a note", async ({ page }) => {
   await page.goto("/");
@@ -9,10 +9,10 @@ test("park from a note and make a note", async ({ page }) => {
   await createNote(page, `ideas/${title}`);
   const marker = uid("retry");
   await typeInEditor(page, marker);
-  await page.getByTestId("save").click();
+  await noteAction(page, "save");
   await expect(page.getByTestId("note-status")).toHaveText("Saved");
 
-  await page.getByTestId("park").click();
+  await noteAction(page, "park");
   await expect(page.getByTestId("park-capture")).toBeVisible();
   const dump = uid("AskJim");
   await page.getByTestId("park-body").fill(`${dump}\nmore detail`);

@@ -7,7 +7,7 @@ import { noteTree } from "../lib/tree";
 import { live, type LiveEvent } from "../live";
 import { parkedItems, refreshParked, showParkCapture } from "../parked";
 import { currentUser, logout } from "../session";
-import { cycleTheme, themeMode } from "../theme";
+import { cycleTheme, setThemeMode, themeMode, type ThemeMode } from "../theme";
 import NoteTree from "./NoteTree.vue";
 
 const themeLabel = computed(() => {
@@ -20,6 +20,15 @@ const notes = ref<NoteMeta[]>([]);
 const collapsed = ref(new Set<string>());
 const route = useRoute();
 const router = useRouter();
+const footerMenu = ref<"account" | "appearance" | null>(null);
+const footerEl = ref<HTMLElement | null>(null);
+const narrow = ref(typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches);
+let footerMq: MediaQueryList | undefined;
+const themes: { id: ThemeMode; label: string }[] = [
+  { id: "system", label: "System" },
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+];
 
 const tree = computed(() => noteTree(notes.value));
 const activeId = computed(() =>
@@ -59,8 +68,36 @@ function toggle(path: string) {
 }
 
 async function signOut() {
+  footerMenu.value = null;
   await logout();
   await router.push("/login");
+}
+
+function toggleFooter(menu: "account" | "appearance") {
+  footerMenu.value = footerMenu.value === menu ? null : menu;
+}
+
+function closeFooter() {
+  footerMenu.value = null;
+}
+
+function chooseTheme(mode: ThemeMode) {
+  setThemeMode(mode);
+  closeFooter();
+}
+
+function onFooterDocClick(event: MouseEvent) {
+  if (!footerMenu.value || !footerEl.value) return;
+  if (!footerEl.value.contains(event.target as Node)) closeFooter();
+}
+
+function onFooterKey(event: KeyboardEvent) {
+  if (event.key === "Escape") closeFooter();
+}
+
+function syncNarrow() {
+  narrow.value = footerMq?.matches ?? false;
+  if (narrow.value) closeFooter();
 }
 
 live.connect();
@@ -70,10 +107,18 @@ onMounted(() => {
   live.connect();
   void load();
   void refreshParked().catch(() => undefined);
+  document.addEventListener("click", onFooterDocClick);
+  document.addEventListener("keydown", onFooterKey);
+  footerMq = window.matchMedia("(max-width: 720px)");
+  syncNarrow();
+  footerMq.addEventListener("change", syncNarrow);
 });
 
 onBeforeUnmount(() => {
   stopLive();
+  document.removeEventListener("click", onFooterDocClick);
+  document.removeEventListener("keydown", onFooterKey);
+  footerMq?.removeEventListener("change", syncNarrow);
 });
 
 const emit = defineEmits<{ "open-picker": []; "open-parked": []; close: [] }>();
@@ -116,8 +161,70 @@ defineExpose({ load });
         <NoteTree :nodes="tree" :active-id="activeId" :collapsed="collapsed" @toggle="toggle" />
       </div>
     </div>
-    <div class="sidebar-footer">
-      <button type="button" class="theme-toggle" data-testid="theme-toggle" @click="cycleTheme">
+    <div v-if="!narrow" ref="footerEl" class="sidebar-footer sidebar-footer-icons">
+      <div class="sidebar-menu" :class="{ open: footerMenu === 'account' }">
+        <button
+          type="button"
+          class="icon-btn"
+          data-testid="account-menu"
+          aria-label="Account"
+          :aria-expanded="footerMenu === 'account'"
+          @click="toggleFooter('account')"
+        >
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+            <circle cx="8" cy="5.2" r="2.35" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <path
+              d="M3.15 13.1c.55-2.35 2.35-3.55 4.85-3.55s4.3 1.2 4.85 3.55"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+        <div class="sidebar-popover sidebar-popover-account" role="menu">
+          <p class="sidebar-popover-user">{{ currentUser?.username }}</p>
+          <RouterLink to="/password" role="menuitem" @click="closeFooter">Account</RouterLink>
+          <button type="button" data-testid="sign-out" role="menuitem" @click="signOut">Sign out</button>
+        </div>
+      </div>
+      <div class="sidebar-menu" :class="{ open: footerMenu === 'appearance' }">
+        <button
+          type="button"
+          class="icon-btn theme-toggle"
+          data-testid="theme-toggle"
+          aria-label="Appearance"
+          :aria-expanded="footerMenu === 'appearance'"
+          @click="toggleFooter('appearance')"
+        >
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+            <circle cx="8" cy="8" r="2.05" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <path
+              d="M6.45 1.85h3.1l.4 1.4 1.35.5 1.25-.9.85.85-.9 1.25.5 1.35 1.4.4v3.1l-1.4.4-.5 1.35.9 1.25-.85.85-1.25-.9-1.35.5-.4 1.4h-3.1l-.4-1.4-1.35-.5-1.25.9-.85-.85.9-1.25-.5-1.35-1.4-.4v-3.1l1.4-.4.5-1.35-.9-1.25.85-.85 1.25.9 1.35-.5.4-1.4z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <div class="sidebar-popover sidebar-popover-theme" role="menu">
+          <button
+            v-for="theme in themes"
+            :key="theme.id"
+            type="button"
+            role="menuitemradio"
+            :aria-checked="themeMode === theme.id"
+            :data-testid="`theme-option-${theme.id}`"
+            @click="chooseTheme(theme.id)"
+          >
+            {{ theme.label }}
+          </button>
+        </div>
+      </div>
+    </div>
+    <div v-else class="sidebar-footer sidebar-footer-text">
+      <button type="button" class="theme-toggle" @click="cycleTheme">
         <span>Appearance</span>
         <span class="muted">{{ themeLabel }}</span>
       </button>

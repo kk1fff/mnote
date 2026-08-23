@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { readEnv, uid } from "./env";
-import { createNote, typeInEditor } from "./helpers";
+import { createNote, noteAction, typeInEditor } from "./helpers";
 
 function noteIdFromUrl(url: string): string {
   const id = new URL(url).pathname.split("/n/")[1] ?? "";
@@ -22,17 +22,17 @@ test("history lists a prior session and restore brings it back", async ({ page }
   await createNote(page, title);
   const first = uid("v1");
   await typeInEditor(page, first);
-  await page.getByTestId("save").click();
+  await noteAction(page, "save");
   await expect(page.getByTestId("note-status")).toHaveText("Saved");
   const noteId = noteIdFromUrl(page.url());
   ageSession(noteId);
 
   const second = uid("v2");
   await typeInEditor(page, ` ${second}`);
-  await page.getByTestId("save").click();
+  await noteAction(page, "save");
   await expect(page.getByTestId("note-status")).toHaveText("Saved");
 
-  await page.getByTestId("history").click();
+  await noteAction(page, "history");
   await expect(page.getByTestId("history-panel")).toBeVisible();
   await expect(page.getByTestId("history-now")).toBeVisible();
   await page.getByTestId("history-row").first().click();

@@ -25,6 +25,14 @@ export async function loginFresh(page: Page, username: string) {
   await page.waitForURL(/\/n\//);
 }
 
+export async function noteAction(page: Page, testId: string) {
+  const item = page.getByTestId(testId);
+  if (!(await item.isVisible())) {
+    await page.getByRole("button", { name: "More actions" }).click();
+  }
+  await item.click();
+}
+
 export async function openPicker(page: Page) {
   await page.getByRole("button", { name: "Go to…" }).click();
   await expect(page.getByTestId("picker")).toBeVisible();

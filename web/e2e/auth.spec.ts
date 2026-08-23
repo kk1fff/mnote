@@ -32,12 +32,14 @@ test("bad login stays on login with an error", async ({ page }) => {
 test("change password keeps the session", async ({ page }) => {
   await login(page, "alice", ALICE_PASSWORD);
   await page.waitForURL(/\/n\//);
-  await page.getByRole("link", { name: "Account" }).click();
+  await page.getByRole("button", { name: "Account" }).click();
+  await page.getByRole("menuitem", { name: "Account" }).click();
   await expect(page.getByRole("heading", { name: "Change password" })).toBeVisible();
   const next = "alicepass2";
   await setPassword(page, next);
   await page.waitForURL(/\/n\//);
-  await page.getByRole("link", { name: "Account" }).click();
+  await page.getByRole("button", { name: "Account" }).click();
+  await page.getByRole("menuitem", { name: "Account" }).click();
   await setPassword(page, ALICE_PASSWORD);
   await page.waitForURL(/\/n\//);
 });
@@ -45,7 +47,8 @@ test("change password keeps the session", async ({ page }) => {
 test("sign out requires login again", async ({ page }) => {
   await login(page, "alice", ALICE_PASSWORD);
   await page.waitForURL(/\/n\//);
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: "Account" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await page.waitForURL(/\/login/);
   await page.goto("/today");
   await page.waitForURL(/\/login/);

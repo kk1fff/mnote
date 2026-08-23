@@ -98,6 +98,7 @@ button.icon-btn,
 .picker-results button,
 .picker-create,
 .suggest-menu button,
+.sidebar-popover button,
 .history-list button,
 .parked-list button {
   background: var(--surface);
@@ -112,6 +113,8 @@ button.icon-btn:hover,
 .actions-more:hover,
 .theme-toggle:hover,
 .backlinks-toggle:hover,
+.sidebar-popover button:hover,
+.sidebar-popover button[aria-checked="true"],
 .picker-results button:hover,
 .picker-results button.active,
 .picker-create:hover,
@@ -152,6 +155,11 @@ button.icon-btn,
   padding: 0 0.65rem;
 }
 
+.icon-btn svg,
+.actions-more svg {
+  display: block;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr;
@@ -183,7 +191,7 @@ button.icon-btn,
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   background: var(--bg-sidebar);
 }
 
@@ -387,6 +395,76 @@ button.icon-btn,
   border-top: 1px solid var(--border);
 }
 
+.sidebar-footer-text {
+  display: none;
+}
+
+.sidebar-footer-icons {
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.35rem;
+  position: relative;
+}
+
+.sidebar-menu {
+  position: relative;
+}
+
+.sidebar-popover {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 0.35rem);
+  z-index: 12;
+  min-width: 10.5rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.sidebar-popover-account {
+  left: 0;
+}
+
+.sidebar-popover-theme {
+  right: 0;
+}
+
+.sidebar-menu.open .sidebar-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.sidebar-popover-user {
+  margin: 0;
+  padding: 0.35rem 0.65rem 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.sidebar-popover a,
+.sidebar-popover button {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  align-items: center;
+  min-height: 1.85rem;
+  padding: 0.3rem 0.65rem;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+  text-align: left;
+}
+
+.sidebar-popover a:hover {
+  background: var(--accent-soft);
+  text-decoration: none;
+}
+
 .theme-toggle {
   width: 100%;
   justify-content: space-between;
@@ -394,6 +472,11 @@ button.icon-btn,
   align-items: center;
   margin-bottom: 0.45rem;
   text-align: left;
+}
+
+.sidebar-footer-icons .theme-toggle {
+  width: auto;
+  margin-bottom: 0;
 }
 
 .note-library {
@@ -572,14 +655,32 @@ button.icon-btn,
   gap: 0.4rem;
 }
 
-.actions-more {
+.actions-more-label {
   display: none;
 }
 
 .actions-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 12;
+  min-width: 12.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.actions.open .actions-menu {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
+}
+
+.actions-menu button {
+  justify-content: flex-start;
 }
 
 .note-status {
@@ -1004,6 +1105,7 @@ button.icon-btn,
     width: min(18rem, 86vw);
     transform: translateX(-100%);
     transition: transform 0.16s ease;
+    overflow: hidden;
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 
@@ -1033,33 +1135,24 @@ button.icon-btn,
     border: 0;
   }
 
-  .actions-more {
-    display: inline-flex;
-  }
-
-  .actions-menu {
+  .sidebar > .sidebar-footer-icons {
     display: none;
-    position: absolute;
-    top: calc(100% + 0.4rem);
-    right: 0;
-    z-index: 12;
-    min-width: 12.5rem;
-    flex-direction: column;
-    align-items: stretch;
-    padding: 0.4rem;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--surface);
-    box-shadow: var(--shadow-lg);
   }
 
-  .actions.open .actions-menu {
+  .sidebar > .sidebar-footer-text {
     display: flex;
+  }
+
+  .actions-more-label {
+    display: inline;
+  }
+
+  .actions-more-icon {
+    display: none;
   }
 
   .actions-menu button {
     min-height: 2.5rem;
-    justify-content: flex-start;
   }
 
   .preview,
@@ -1121,5 +1214,156 @@ button.icon-btn,
   .history-list button {
     width: 9.5rem;
     margin: 0;
+  }
+}
+
+@media (min-width: 721px) {
+  :root {
+    --bar-height: 2.75rem;
+    --sidebar-width: 15rem;
+  }
+
+  button,
+  input,
+  textarea {
+    font-size: 0.875rem;
+  }
+
+  button {
+    padding: 0.25rem 0.6rem;
+  }
+
+  button.icon-btn,
+  .nav-toggle,
+  .nav-close,
+  .actions-more {
+    min-width: 1.85rem;
+    min-height: 1.85rem;
+    padding: 0 0.45rem;
+  }
+
+  .sidebar {
+    padding: 0.65rem;
+    padding-top: max(0.65rem, env(safe-area-inset-top));
+    padding-left: max(0.65rem, env(safe-area-inset-left));
+  }
+
+  .sidebar .brand {
+    margin-bottom: 0.5rem;
+  }
+
+  .sidebar .brand strong {
+    font-size: 0.95rem;
+  }
+
+  .new-note-button,
+  .parked-button {
+    margin-top: 0.35rem;
+  }
+
+  .parked-button {
+    margin-top: 0.25rem;
+  }
+
+  .sidebar .shortcuts {
+    margin: 0.55rem 0 0.65rem;
+  }
+
+  .sidebar-footer {
+    margin: 0.65rem 0 0;
+    padding-top: 0.5rem;
+  }
+
+  .note-heading,
+  .note-meta-form {
+    --title-h: 1.35rem;
+    --folder-h: 1.05rem;
+    height: 2.45rem;
+  }
+
+  .bar > h1,
+  .note-heading h1,
+  .note-meta-form .title-input {
+    font-size: 0.95rem;
+  }
+
+  .preview {
+    padding: 0.85rem 1.1rem 1.4rem;
+  }
+
+  .cm-editor .cm-content {
+    padding: 0.7rem 0.9rem 1.4rem;
+  }
+
+  .picker-mirror,
+  .note-picker input {
+    padding: 0.65rem 0.85rem;
+    font-size: 0.95rem;
+  }
+
+  .picker-results button,
+  .picker-create {
+    padding: 0.4rem 0.75rem;
+  }
+
+  .sheet-bar,
+  .history-panel-bar,
+  .parked-panel-bar {
+    min-height: 2.4rem;
+    padding: 0.45rem 0.75rem;
+  }
+
+  .history-list button,
+  .parked-list button {
+    margin-bottom: 0.2rem;
+    padding: 0.4rem 0.5rem;
+  }
+
+  .history-actions,
+  .parked-actions {
+    min-height: 2.6rem;
+    padding: 0.4rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
+  }
+
+  .backlinks-toggle {
+    padding: 0.45rem 0.75rem;
+  }
+
+  .results {
+    padding: 0.75rem 1rem;
+  }
+
+  .results li {
+    padding: 0.4rem 0;
+  }
+
+  .suggest-menu button {
+    min-height: 1.85rem;
+    padding: 0.28rem 0.5rem;
+  }
+
+  .park-capture {
+    padding: 0.85rem 0.9rem;
+    gap: 0.5rem;
+  }
+
+  .park-capture textarea,
+  .quick-card textarea {
+    min-height: 5rem;
+  }
+
+  .sidebar li,
+  .results li,
+  .backlinks li {
+    margin: 0.08rem 0;
+  }
+
+  .actions-menu button {
+    min-height: 1.85rem;
+  }
+
+  .card {
+    padding: 1.15rem;
+    gap: 0.6rem;
   }
 }

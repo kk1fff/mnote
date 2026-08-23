@@ -57,6 +57,14 @@ async function login(page, password = pass) {
   }
 }
 
+async function noteAction(page, testId) {
+  const item = page.getByTestId(testId);
+  if (!(await item.isVisible())) {
+    await page.getByRole("button", { name: "More actions" }).click();
+  }
+  await item.click();
+}
+
 async function closeSheet(page) {
   const close = page.getByRole("button", { name: "Close" }).last();
   if (await close.count()) await close.click().catch(() => undefined);
@@ -101,18 +109,18 @@ if (Math.abs(barAfter - barBefore) > 1) {
 }
 await page.getByTestId("note-title-input").press("Escape");
 
-await page.getByTestId("history").click();
+await noteAction(page, "history");
 await page.waitForSelector('[data-testid="history-panel"]');
 await shot(page, "04-history-sheet");
 await closeSheet(page);
 
-await page.getByTestId("delete-note-open").click();
+await noteAction(page, "delete-note-open");
 await page.waitForSelector('[data-testid="delete-note"]');
 await shot(page, "04b-delete-confirm");
 await page.keyboard.press("Escape");
 await page.waitForSelector('[data-testid="delete-note"]', { state: "hidden" });
 
-await page.getByTestId("park").click();
+await noteAction(page, "park");
 await page.waitForSelector('[data-testid="park-capture"]');
 await page.getByTestId("park-body").fill("Ask Jim about onboarding");
 await shot(page, "05-park-capture");
@@ -141,7 +149,7 @@ await page.keyboard.type("/");
 await page.waitForSelector('[data-testid="suggest"]');
 await shot(page, "08b-slash-dark");
 await page.keyboard.press("Escape");
-await page.getByTestId("history").click();
+await noteAction(page, "history");
 await page.waitForSelector('[data-testid="history-panel"]');
 await shot(page, "09-history-dark");
 await desktop.close();

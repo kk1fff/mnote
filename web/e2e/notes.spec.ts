@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { uid } from "./env";
-import { createNote, openPicker, typeInEditor } from "./helpers";
+import { createNote, noteAction, openPicker, typeInEditor } from "./helpers";
 
 test("today opens a dated note", async ({ page }) => {
   await page.goto("/");
@@ -87,7 +87,7 @@ test("save keeps content after reload", async ({ page }) => {
   await createNote(page, title);
   const marker = uid("body");
   await typeInEditor(page, marker);
-  await page.getByTestId("save").click();
+  await noteAction(page, "save");
   await expect(page.getByTestId("note-status")).toHaveText("Saved");
   await page.reload();
   await expect(page.locator(".cm-content")).toContainText(marker);
@@ -98,9 +98,9 @@ test("preview shows markdown and source returns", async ({ page }) => {
   await page.waitForURL(/\/n\//);
   await createNote(page, uid("Prev"));
   await typeInEditor(page, "hello **bold**");
-  await page.getByTestId("preview-toggle").click();
+  await noteAction(page, "preview-toggle");
   await expect(page.locator(".preview strong")).toHaveText("bold");
-  await page.getByTestId("preview-toggle").click();
+  await noteAction(page, "preview-toggle");
   await expect(page.getByTestId("editor")).toBeVisible();
 });
 
@@ -111,7 +111,7 @@ test("wiki link opens an existing note", async ({ page }) => {
   await createNote(page, target);
   await createNote(page, uid("WikiS"));
   await typeInEditor(page, `see [[${target}]]`);
-  await page.getByTestId("preview-toggle").click();
+  await noteAction(page, "preview-toggle");
   await page.locator(`a[data-wiki="${target}"]`).click();
   await expect(page.getByTestId("note-title")).toHaveText(target);
 });
@@ -122,7 +122,7 @@ test("wiki link creates a missing note", async ({ page }) => {
   const missing = uid("WikiM");
   await createNote(page, uid("WikiFrom"));
   await typeInEditor(page, `see [[${missing}]]`);
-  await page.getByTestId("preview-toggle").click();
+  await noteAction(page, "preview-toggle");
   await page.locator(`a[data-wiki="${missing}"]`).click();
   await page.waitForURL(/\/n\//);
   await expect(page.getByTestId("note-title")).toHaveText(missing);
@@ -136,14 +136,14 @@ test("delete warns about backlinks and leaves the link", async ({ page }) => {
   await createNote(page, target);
   await createNote(page, source);
   await typeInEditor(page, `[[${target}]]`);
-  await page.getByTestId("save").click();
+  await noteAction(page, "save");
   await expect(page.getByTestId("note-status")).toHaveText("Saved");
   await openPicker(page);
   await page.getByTestId("picker-input").fill(target);
   await page.getByTestId("picker").getByRole("button", { name: target }).click();
   await expect(page.getByTestId("note-title")).toHaveText(target);
   await expect(page.locator(".backlinks")).toContainText(source);
-  await page.getByTestId("delete-note-open").click();
+  await noteAction(page, "delete-note-open");
   await expect(page.getByTestId("delete-note")).toContainText(source);
   await page.getByTestId("delete-note-confirm").click();
   await page.waitForURL(/\/n\//);
@@ -163,7 +163,7 @@ test("backlinks list the linking note", async ({ page }) => {
   await createNote(page, target);
   await createNote(page, source);
   await typeInEditor(page, `[[${target}]]`);
-  await page.getByTestId("save").click();
+  await noteAction(page, "save");
   await expect(page.getByTestId("note-status")).toHaveText("Saved");
   await openPicker(page);
   await page.getByTestId("picker-input").fill(target);
@@ -177,12 +177,12 @@ test("favorite appears on favorites then unfavorite removes it", async ({ page }
   await page.waitForURL(/\/n\//);
   const title = uid("Fav");
   await createNote(page, title);
-  await page.getByTestId("favorite").click();
+  await noteAction(page, "favorite");
   await page.getByRole("link", { name: "Favorites" }).click();
   await expect(page.getByRole("heading", { name: "Favorites" })).toBeVisible();
   await expect(page.locator(".results")).toContainText(title);
   await page.getByRole("main").getByRole("link", { name: title }).click();
-  await page.getByTestId("favorite").click();
+  await noteAction(page, "favorite");
   await page.getByRole("link", { name: "Favorites" }).click();
   await expect(page.locator(".results")).not.toContainText(title);
 });

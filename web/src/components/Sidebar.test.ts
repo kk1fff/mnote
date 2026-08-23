@@ -67,10 +67,13 @@ describe("Sidebar", () => {
     expect(wrapper.text()).toContain("ideas");
     expect(wrapper.text()).toContain("One");
     expect(wrapper.get(".new-note-button").text()).toBe("Go to…");
-    expect(wrapper.get('[data-testid="theme-toggle"]').text()).toContain("System");
     await wrapper.get('[data-testid="theme-toggle"]').trigger("click");
-    expect(wrapper.get('[data-testid="theme-toggle"]').text()).toContain("Light");
-    await wrapper.get(".sidebar-footer button.linkish").trigger("click");
+    expect(wrapper.get('[data-testid="theme-option-system"]').attributes("aria-checked")).toBe("true");
+    await wrapper.get('[data-testid="theme-option-light"]').trigger("click");
+    await wrapper.get('[data-testid="theme-toggle"]').trigger("click");
+    expect(wrapper.get('[data-testid="theme-option-light"]').attributes("aria-checked")).toBe("true");
+    await wrapper.get('[data-testid="account-menu"]').trigger("click");
+    await wrapper.get('[data-testid="sign-out"]').trigger("click");
     await flushPromises();
     expect(logout).toHaveBeenCalled();
     expect(router.currentRoute.value.path).toBe("/login");
