@@ -219,11 +219,6 @@ defineExpose({ load });
     >
       {{ parkedItems.length }} parked
     </button>
-    <nav class="shortcuts" aria-label="Quick access">
-      <RouterLink to="/today">Today</RouterLink>
-      <RouterLink to="/recent">Recent</RouterLink>
-      <RouterLink to="/favorites">Favorites</RouterLink>
-    </nav>
     <div class="note-library">
       <p class="section-label">Notes</p>
       <div class="note-tree">

@@ -1,13 +1,20 @@
 import type { NoteMeta } from "../api";
 import { parseCreateQuery } from "./paths";
 
-export type PickerSectionId = "note" | "folder" | "create";
+export type PickerSectionId = "goto" | "note" | "folder" | "create";
 
 export type PickerItem =
+  | { type: "jump"; key: string; to: string; label: string }
   | { type: "note"; key: string; note: NoteMeta }
   | { type: "folder"; key: string; path: string }
   | { type: "search-folder"; key: "search-folder" }
   | { type: "create"; key: "create"; draft: { title: string; folder: string }; label: string };
+
+const JUMPS: Extract<PickerItem, { type: "jump" }>[] = [
+  { type: "jump", key: "today", to: "/today", label: "Today" },
+  { type: "jump", key: "recent", to: "/recent", label: "Recent" },
+  { type: "jump", key: "favorites", to: "/favorites", label: "Favorites" },
+];
 
 export interface PickerSection {
   id: PickerSectionId;
@@ -16,6 +23,7 @@ export interface PickerSection {
 }
 
 export const PICKER_SECTION_LABELS: Record<PickerSectionId, string> = {
+  goto: "Go to",
   note: "Note",
   folder: "Folder",
   create: "Create",
@@ -37,7 +45,12 @@ export function buildPickerSections(input: {
     const hits = input.folders.filter((folder) => !needle || folder.toLowerCase().includes(needle));
     return section("folder", hits.map(folderItem));
   }
-  if (!trimmed) return section("folder", [{ type: "search-folder", key: "search-folder" }]);
+  if (!trimmed) {
+    return [
+      ...section("goto", JUMPS),
+      ...section("folder", [{ type: "search-folder", key: "search-folder" }]),
+    ];
+  }
 
   const folderQuery = trimmed.endsWith("/") ? trimmed.slice(0, -1).toLowerCase() : "";
   const notes = folderQuery ? notesInFolder(input.notes, folderQuery) : input.notes;
@@ -49,8 +62,13 @@ export function buildPickerSections(input: {
         (note.folder ?? "").toLowerCase() === draft.folder.toLowerCase() &&
         note.title.toLowerCase() === draft.title.toLowerCase(),
     );
+  const needle = trimmed.toLowerCase();
 
   return [
+    ...section(
+      "goto",
+      folderQuery ? [] : JUMPS.filter((jump) => jump.label.toLowerCase().startsWith(needle)),
+    ),
     ...section(
       "note",
       notes.map((note) => ({ type: "note" as const, key: note.id, note })),

@@ -7,15 +7,45 @@ function note(id: string, title: string, folder = ""): NoteMeta {
 }
 
 describe("buildPickerSections", () => {
-  it("shows Search folder when the query is empty", () => {
+  it("shows Go to and Search folder when the query is empty", () => {
     const sections = buildPickerSections({ query: "", notes: [], folders: ["ideas"] });
     expect(sections).toEqual([
+      {
+        id: "goto",
+        label: "Go to",
+        items: [
+          { type: "jump", key: "today", to: "/today", label: "Today" },
+          { type: "jump", key: "recent", to: "/recent", label: "Recent" },
+          { type: "jump", key: "favorites", to: "/favorites", label: "Favorites" },
+        ],
+      },
       {
         id: "folder",
         label: "Folder",
         items: [{ type: "search-folder", key: "search-folder" }],
       },
     ]);
+  });
+
+  it("filters Go to destinations by prefix", () => {
+    const sections = buildPickerSections({ query: "fav", notes: [], folders: [] });
+    expect(pickerItems(sections)).toMatchObject([
+      { type: "jump", to: "/favorites", label: "Favorites" },
+      { type: "create", label: "fav" },
+    ]);
+  });
+
+  it("hides Go to in bang and folder browse", () => {
+    expect(
+      buildPickerSections({ query: "!", notes: [], folders: ["ideas"] }).map((section) => section.id),
+    ).toEqual(["folder"]);
+    expect(
+      buildPickerSections({
+        query: "ideas/",
+        notes: [note("o1", "One", "ideas")],
+        folders: [],
+      }).map((section) => section.id),
+    ).toEqual(["note"]);
   });
 
   it("lists notes and create for a partial title", () => {

@@ -361,7 +361,6 @@ button.icon-btn,
   padding: 0.8rem 1rem 1rem;
 }
 
-.sidebar .shortcuts,
 .sidebar-footer {
   display: flex;
   flex-direction: column;
@@ -369,7 +368,6 @@ button.icon-btn,
   margin: 0.85rem 0 1rem;
 }
 
-.sidebar .shortcuts a,
 .sidebar-footer a {
   display: block;
   padding: 0.32rem 0.5rem;
@@ -378,9 +376,7 @@ button.icon-btn,
   text-decoration: none;
 }
 
-.sidebar .shortcuts a:hover,
-.sidebar-footer a:hover,
-.sidebar .shortcuts a.router-link-active {
+.sidebar-footer a:hover {
   background: var(--accent-soft);
   color: var(--accent);
   text-decoration: none;
@@ -481,6 +477,7 @@ button.icon-btn,
   flex: 1;
   flex-direction: column;
   min-height: 0;
+  margin-top: 0.85rem;
 }
 
 .section-label {
@@ -1338,13 +1335,13 @@ button.icon-btn,
     margin-top: 0.25rem;
   }
 
-  .sidebar .shortcuts {
-    margin: 0.55rem 0 0.65rem;
-  }
-
   .sidebar-footer {
     margin: 0.65rem 0 0;
     padding-top: 0.5rem;
+  }
+
+  .note-library {
+    margin-top: 0.65rem;
   }
 
   .note-heading,

@@ -22,6 +22,9 @@ async function openPicker() {
     routes: [
       { path: "/", component: { template: "<div />" } },
       { path: "/n/:id", component: { template: "<div />" } },
+      { path: "/today", component: { template: "<div />" } },
+      { path: "/recent", component: { template: "<div />" } },
+      { path: "/favorites", component: { template: "<div />" } },
     ],
   });
   await router.push("/");
@@ -96,6 +99,16 @@ describe("NotePicker", () => {
     expect(wrapper.text()).toContain("Type a name to create in ideas/");
     expect(wrapper.find(".picker-create").exists()).toBe(false);
     expect(wrapper.text()).not.toMatch(/⌘↵ create|Ctrl\+↵ create/);
+  });
+
+  it("opens Today from the empty picker", async () => {
+    const { wrapper, router } = await openPicker();
+    expect(wrapper.text()).toContain("Go to");
+    expect(wrapper.text()).toContain("Today");
+    await wrapper.get(".picker-results button").trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/today");
+    expect(wrapper.find('[data-testid="picker"]').exists()).toBe(false);
   });
 
   it("enters folder search and fills the folder prefix", async () => {

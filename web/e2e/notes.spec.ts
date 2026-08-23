@@ -193,12 +193,14 @@ test("favorite appears on favorites then unfavorite removes it", async ({ page }
   const title = uid("Fav");
   await createNote(page, title);
   await noteAction(page, "favorite");
-  await page.getByRole("link", { name: "Favorites" }).click();
+  await openPicker(page);
+  await page.getByTestId("picker").getByRole("button", { name: "Favorites" }).click();
   await expect(page.getByRole("heading", { name: "Favorites" })).toBeVisible();
   await expect(page.locator(".results")).toContainText(title);
   await page.getByRole("main").getByRole("link", { name: title }).click();
   await noteAction(page, "favorite");
-  await page.getByRole("link", { name: "Favorites" }).click();
+  await openPicker(page);
+  await page.getByTestId("picker").getByRole("button", { name: "Favorites" }).click();
   await expect(page.locator(".results")).not.toContainText(title);
 });
 
@@ -207,7 +209,8 @@ test("recent lists an opened note", async ({ page }) => {
   await page.waitForURL(/\/n\//);
   const title = uid("Rec");
   await createNote(page, title);
-  await page.getByRole("link", { name: "Recent" }).click();
+  await openPicker(page);
+  await page.getByTestId("picker").getByRole("button", { name: "Recent" }).click();
   await expect(page.getByRole("heading", { name: "Recent notes" })).toBeVisible();
   await expect(page.locator(".results")).toContainText(title);
 });

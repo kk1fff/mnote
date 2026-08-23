@@ -68,6 +68,11 @@ async function select(note: NoteMeta) {
   await router.push(noteHref(note.id));
 }
 
+async function jump(to: string) {
+  close();
+  await router.push(to);
+}
+
 async function create() {
   if (!createItem.value) return;
   error.value = "";
@@ -121,6 +126,7 @@ function activate(item: PickerItem) {
   if (item.type === "note") void select(item.note);
   else if (item.type === "folder") pickFolder(item.path);
   else if (item.type === "search-folder") enterFolderMode();
+  else if (item.type === "jump") void jump(item.to);
   else void create();
 }
 
@@ -247,6 +253,14 @@ defineExpose({ show, open });
                 @click="enterFolderMode"
               >
                 <span>Search folder</span>
+              </button>
+              <button
+                v-else-if="item.type === 'jump'"
+                type="button"
+                :class="{ active: selected === indexOf(item) }"
+                @click="jump(item.to)"
+              >
+                <span>{{ item.label }}</span>
               </button>
               <button
                 v-else
