@@ -229,6 +229,23 @@ test("tree collapse and open a note", async ({ page }) => {
   await expect(page.getByTestId("note-title")).toHaveText(title);
 });
 
+test("tree collapse persists across navigation and reload", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  const title = uid("Keep");
+  await createNote(page, `ideas/${title}`);
+  const folder = () => page.getByTestId("sidebar").getByRole("button", { name: /ideas/ });
+  await folder().click();
+  await expect(page.getByTestId("sidebar").getByRole("link", { name: title })).toHaveCount(0);
+  await page.goto("/search");
+  await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
+  await expect(page.getByTestId("sidebar").getByRole("link", { name: title })).toHaveCount(0);
+  await expect(folder()).toContainText("▸");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
+  await expect(page.getByTestId("sidebar").getByRole("link", { name: title })).toHaveCount(0);
+});
+
 test("pasting a png inserts an asset", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);

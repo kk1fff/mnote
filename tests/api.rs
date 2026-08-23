@@ -553,6 +553,65 @@ async fn favorites_and_recent_notes_are_per_user() {
 }
 
 #[tokio::test]
+async fn collapsed_folders_are_per_user() {
+    let h = Harness::new();
+    let alice = h.login("alice", "password1").await;
+    let bob = h.login("bob", "password1").await;
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/collapsed-folders", &alice, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!([]));
+
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::PUT,
+            "/api/collapsed-folders/work/projects",
+            &alice,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _, _) = h
+        .call(h.authed(Method::PUT, "/api/collapsed-folders/ideas", &alice, None))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/collapsed-folders", &alice, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!(["ideas", "work/projects"]));
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/collapsed-folders", &bob, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!([]));
+
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::DELETE,
+            "/api/collapsed-folders/work/projects",
+            &alice,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/collapsed-folders", &alice, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!(["ideas"]));
+
+    let (status, _, body) = h
+        .call(h.authed(Method::PUT, "/api/collapsed-folders/..", &alice, None))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_ne!(body["error"], Value::Null);
+}
+
+#[tokio::test]
 async fn assets() {
     let h = Harness::new();
     let cookie = h.login("alice", "password1").await;

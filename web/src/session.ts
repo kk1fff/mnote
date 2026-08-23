@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { api, type Me } from "./api";
+import { resetCollapsed } from "./folders";
 import { live } from "./live";
 
 export const currentUser = ref<Me | null>(null);
@@ -33,6 +34,7 @@ export async function logout(): Promise<void> {
     await api.logout();
   } finally {
     currentUser.value = null;
+    resetCollapsed();
     live.disconnect();
   }
 }

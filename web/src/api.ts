@@ -74,6 +74,14 @@ export interface Parked {
   excerpt?: string;
 }
 
+function folderPath(folder: string): string {
+  return folder
+    .split("/")
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join("/");
+}
+
 function isNote(data: unknown): data is Note {
   return (
     !!data &&
@@ -140,6 +148,11 @@ export const api = {
   favorites: () => request<NoteMeta[]>("/api/favorites"),
   favorite: (id: string) => request<void>(`/api/favorites/${encodeURIComponent(id)}`, { method: "PUT" }),
   unfavorite: (id: string) => request<void>(`/api/favorites/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  collapsedFolders: () => request<string[]>("/api/collapsed-folders"),
+  collapseFolder: (folder: string) =>
+    request<void>(`/api/collapsed-folders/${folderPath(folder)}`, { method: "PUT" }),
+  expandFolder: (folder: string) =>
+    request<void>(`/api/collapsed-folders/${folderPath(folder)}`, { method: "DELETE" }),
   getNote: (id: string) => request<Note>(`/api/notes/${encodeURIComponent(id)}`),
   putNote: (id: string, content: string) =>
     request<Note>(`/api/notes/${encodeURIComponent(id)}`, {

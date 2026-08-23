@@ -23,6 +23,7 @@ vi.mock("../api", async () => {
       unfavorite: vi.fn(),
       logout: vi.fn(),
       listParked: vi.fn().mockResolvedValue([]),
+      collapsedFolders: vi.fn().mockResolvedValue([]),
       noteHistory: vi.fn().mockResolvedValue([]),
       noteRevision: vi.fn(),
       restoreNote: vi.fn(),

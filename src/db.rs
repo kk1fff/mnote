@@ -59,6 +59,11 @@ pub fn init(conn: &rusqlite::Connection) -> Result<(), AppError> {
         );
         CREATE INDEX IF NOT EXISTS parked_user_idx
             ON parked (user_id, created_at DESC);
+        CREATE TABLE IF NOT EXISTS collapsed_folders (
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            folder TEXT NOT NULL,
+            PRIMARY KEY (user_id, folder)
+        );
         ",
     )?;
     Ok(())
@@ -389,6 +394,45 @@ pub fn recent_paths(state: &AppState, user_id: i64) -> Result<Vec<String>, AppEr
     Ok(paths)
 }
 
+pub fn collapsed_folders(state: &AppState, user_id: i64) -> Result<Vec<String>, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    let mut stmt =
+        conn.prepare("SELECT folder FROM collapsed_folders WHERE user_id = ?1 ORDER BY folder")?;
+    let folders = stmt
+        .query_map(params![user_id], |row| row.get(0))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)?;
+    Ok(folders)
+}
+
+pub fn set_folder_collapsed(
+    state: &AppState,
+    user_id: i64,
+    folder: &str,
+    collapsed: bool,
+) -> Result<(), AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    if collapsed {
+        conn.execute(
+            "INSERT INTO collapsed_folders (user_id, folder) VALUES (?1, ?2)
+             ON CONFLICT(user_id, folder) DO NOTHING",
+            params![user_id, folder],
+        )?;
+    } else {
+        conn.execute(
+            "DELETE FROM collapsed_folders WHERE user_id = ?1 AND folder = ?2",
+            params![user_id, folder],
+        )?;
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Parked {
     pub id: i64,
@@ -596,5 +640,29 @@ mod tests {
         delete_parked(&state, alice.id, item.id).unwrap();
         assert!(list_parked(&state, alice.id).unwrap().is_empty());
         assert!(create_parked(&state, alice.id, "   ", None, None, None, None).is_err());
+    }
+
+    #[test]
+    fn collapsed_folders_are_per_user() {
+        let (_dir, state) = setup();
+        create_user(&state, "alice", Some("password1")).unwrap();
+        create_user(&state, "bob", Some("password1")).unwrap();
+        let alice = authenticate(&state, "alice", "password1").unwrap();
+        let bob = authenticate(&state, "bob", "password1").unwrap();
+        set_folder_collapsed(&state, alice.id, "ideas", true).unwrap();
+        set_folder_collapsed(&state, alice.id, "work/projects", true).unwrap();
+        set_folder_collapsed(&state, alice.id, "ideas", true).unwrap();
+        assert_eq!(
+            collapsed_folders(&state, alice.id).unwrap(),
+            vec!["ideas", "work/projects"]
+        );
+        assert!(collapsed_folders(&state, bob.id).unwrap().is_empty());
+        set_folder_collapsed(&state, alice.id, "ideas", false).unwrap();
+        assert_eq!(
+            collapsed_folders(&state, alice.id).unwrap(),
+            vec!["work/projects"]
+        );
+        set_folder_collapsed(&state, bob.id, "ideas", false).unwrap();
+        assert!(collapsed_folders(&state, bob.id).unwrap().is_empty());
     }
 }

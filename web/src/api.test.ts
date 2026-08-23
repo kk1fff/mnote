@@ -79,6 +79,9 @@ describe("api", () => {
     await api.favorites();
     await api.favorite("note-1");
     await api.unfavorite("note-1");
+    await api.collapsedFolders();
+    await api.collapseFolder("work/projects");
+    await api.expandFolder("work/projects");
     await api.getNote("note-1");
     await api.putNote("note-1", "hi");
     await api.patchNote("note-1", { title: "Renamed", folder: "ideas" });

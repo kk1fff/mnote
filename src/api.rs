@@ -41,6 +41,11 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/favorites", get(favorites))
         .route("/favorites/{id}", put(favorite).delete(unfavorite))
+        .route("/collapsed-folders", get(list_collapsed_folders))
+        .route(
+            "/collapsed-folders/{*folder}",
+            put(collapse_folder).delete(expand_folder),
+        )
         .route("/search", get(search_notes))
         .route("/parked", get(list_parked).post(create_parked))
         .route("/parked/{id}", axum::routing::delete(delete_parked))
@@ -316,6 +321,42 @@ async fn unfavorite(
 ) -> Result<StatusCode, AppError> {
     require_ready(&user)?;
     db::set_favorite(&state, user.id, &id, false)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn folder_key(raw: &str) -> Result<String, AppError> {
+    let folder = notes::normalize_folder(raw)?;
+    if folder.is_empty() {
+        return Err(AppError::BadRequest("folder path is empty".into()));
+    }
+    Ok(folder)
+}
+
+async fn list_collapsed_folders(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+) -> Result<Json<Vec<String>>, AppError> {
+    require_ready(&user)?;
+    Ok(Json(db::collapsed_folders(&state, user.id)?))
+}
+
+async fn collapse_folder(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(folder): Path<String>,
+) -> Result<StatusCode, AppError> {
+    require_ready(&user)?;
+    db::set_folder_collapsed(&state, user.id, &folder_key(&folder)?, true)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn expand_folder(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(folder): Path<String>,
+) -> Result<StatusCode, AppError> {
+    require_ready(&user)?;
+    db::set_folder_collapsed(&state, user.id, &folder_key(&folder)?, false)?;
     Ok(StatusCode::NO_CONTENT)
 }
 

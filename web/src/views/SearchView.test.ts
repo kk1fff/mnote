@@ -10,6 +10,8 @@ vi.mock("../api", async () => {
     ...actual,
     api: {
       listNotes: vi.fn().mockResolvedValue([]),
+      listParked: vi.fn().mockResolvedValue([]),
+      collapsedFolders: vi.fn().mockResolvedValue([]),
       search: vi.fn(),
     },
   };

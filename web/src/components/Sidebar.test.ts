@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { live, type LiveEvent } from "../live";
+import { resetCollapsed } from "../folders";
 import { logout } from "../session";
 import Sidebar from "./Sidebar.vue";
 
@@ -13,6 +14,9 @@ vi.mock("../api", async () => {
     api: {
       listNotes: vi.fn(),
       listParked: vi.fn().mockResolvedValue([]),
+      collapsedFolders: vi.fn().mockResolvedValue([]),
+      collapseFolder: vi.fn().mockResolvedValue(undefined),
+      expandFolder: vi.fn().mockResolvedValue(undefined),
       backlinks: vi.fn().mockResolvedValue([]),
       deleteNote: vi.fn().mockResolvedValue(undefined),
     },
@@ -48,6 +52,29 @@ vi.mock("../parked", async () => {
 describe("Sidebar", () => {
   afterEach(() => {
     showParkCapture.mockClear();
+    vi.mocked(api.collapsedFolders).mockResolvedValue([]);
+    resetCollapsed();
+  });
+
+  it("hides notes in collapsed folders", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([
+      { id: "o1", title: "One", folder: "ideas", modified_at: "" },
+    ]);
+    vi.mocked(api.collapsedFolders).mockResolvedValueOnce(["ideas"]);
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/", component: { template: "<div />" } },
+        { path: "/n/:id", component: { template: "<div />" } },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/");
+    await router.isReady();
+    const wrapper = mount(Sidebar, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(wrapper.text()).toContain("ideas");
+    expect(wrapper.text()).not.toContain("One");
   });
 
   it("lists notes and signs out", async () => {

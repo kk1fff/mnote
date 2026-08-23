@@ -6,6 +6,7 @@ import { clearDraft } from "../lib/drafts";
 import { noteIdFromRoute } from "../lib/paths";
 import { noteTree } from "../lib/tree";
 import { live, type LiveEvent } from "../live";
+import { collapsed, refreshCollapsed, toggleCollapsed } from "../folders";
 import { parkedItems, refreshParked, showParkCapture } from "../parked";
 import { currentUser, logout } from "../session";
 import { cycleTheme, setThemeMode, themeMode, type ThemeMode } from "../theme";
@@ -19,7 +20,6 @@ const themeLabel = computed(() => {
 });
 
 const notes = ref<NoteMeta[]>([]);
-const collapsed = ref(new Set<string>());
 const route = useRoute();
 const router = useRouter();
 const footerMenu = ref<"account" | "appearance" | null>(null);
@@ -68,13 +68,6 @@ function onLive(event: LiveEvent) {
 
 async function load() {
   notes.value = await api.listNotes();
-}
-
-function toggle(path: string) {
-  const next = new Set(collapsed.value);
-  if (next.has(path)) next.delete(path);
-  else next.add(path);
-  collapsed.value = next;
 }
 
 async function signOut() {
@@ -175,6 +168,7 @@ const stopLive = live.on(onLive);
 onMounted(() => {
   live.connect();
   void load();
+  void refreshCollapsed().catch(() => undefined);
   void refreshParked().catch(() => undefined);
   document.addEventListener("click", onFooterDocClick);
   document.addEventListener("keydown", onFooterKey);
@@ -227,7 +221,7 @@ defineExpose({ load });
           :active-id="activeId"
           :collapsed="collapsed"
           :menu-id="menuNote?.id ?? ''"
-          @toggle="toggle"
+          @toggle="toggleCollapsed"
           @menu="openMenu"
         />
       </div>
