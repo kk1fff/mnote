@@ -370,8 +370,7 @@ button.icon-btn,
 }
 
 .sidebar .shortcuts a,
-.sidebar-footer a,
-.sidebar .tree a {
+.sidebar-footer a {
   display: block;
   padding: 0.32rem 0.5rem;
   border-radius: 8px;
@@ -381,9 +380,7 @@ button.icon-btn,
 
 .sidebar .shortcuts a:hover,
 .sidebar-footer a:hover,
-.sidebar .tree a:hover,
-.sidebar .shortcuts a.router-link-active,
-.sidebar .tree a.active {
+.sidebar .shortcuts a.router-link-active {
   background: var(--accent-soft);
   color: var(--accent);
   text-decoration: none;
@@ -517,6 +514,75 @@ button.icon-btn,
 
 .sidebar .tree .tree {
   padding-left: 0.85rem;
+}
+
+.sidebar .tree-row {
+  display: flex;
+  align-items: center;
+  gap: 0.05rem;
+  border-radius: 8px;
+}
+
+.sidebar .tree-row:hover,
+.sidebar .tree-row:focus-within,
+.sidebar .tree-row.open,
+.sidebar .tree-row.active {
+  background: var(--accent-soft);
+}
+
+.sidebar .tree-link {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  padding: 0.32rem 0.35rem 0.32rem 0.5rem;
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar .tree-row:hover .tree-link,
+.sidebar .tree-row:focus-within .tree-link,
+.sidebar .tree-row.open .tree-link,
+.sidebar .tree-link.active {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.sidebar .tree-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.7rem;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  min-height: 1.7rem;
+  margin-right: 0.12rem;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.sidebar .tree-more:hover,
+.sidebar .tree-row.open .tree-more {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.sidebar .tree-more svg {
+  display: block;
+}
+
+.tree-menu {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  z-index: 32;
 }
 
 .sidebar .folder {
@@ -1109,6 +1175,13 @@ button.icon-btn,
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 
+  .sidebar .tree-more {
+    width: 2rem;
+    min-width: 2rem;
+    height: 2rem;
+    min-height: 2rem;
+  }
+
   .app-shell.nav-open .sidebar {
     transform: none;
   }
@@ -1356,6 +1429,16 @@ button.icon-btn,
   .results li,
   .backlinks li {
     margin: 0.08rem 0;
+  }
+
+  .sidebar .tree-more {
+    opacity: 0;
+  }
+
+  .sidebar .tree-row:hover .tree-more,
+  .sidebar .tree-row:focus-within .tree-more,
+  .sidebar .tree-row.open .tree-more {
+    opacity: 1;
   }
 
   .actions-menu button {

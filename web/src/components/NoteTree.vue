@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { NoteMeta } from "../api";
 import { noteHref } from "../lib/paths";
 import type { TreeNode } from "../lib/tree";
 import NoteTree from "./NoteTree.vue";
@@ -7,10 +8,12 @@ defineProps<{
   nodes: TreeNode[];
   activeId: string;
   collapsed: Set<string>;
+  menuId: string;
 }>();
 
 const emit = defineEmits<{
   toggle: [path: string];
+  menu: [note: NoteMeta, event: MouseEvent];
 }>();
 </script>
 
@@ -26,16 +29,38 @@ const emit = defineEmits<{
           :nodes="node.children"
           :active-id="activeId"
           :collapsed="collapsed"
+          :menu-id="menuId"
           @toggle="emit('toggle', $event)"
+          @menu="(note, event) => emit('menu', note, event)"
         />
       </template>
-      <RouterLink
+      <div
         v-else
-        :to="noteHref(node.note.id)"
-        :class="{ active: activeId === node.note.id }"
+        class="tree-row"
+        :class="{ active: activeId === node.note.id, open: menuId === node.note.id }"
       >
-        {{ node.name }}
-      </RouterLink>
+        <RouterLink
+          class="tree-link"
+          :to="noteHref(node.note.id)"
+          :class="{ active: activeId === node.note.id }"
+        >
+          {{ node.name }}
+        </RouterLink>
+        <button
+          type="button"
+          class="tree-more"
+          :aria-label="`Actions for ${node.name}`"
+          :aria-expanded="menuId === node.note.id"
+          data-testid="tree-more"
+          @click.stop="emit('menu', node.note, $event)"
+        >
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+            <circle cx="3.5" cy="8" r="1.2" fill="currentColor" />
+            <circle cx="8" cy="8" r="1.2" fill="currentColor" />
+            <circle cx="12.5" cy="8" r="1.2" fill="currentColor" />
+          </svg>
+        </button>
+      </div>
     </li>
   </ul>
 </template>

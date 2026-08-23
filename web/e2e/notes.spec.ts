@@ -155,6 +155,21 @@ test("delete warns about backlinks and leaves the link", async ({ page }) => {
   await expect(page.locator(".cm-content")).toContainText(`[[${target}]]`);
 });
 
+test("sidebar row menu deletes a note", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  const title = uid("SideDel");
+  await createNote(page, title);
+  const row = page.getByTestId("sidebar").locator(".tree-row", { hasText: title });
+  await row.hover();
+  await row.getByTestId("tree-more").click();
+  await page.getByTestId("tree-delete").click();
+  await expect(page.getByTestId("delete-note")).toBeVisible();
+  await page.getByTestId("delete-note-confirm").click();
+  await page.waitForURL(/\/today|\/n\//);
+  await expect(page.getByTestId("sidebar")).not.toContainText(title);
+});
+
 test("backlinks list the linking note", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);

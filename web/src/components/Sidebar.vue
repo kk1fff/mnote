@@ -2,12 +2,14 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, type NoteMeta } from "../api";
+import { clearDraft } from "../lib/drafts";
 import { noteIdFromRoute } from "../lib/paths";
 import { noteTree } from "../lib/tree";
 import { live, type LiveEvent } from "../live";
 import { parkedItems, refreshParked, showParkCapture } from "../parked";
 import { currentUser, logout } from "../session";
 import { cycleTheme, setThemeMode, themeMode, type ThemeMode } from "../theme";
+import DeleteNoteDialog from "./DeleteNoteDialog.vue";
 import NoteTree from "./NoteTree.vue";
 
 const themeLabel = computed(() => {
@@ -22,6 +24,14 @@ const route = useRoute();
 const router = useRouter();
 const footerMenu = ref<"account" | "appearance" | null>(null);
 const footerEl = ref<HTMLElement | null>(null);
+const menuNote = ref<NoteMeta | null>(null);
+const menuEl = ref<HTMLElement | null>(null);
+const menuTop = ref(0);
+const menuLeft = ref(0);
+const deleteTarget = ref<NoteMeta | null>(null);
+const deleteLinks = ref<NoteMeta[]>([]);
+const deleteError = ref("");
+const deleteBusy = ref(false);
 const narrow = ref(typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches);
 let footerMq: MediaQueryList | undefined;
 const themes: { id: ThemeMode; label: string }[] = [
@@ -86,13 +96,72 @@ function chooseTheme(mode: ThemeMode) {
   closeFooter();
 }
 
+function closeMenu() {
+  menuNote.value = null;
+}
+
+function openMenu(note: NoteMeta, event: MouseEvent) {
+  footerMenu.value = null;
+  if (menuNote.value?.id === note.id) {
+    closeMenu();
+    return;
+  }
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  const width = 168;
+  menuLeft.value = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+  menuTop.value = rect.bottom + 6;
+  if (menuTop.value + 48 > window.innerHeight) menuTop.value = Math.max(8, rect.top - 48);
+  menuNote.value = note;
+}
+
+async function showDelete() {
+  const note = menuNote.value;
+  closeMenu();
+  if (!note) return;
+  deleteError.value = "";
+  deleteLinks.value = await api.backlinks(note.id).catch(() => []);
+  deleteTarget.value = note;
+}
+
+function closeDelete() {
+  if (deleteBusy.value) return;
+  deleteTarget.value = null;
+  deleteError.value = "";
+}
+
+async function confirmDelete() {
+  const note = deleteTarget.value;
+  if (!note || deleteBusy.value) return;
+  deleteBusy.value = true;
+  deleteError.value = "";
+  try {
+    await api.deleteNote(note.id);
+    clearDraft(note.id);
+    deleteTarget.value = null;
+    notes.value = notes.value.filter((item) => item.id !== note.id);
+    if (activeId.value === note.id) await router.push("/today");
+  } catch {
+    deleteError.value = "Could not delete";
+  } finally {
+    deleteBusy.value = false;
+  }
+}
+
 function onFooterDocClick(event: MouseEvent) {
-  if (!footerMenu.value || !footerEl.value) return;
-  if (!footerEl.value.contains(event.target as Node)) closeFooter();
+  const target = event.target as Node;
+  if (footerMenu.value && footerEl.value && !footerEl.value.contains(target)) closeFooter();
+  if (menuNote.value && menuEl.value && !menuEl.value.contains(target)) {
+    if (!(event.target instanceof Element) || !event.target.closest(".tree-more")) closeMenu();
+  }
 }
 
 function onFooterKey(event: KeyboardEvent) {
-  if (event.key === "Escape") closeFooter();
+  if (event.key !== "Escape") return;
+  if (menuNote.value) {
+    closeMenu();
+    return;
+  }
+  closeFooter();
 }
 
 function syncNarrow() {
@@ -158,9 +227,39 @@ defineExpose({ load });
     <div class="note-library">
       <p class="section-label">Notes</p>
       <div class="note-tree">
-        <NoteTree :nodes="tree" :active-id="activeId" :collapsed="collapsed" @toggle="toggle" />
+        <NoteTree
+          :nodes="tree"
+          :active-id="activeId"
+          :collapsed="collapsed"
+          :menu-id="menuNote?.id ?? ''"
+          @toggle="toggle"
+          @menu="openMenu"
+        />
       </div>
     </div>
+    <Teleport to="body">
+      <div
+        v-if="menuNote"
+        ref="menuEl"
+        class="sidebar-popover tree-menu"
+        role="menu"
+        data-testid="tree-menu"
+        :style="{ top: `${menuTop}px`, left: `${menuLeft}px` }"
+      >
+        <button type="button" role="menuitem" data-testid="tree-delete" @click="void showDelete()">
+          Delete
+        </button>
+      </div>
+    </Teleport>
+    <DeleteNoteDialog
+      v-if="deleteTarget"
+      :title="deleteTarget.title"
+      :links="deleteLinks"
+      :error="deleteError"
+      :busy="deleteBusy"
+      @cancel="closeDelete"
+      @confirm="void confirmDelete()"
+    />
     <div v-if="!narrow" ref="footerEl" class="sidebar-footer sidebar-footer-icons">
       <div class="sidebar-menu" :class="{ open: footerMenu === 'account' }">
         <button

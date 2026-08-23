@@ -10,7 +10,12 @@ vi.mock("../api", async () => {
   const actual = await vi.importActual<typeof import("../api")>("../api");
   return {
     ...actual,
-    api: { listNotes: vi.fn(), listParked: vi.fn().mockResolvedValue([]) },
+    api: {
+      listNotes: vi.fn(),
+      listParked: vi.fn().mockResolvedValue([]),
+      backlinks: vi.fn().mockResolvedValue([]),
+      deleteNote: vi.fn().mockResolvedValue(undefined),
+    },
   };
 });
 
@@ -166,5 +171,63 @@ describe("Sidebar", () => {
     liveHandlers[0]({ type: "deleted", id: "t1" });
     await flushPromises();
     expect(wrapper.text()).not.toContain("Time");
+  });
+
+  it("deletes a note from the row menu", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([
+      { id: "o1", title: "One", folder: "ideas", modified_at: "" },
+    ]);
+    vi.mocked(api.backlinks).mockResolvedValue([
+      { id: "n2", title: "Index", folder: "ideas", modified_at: "" },
+    ]);
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/", component: { template: "<div />" } },
+        { path: "/n/:id", component: { template: "<div />" } },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/");
+    await router.isReady();
+    const wrapper = mount(Sidebar, { attachTo: document.body, global: { plugins: [router] } });
+    await flushPromises();
+    await wrapper.get('[data-testid="tree-more"]').trigger("click");
+    await flushPromises();
+    document.querySelector<HTMLButtonElement>('[data-testid="tree-delete"]')?.click();
+    await flushPromises();
+    expect(wrapper.get('[data-testid="delete-note"]').text()).toContain("ideas / Index");
+    await wrapper.get('[data-testid="delete-note-confirm"]').trigger("click");
+    await flushPromises();
+    expect(api.deleteNote).toHaveBeenCalledWith("o1");
+    expect(wrapper.text()).not.toContain("One");
+    wrapper.unmount();
+  });
+
+  it("leaves the open note after a sidebar delete", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([
+      { id: "o1", title: "One", folder: "", modified_at: "" },
+    ]);
+    vi.mocked(api.backlinks).mockResolvedValue([]);
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/", component: { template: "<div />" } },
+        { path: "/n/:id", component: { template: "<div />" } },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/n/o1");
+    await router.isReady();
+    const wrapper = mount(Sidebar, { attachTo: document.body, global: { plugins: [router] } });
+    await flushPromises();
+    await wrapper.get('[data-testid="tree-more"]').trigger("click");
+    await flushPromises();
+    document.querySelector<HTMLButtonElement>('[data-testid="tree-delete"]')?.click();
+    await flushPromises();
+    await wrapper.get('[data-testid="delete-note-confirm"]').trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/today");
+    wrapper.unmount();
   });
 });

@@ -87,6 +87,12 @@ if ((await page.locator(".cm-content").innerText()).trim().length < 8) {
   await page.waitForTimeout(300);
 }
 await shot(page, "02-note-desktop-light");
+await page.locator(".tree-row").first().hover();
+await page.getByTestId("tree-more").first().click();
+await page.waitForSelector('[data-testid="tree-menu"]');
+await shot(page, "02d-sidebar-menu-light");
+await page.keyboard.press("Escape");
+await page.waitForSelector('[data-testid="tree-menu"]', { state: "hidden" });
 await page.locator(".cm-content").click();
 await page.keyboard.press("End");
 await page.keyboard.press("Enter");
@@ -142,6 +148,12 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(150);
 await shot(page, "08-note-desktop-dark");
+await page.locator(".tree-row").first().hover();
+await page.getByTestId("tree-more").first().click();
+await page.waitForSelector('[data-testid="tree-menu"]');
+await shot(page, "08c-sidebar-menu-dark");
+await page.keyboard.press("Escape");
+await page.waitForSelector('[data-testid="tree-menu"]', { state: "hidden" });
 await page.locator(".cm-content").click();
 await page.keyboard.press("End");
 await page.keyboard.press("Enter");
@@ -171,6 +183,9 @@ await m.getByRole("button", { name: "More actions" }).click();
 await shot(m, "11-note-mobile-menu");
 await m.getByRole("button", { name: "Menu" }).click();
 await shot(m, "12-note-mobile-nav");
+await m.getByTestId("tree-more").first().click();
+await m.waitForSelector('[data-testid="tree-menu"]');
+await shot(m, "12b-sidebar-menu-mobile");
 await mobile.close();
 
 const loginDark = await browser.newContext({ viewport: { width: 1440, height: 900 } });
