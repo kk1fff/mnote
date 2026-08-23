@@ -49,6 +49,31 @@ export interface Asset {
   markdown: string;
 }
 
+export interface HistoryEntry {
+  rev: string;
+  created_at: string;
+  bytes: number;
+}
+
+export interface HistoryRev {
+  rev: string;
+  created_at: string;
+  bytes: number;
+  title: string;
+  folder: string;
+  content: string;
+}
+
+export interface Parked {
+  id: number;
+  body: string;
+  created_at: string;
+  source_id?: string;
+  source_title?: string;
+  source_folder?: string;
+  excerpt?: string;
+}
+
 function isNote(data: unknown): data is Note {
   return (
     !!data &&
@@ -147,6 +172,26 @@ export const api = {
     }),
   search: (q: string) => request<SearchHit[]>(`/api/search?q=${encodeURIComponent(q)}`),
   backlinks: (id: string) => request<NoteMeta[]>(`/api/backlinks/${encodeURIComponent(id)}`),
+  noteHistory: (id: string) =>
+    request<HistoryEntry[]>(`/api/notes/${encodeURIComponent(id)}/history`),
+  noteRevision: (id: string, rev: string) =>
+    request<HistoryRev>(`/api/notes/${encodeURIComponent(id)}/history/${encodeURIComponent(rev)}`),
+  restoreNote: (id: string, rev: string) =>
+    request<Note>(`/api/notes/${encodeURIComponent(id)}/restore`, {
+      method: "POST",
+      body: JSON.stringify({ rev }),
+    }),
+  listParked: () => request<Parked[]>("/api/parked"),
+  createParked: (body: {
+    body: string;
+    source_id?: string;
+    source_title?: string;
+    source_folder?: string;
+    excerpt?: string;
+  }) => request<Parked>("/api/parked", { method: "POST", body: JSON.stringify(body) }),
+  deleteParked: (id: number) =>
+    request<void>(`/api/parked/${id}`, { method: "DELETE" }),
+  parkedToNote: (id: number) => request<Note>(`/api/parked/${id}/note`, { method: "POST" }),
   uploadAsset: async (file: File) => {
     const body = new FormData();
     body.append("file", file);

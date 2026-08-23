@@ -12,7 +12,8 @@ import {
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { defineExpose, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { excerptAround, findExcerpt } from "../lib/excerpt";
 import { imageFileFromList, insertAt, isAllowedImage } from "../lib/images";
 import { api } from "../api";
 
@@ -42,6 +43,23 @@ class CaretWidget extends WidgetType {
     return el;
   }
 }
+
+const setFlash = StateEffect.define<{ from: number; to: number } | null>();
+const flashField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setFlash)) {
+        if (!effect.value) return Decoration.none;
+        return Decoration.set([
+          Decoration.mark({ class: "cm-park-excerpt" }).range(effect.value.from, effect.value.to),
+        ]);
+      }
+    }
+    return value.map(tr.changes);
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
 
 const remotesField = StateField.define<RemoteCaret[]>({
   create: () => [],
@@ -115,6 +133,7 @@ onMounted(() => {
         EditorView.lineWrapping,
         remotesField,
         remotesPlugin,
+        flashField,
         EditorView.updateListener.of((update) => {
           const remote = update.transactions.some((tr) => tr.annotation(remoteAnn));
           if (update.docChanged) {
@@ -176,6 +195,31 @@ watch(
     view?.dispatch({ effects: setRemotes.of(remotes ?? []) });
   },
 );
+
+function excerpt(): string {
+  if (!view) return "";
+  const sel = view.state.selection.main;
+  return excerptAround(view.state.doc.toString(), sel.from, sel.to);
+}
+
+function revealExcerpt(quote: string): boolean {
+  if (!view) return false;
+  const found = findExcerpt(view.state.doc.toString(), quote);
+  if (!found) return false;
+  view.dispatch({
+    selection: { anchor: found.from, head: found.to },
+    effects: [
+      setFlash.of(found),
+      EditorView.scrollIntoView(found.from, { y: "center" }),
+    ],
+  });
+  window.setTimeout(() => {
+    view?.dispatch({ effects: setFlash.of(null) });
+  }, 1600);
+  return true;
+}
+
+defineExpose({ excerpt, revealExcerpt });
 
 onBeforeUnmount(() => {
   view?.destroy();

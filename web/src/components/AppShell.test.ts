@@ -7,7 +7,10 @@ vi.mock("../api", async () => {
   const actual = await vi.importActual<typeof import("../api")>("../api");
   return {
     ...actual,
-    api: { listNotes: vi.fn().mockResolvedValue([]) },
+    api: {
+      listNotes: vi.fn().mockResolvedValue([]),
+      listParked: vi.fn().mockResolvedValue([]),
+    },
   };
 });
 
@@ -40,5 +43,8 @@ describe("AppShell", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "o", ctrlKey: true, shiftKey: true }));
     await flushPromises();
     expect(wrapper.find(".note-picker").exists()).toBe(true);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true }));
+    await flushPromises();
+    expect(wrapper.find('[data-testid="park-capture"]').exists()).toBe(true);
   });
 });

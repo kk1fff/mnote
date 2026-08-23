@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import { api, ApiError, type NoteMeta } from "../api";
+import { api, ApiError, type Note, type NoteMeta } from "../api";
 import AppShell from "../components/AppShell.vue";
 import Backlinks from "../components/Backlinks.vue";
 import Editor, { type RemoteCaret } from "../components/Editor.vue";
+import HistoryPanel from "../components/HistoryPanel.vue";
 import Preview from "../components/Preview.vue";
 import { clearDraft, loadDraft, saveDraft } from "../lib/drafts";
 import { threeWay } from "../lib/merge";
+import { excerptAround } from "../lib/excerpt";
 import { noteIdFromRoute } from "../lib/paths";
 import { live, type LiveEvent } from "../live";
+import { pendingExcerpt, setParkContext, showParkCapture } from "../parked";
 
 const route = useRoute();
 const noteId = computed(() => noteIdFromRoute(route.params.id));
@@ -25,6 +28,10 @@ const links = ref<NoteMeta[]>([]);
 const remotes = ref<RemoteCaret[]>([]);
 const isFavorite = ref(false);
 const shell = ref<{ load: () => Promise<void> } | null>(null);
+const editor = ref<{ excerpt: () => string; revealExcerpt: (quote: string) => boolean } | null>(null);
+const history = ref<{ show: () => void } | null>(null);
+let replacing = false;
+const parkShortcut = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘↵" : "Ctrl+↵";
 let saveTimer: number | undefined;
 let loadedId = "";
 let base = "";
@@ -68,6 +75,11 @@ async function load() {
     .favorites()
     .then((notes) => notes.some((note) => note.id === id))
     .catch(() => false);
+  const quote = pendingExcerpt.value;
+  if (quote) {
+    pendingExcerpt.value = null;
+    queueMicrotask(() => editor.value?.revealExcerpt(quote));
+  }
 }
 
 function applyRemote(next: string) {
@@ -110,6 +122,12 @@ function onLive(event: LiveEvent) {
   }
   if (event.type === "resync" && event.path === id) {
     rev = event.rev;
+    if (replacing) {
+      applyRemote(event.content);
+      base = event.content;
+      clearDraft(id);
+      return;
+    }
     const merged = threeWay(base, content.value, event.content);
     applyRemote(merged.content);
     if (merged.content !== event.content) {
@@ -207,6 +225,17 @@ async function saveMeta() {
   }
 }
 
+async function onRestored(note: Note) {
+  replacing = true;
+  applyRemote(note.content);
+  base = note.content;
+  clearDraft(note.id);
+  status.value = "Restored";
+  queueMicrotask(() => {
+    replacing = false;
+  });
+}
+
 async function toggleFavorite() {
   const id = loadedId || noteId.value;
   if (!id) return;
@@ -258,10 +287,20 @@ watch(content, () => {
 
 onMounted(() => {
   live.connect();
+  setParkContext(() => {
+    if (!loadedId) return null;
+    return {
+      source_id: loadedId,
+      source_title: title.value,
+      source_folder: folder.value || undefined,
+      excerpt: editor.value?.excerpt() || excerptAround(content.value, 0, 0) || undefined,
+    };
+  });
 });
 
 onBeforeUnmount(() => {
   stopLive?.();
+  setParkContext(null);
 });
 </script>
 
@@ -297,24 +336,34 @@ onBeforeUnmount(() => {
         </div>
         <div class="actions">
           <span class="muted" data-testid="note-status">{{ status }}</span>
+          <button type="button" data-testid="park" @click="showParkCapture()">Park {{ parkShortcut }}</button>
           <button type="button" data-testid="favorite" :aria-pressed="isFavorite" @click="toggleFavorite">
             {{ isFavorite ? "Unfavorite" : "Favorite" }}
           </button>
           <button type="button" data-testid="preview-toggle" @click="preview = !preview">
             {{ preview ? "Source" : "Preview" }}
           </button>
+          <button type="button" data-testid="history" @click="history?.show()">History</button>
           <button type="button" data-testid="save" @click="save">Save</button>
         </div>
       </header>
       <Preview v-if="preview" :source="content" />
       <Editor
         v-else
+        ref="editor"
         v-model="content"
         :remotes="remotes"
         @live-change="onLiveChange"
         @cursor="live.cursor($event.from, $event.to)"
       />
       <Backlinks :links="links" />
+      <HistoryPanel
+        v-if="noteId"
+        ref="history"
+        :note-id="noteId"
+        :current="content"
+        @restored="onRestored"
+      />
     </main>
   </AppShell>
 </template>

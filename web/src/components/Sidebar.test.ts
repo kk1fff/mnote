@@ -10,7 +10,7 @@ vi.mock("../api", async () => {
   const actual = await vi.importActual<typeof import("../api")>("../api");
   return {
     ...actual,
-    api: { listNotes: vi.fn() },
+    api: { listNotes: vi.fn(), listParked: vi.fn().mockResolvedValue([]) },
   };
 });
 
@@ -79,6 +79,28 @@ describe("Sidebar", () => {
     await flushPromises();
     await wrapper.get(".new-note-button").trigger("click");
     expect(wrapper.emitted("open-picker")).toHaveLength(1);
+  });
+
+  it("shows parked count", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([]);
+    vi.mocked(api.listParked).mockResolvedValue([
+      { id: 1, body: "ask jim", created_at: "2026-08-22T15:00:00Z" },
+    ]);
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/", component: { template: "<div />" } },
+        { path: "/n/:id", component: { template: "<div />" } },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/");
+    await router.isReady();
+    const wrapper = mount(Sidebar, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="parked-count"]').text()).toBe("1 parked");
+    await wrapper.get('[data-testid="parked-count"]').trigger("click");
+    expect(wrapper.emitted("open-parked")).toHaveLength(1);
   });
 
   it("upserts a live index note without refetching", async () => {

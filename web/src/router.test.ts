@@ -30,6 +30,14 @@ describe("router guards", () => {
     expect(router.currentRoute.value.path).not.toBe("/login");
   });
 
+  it("lets a ready user open /quick", async () => {
+    currentUser.value = { username: "alice", must_change_password: false };
+    const router = (await import("./router")).default;
+    await router.push("/quick");
+    await router.isReady();
+    expect(router.currentRoute.value.path).toBe("/quick");
+  });
+
   it("forces a password change", async () => {
     currentUser.value = { username: "alice", must_change_password: true };
     const router = (await import("./router")).default;

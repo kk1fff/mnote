@@ -635,3 +635,162 @@ async fn patch_renames_and_moves() {
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn parked_crud_and_make_note() {
+    let h = Harness::new();
+    let cookie = h.login("alice", "password1").await;
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/parked",
+            &cookie,
+            Some(json!({
+                "body": "ask jim about the API",
+                "source_id": "n1",
+                "source_title": "Weekly",
+                "source_folder": "ideas",
+                "excerpt": "retry budget"
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let id = body["id"].as_i64().unwrap();
+    assert_eq!(body["body"], "ask jim about the API");
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/parked", &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body.as_array().unwrap().len(), 1);
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            &format!("/api/parked/{id}/note"),
+            &cookie,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(body["title"], "ask jim about the API");
+    assert_eq!(body["folder"], "ideas");
+    assert!(body["content"]
+        .as_str()
+        .unwrap()
+        .contains("Captured while in [[Weekly]]"));
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/parked", &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.as_array().unwrap().is_empty());
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/parked",
+            &cookie,
+            Some(json!({ "body": "buy milk" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let id = body["id"].as_i64().unwrap();
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::DELETE,
+            &format!("/api/parked/{id}"),
+            &cookie,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn note_history_and_restore() {
+    let h = Harness::new();
+    let cookie = h.login("alice", "password1").await;
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &cookie,
+            Some(json!({ "title": "Hist", "content": "v0" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let id = body["id"].as_str().unwrap().to_string();
+
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::PUT,
+            &format!("/api/notes/{id}"),
+            &cookie,
+            Some(json!({ "content": "v1" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, &format!("/api/notes/{id}/history"), &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.as_array().unwrap().is_empty());
+
+    let last_edit = h
+        ._dir
+        .path()
+        .join("vaults/alice/history")
+        .join(&id)
+        .join("last_edit");
+    let aged = chrono::Utc::now() - chrono::Duration::minutes(6);
+    std::fs::write(&last_edit, aged.to_rfc3339()).unwrap();
+
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::PUT,
+            &format!("/api/notes/{id}"),
+            &cookie,
+            Some(json!({ "content": "v2" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, &format!("/api/notes/{id}/history"), &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let hist = body.as_array().unwrap();
+    assert_eq!(hist.len(), 1);
+    let rev = hist[0]["rev"].as_str().unwrap();
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::GET,
+            &format!("/api/notes/{id}/history/{rev}"),
+            &cookie,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["content"], "v1");
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            &format!("/api/notes/{id}/restore"),
+            &cookie,
+            Some(json!({ "rev": rev })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["content"], "v1");
+    assert_eq!(body["title"], "Hist");
+
+    let bob = h.login("bob", "password1").await;
+    let (status, _, _) = h
+        .call(h.authed(Method::GET, &format!("/api/notes/{id}/history"), &bob, None))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

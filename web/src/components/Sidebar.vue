@@ -5,6 +5,7 @@ import { api, type NoteMeta } from "../api";
 import { noteIdFromRoute } from "../lib/paths";
 import { noteTree } from "../lib/tree";
 import { live, type LiveEvent } from "../live";
+import { parkedItems, refreshParked } from "../parked";
 import { currentUser, logout } from "../session";
 import NoteTree from "./NoteTree.vue";
 
@@ -58,13 +59,14 @@ const stopLive = live.on(onLive);
 onMounted(() => {
   live.connect();
   void load();
+  void refreshParked().catch(() => undefined);
 });
 
 onBeforeUnmount(() => {
   stopLive();
 });
 
-const emit = defineEmits<{ "open-picker": [] }>();
+const emit = defineEmits<{ "open-picker": []; "open-parked": [] }>();
 
 defineExpose({ load });
 </script>
@@ -76,6 +78,15 @@ defineExpose({ load });
       <span>{{ currentUser?.username }}</span>
     </div>
     <button class="new-note-button" type="button" @click="emit('open-picker')">Go to…</button>
+    <button
+      v-if="parkedItems.length"
+      class="parked-button"
+      type="button"
+      data-testid="parked-count"
+      @click="emit('open-parked')"
+    >
+      {{ parkedItems.length }} parked
+    </button>
     <nav class="shortcuts" aria-label="Quick access">
       <RouterLink to="/today">Today</RouterLink>
       <RouterLink to="/recent">Recent</RouterLink>

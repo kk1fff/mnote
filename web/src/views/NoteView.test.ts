@@ -21,6 +21,10 @@ vi.mock("../api", async () => {
       favorite: vi.fn(),
       unfavorite: vi.fn(),
       logout: vi.fn(),
+      listParked: vi.fn().mockResolvedValue([]),
+      noteHistory: vi.fn().mockResolvedValue([]),
+      noteRevision: vi.fn(),
+      restoreNote: vi.fn(),
     },
   };
 });
@@ -178,4 +182,52 @@ describe("NoteView", () => {
     expect(wrapper.get('[data-testid="note-title"]').text()).toBe("New");
     expect(wrapper.get('[data-testid="note-folder"]').text()).toBe("work");
   });
+
+  it("restores a history snapshot into the editor", async () => {
+    vi.mocked(api.getNote).mockResolvedValue({
+      id: "n1",
+      title: "One",
+      content: "newer",
+      modified_at: "",
+    });
+    vi.mocked(api.noteHistory).mockResolvedValue([
+      { rev: "r1", created_at: "2026-08-22T14:30:00Z", bytes: 4 },
+    ]);
+    vi.mocked(api.noteRevision).mockResolvedValue({
+      rev: "r1",
+      created_at: "2026-08-22T14:30:00Z",
+      bytes: 4,
+      title: "One",
+      folder: "",
+      content: "keep",
+    });
+    vi.mocked(api.restoreNote).mockResolvedValue({
+      id: "n1",
+      title: "One",
+      content: "keep",
+      modified_at: "",
+    });
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/n/:id", component: NoteView },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/n/n1");
+    await router.isReady();
+    const wrapper = mount(NoteView, { global: { plugins: [router] } });
+    await flushPromises();
+    await wrapper.get('[data-testid="history"]').trigger("click");
+    await flushPromises();
+    await wrapper.get('[data-testid="history-row"]').trigger("click");
+    await flushPromises();
+    await wrapper.get('[data-testid="history-restore"]').trigger("click");
+    await wrapper.get('[data-testid="history-restore"]').trigger("click");
+    await flushPromises();
+    expect(api.restoreNote).toHaveBeenCalledWith("n1", "r1");
+    expect(wrapper.get(".fake-editor").element).toHaveProperty("value", "keep");
+    expect(wrapper.get('[data-testid="note-status"]').text()).toBe("Restored");
+  });
 });
+

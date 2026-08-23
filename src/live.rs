@@ -335,6 +335,36 @@ impl LiveHub {
         fanout(user, "", None, ServerMsg::Index { note });
     }
 
+    pub fn force_replace(&self, user_id: i64, path: &str, content: &str) -> Option<u64> {
+        let mut inner = self.inner.lock().expect("live lock");
+        let user = inner.users.get_mut(&user_id)?;
+        let buf = user
+            .notes
+            .entry(path.to_string())
+            .or_insert_with(|| NoteBuf {
+                content: content.to_string(),
+                rev: 0,
+            });
+        if buf.content == content {
+            return Some(buf.rev);
+        }
+        buf.content = content.to_string();
+        buf.rev += 1;
+        let rev = buf.rev;
+        fanout(
+            user,
+            "",
+            Some(path),
+            ServerMsg::Resync {
+                path: path.to_string(),
+                rev,
+                content: content.to_string(),
+                conflict: false,
+            },
+        );
+        Some(rev)
+    }
+
     pub fn replace(&self, user_id: i64, path: &str, content: &str) -> Option<u64> {
         let mut inner = self.inner.lock().expect("live lock");
         let user = inner.users.get_mut(&user_id)?;
@@ -603,6 +633,21 @@ mod tests {
         assert!(drain(&mut new_rx)
             .iter()
             .any(|m| matches!(m, ServerMsg::Opened { .. })));
+    }
+
+    #[test]
+    fn force_replace_resyncs_active_session() {
+        let (hub, mut a_rx, mut b_rx) = pair();
+        drain(&mut a_rx);
+        drain(&mut b_rx);
+        hub.open(1, "a", "n", Some("x"), "x");
+        drain(&mut a_rx);
+        assert_eq!(hub.force_replace(1, "n", "restored"), Some(1));
+        assert!(drain(&mut a_rx).iter().any(
+            |m| matches!(m, ServerMsg::Resync { content, rev: 1, .. } if content == "restored")
+        ));
+        assert!(drain(&mut b_rx).is_empty());
+        assert_eq!(hub.rev(1, "n"), Some(1));
     }
 
     #[test]

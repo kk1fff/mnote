@@ -29,10 +29,16 @@ pub fn router(state: AppState) -> Router {
         .route("/notes/daily/{date}", get(daily_note).put(put_daily_note))
         .route("/notes/recent", get(recent_notes))
         .route("/notes/title-search", get(search_titles))
+        .route("/notes/{id}/history", get(list_history))
+        .route("/notes/{id}/history/{rev}", get(get_history))
+        .route("/notes/{id}/restore", post(restore_note))
         .route("/notes/{id}", get(get_note).put(put_note).patch(patch_note))
         .route("/favorites", get(favorites))
         .route("/favorites/{id}", put(favorite).delete(unfavorite))
         .route("/search", get(search_notes))
+        .route("/parked", get(list_parked).post(create_parked))
+        .route("/parked/{id}", axum::routing::delete(delete_parked))
+        .route("/parked/{id}/note", post(parked_to_note))
         .route("/backlinks/{id}", get(backlinks))
         .route("/assets", post(upload_asset))
         .route("/assets/{id}", get(get_asset));
@@ -307,6 +313,48 @@ async fn unfavorite(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn list_history(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<notes::HistoryEntry>>, AppError> {
+    require_ready(&user)?;
+    Ok(Json(notes::list_history(
+        &state.vault_dir(&user.username),
+        &id,
+    )?))
+}
+
+async fn get_history(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path((id, rev)): Path<(String, String)>,
+) -> Result<Json<notes::HistoryRev>, AppError> {
+    require_ready(&user)?;
+    Ok(Json(notes::get_history(
+        &state.vault_dir(&user.username),
+        &id,
+        &rev,
+    )?))
+}
+
+#[derive(Deserialize)]
+struct RestoreNote {
+    rev: String,
+}
+
+async fn restore_note(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(id): Path<String>,
+    Json(body): Json<RestoreNote>,
+) -> Result<Json<notes::Note>, AppError> {
+    require_ready(&user)?;
+    let note = notes::restore_note(&state.vault_dir(&user.username), &id, &body.rev)?;
+    state.live.force_replace(user.id, &note.id, &note.content);
+    Ok(Json(note))
+}
+
 async fn put_note(
     State(state): State<AppState>,
     Auth(user): Auth,
@@ -340,6 +388,81 @@ async fn patch_note(
     )?;
     state.live.index(user.id, notes::to_meta(&note));
     Ok(Json(note))
+}
+
+#[derive(Deserialize)]
+struct CreateParked {
+    body: String,
+    source_id: Option<String>,
+    source_title: Option<String>,
+    source_folder: Option<String>,
+    excerpt: Option<String>,
+}
+
+async fn list_parked(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+) -> Result<Json<Vec<db::Parked>>, AppError> {
+    require_ready(&user)?;
+    Ok(Json(db::list_parked(&state, user.id)?))
+}
+
+async fn create_parked(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Json(body): Json<CreateParked>,
+) -> Result<(StatusCode, Json<db::Parked>), AppError> {
+    require_ready(&user)?;
+    let item = db::create_parked(
+        &state,
+        user.id,
+        &body.body,
+        body.source_id.as_deref(),
+        body.source_title.as_deref(),
+        body.source_folder.as_deref(),
+        body.excerpt.as_deref(),
+    )?;
+    Ok((StatusCode::CREATED, Json(item)))
+}
+
+async fn delete_parked(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, AppError> {
+    require_ready(&user)?;
+    db::delete_parked(&state, user.id, id)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn parked_to_note(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(id): Path<i64>,
+) -> Result<Response, AppError> {
+    require_ready(&user)?;
+    let item = db::get_parked(&state, user.id, id)?;
+    let title = notes::parked_note_title(&item.body);
+    let folder = item.source_folder.clone().unwrap_or_default();
+    let content = notes::parked_note_body(
+        &item.body,
+        item.source_title.as_deref(),
+        item.excerpt.as_deref(),
+    );
+    let vault = state.vault_dir(&user.username);
+    let (status, note) = match notes::create_note(&vault, &title, &folder, Some(&content)) {
+        Ok(note) => (StatusCode::CREATED, note),
+        Err(err) => {
+            let Some(existing_id) = notes::conflict_id(&err) else {
+                return Err(err);
+            };
+            (StatusCode::OK, notes::get_note(&vault, existing_id)?)
+        }
+    };
+    db::delete_parked(&state, user.id, id)?;
+    state.live.replace(user.id, &note.id, &note.content);
+    state.live.index(user.id, notes::to_meta(&note));
+    Ok((status, Json(note)).into_response())
 }
 
 async fn backlinks(

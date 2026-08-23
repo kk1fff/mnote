@@ -87,6 +87,13 @@ describe("api", () => {
     await api.putDaily("2026-08-22", "d");
     await api.search("q");
     await api.backlinks("note-1");
+    await api.noteHistory("note-1");
+    await api.noteRevision("note-1", "2026-08-22T14-30-00Z");
+    await api.restoreNote("note-1", "2026-08-22T14-30-00Z");
+    await api.listParked();
+    await api.createParked({ body: "ask jim" });
+    await api.parkedToNote(1);
+    await api.deleteParked(1);
     await api.uploadAsset(new File(["x"], "a.png", { type: "image/png" }));
     expect(fetchMock).toHaveBeenCalled();
   });

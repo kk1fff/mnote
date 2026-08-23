@@ -9,6 +9,7 @@ $data/
   db/mnote.db
   vaults/<username>/notes/
   vaults/<username>/assets/
+  vaults/<username>/history/<note-id>/
   logs/mnote.log.YYYY-MM-DD
 ```
 

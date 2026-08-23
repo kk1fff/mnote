@@ -47,6 +47,18 @@ pub fn init(conn: &rusqlite::Connection) -> Result<(), AppError> {
         );
         CREATE INDEX IF NOT EXISTS user_note_state_recent_idx
             ON user_note_state (user_id, last_opened_at DESC);
+        CREATE TABLE IF NOT EXISTS parked (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            body TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            source_id TEXT,
+            source_title TEXT,
+            source_folder TEXT,
+            excerpt TEXT
+        );
+        CREATE INDEX IF NOT EXISTS parked_user_idx
+            ON parked (user_id, created_at DESC);
         ",
     )?;
     Ok(())
@@ -365,6 +377,107 @@ pub fn recent_paths(state: &AppState, user_id: i64) -> Result<Vec<String>, AppEr
     Ok(paths)
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Parked {
+    pub id: i64,
+    pub body: String,
+    pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_folder: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excerpt: Option<String>,
+}
+
+fn parked_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Parked> {
+    Ok(Parked {
+        id: row.get(0)?,
+        body: row.get(1)?,
+        created_at: row.get(2)?,
+        source_id: row.get(3)?,
+        source_title: row.get(4)?,
+        source_folder: row.get(5)?,
+        excerpt: row.get(6)?,
+    })
+}
+
+pub fn list_parked(state: &AppState, user_id: i64) -> Result<Vec<Parked>, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    let mut stmt = conn.prepare(
+        "SELECT id, body, created_at, source_id, source_title, source_folder, excerpt
+         FROM parked WHERE user_id = ?1 ORDER BY created_at DESC, id DESC",
+    )?;
+    let rows = stmt.query_map(params![user_id], parked_from_row)?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
+pub fn create_parked(
+    state: &AppState,
+    user_id: i64,
+    body: &str,
+    source_id: Option<&str>,
+    source_title: Option<&str>,
+    source_folder: Option<&str>,
+    excerpt: Option<&str>,
+) -> Result<Parked, AppError> {
+    let body = body.trim();
+    if body.is_empty() {
+        return Err(AppError::BadRequest("body is empty".into()));
+    }
+    if body.len() > 20_000 {
+        return Err(AppError::BadRequest("body is too long".into()));
+    }
+    let now = Utc::now().to_rfc3339();
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    conn.execute(
+        "INSERT INTO parked (user_id, body, created_at, source_id, source_title, source_folder, excerpt)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![user_id, body, now, source_id, source_title, source_folder, excerpt],
+    )?;
+    let id = conn.last_insert_rowid();
+    drop(conn);
+    get_parked(state, user_id, id)
+}
+
+pub fn get_parked(state: &AppState, user_id: i64, id: i64) -> Result<Parked, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    conn.query_row(
+        "SELECT id, body, created_at, source_id, source_title, source_folder, excerpt
+         FROM parked WHERE id = ?1 AND user_id = ?2",
+        params![id, user_id],
+        parked_from_row,
+    )
+    .optional()?
+    .ok_or(AppError::NotFound)
+}
+
+pub fn delete_parked(state: &AppState, user_id: i64, id: i64) -> Result<(), AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    let n = conn.execute(
+        "DELETE FROM parked WHERE id = ?1 AND user_id = ?2",
+        params![id, user_id],
+    )?;
+    if n == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,5 +556,33 @@ mod tests {
         assert!(user_from_token(&state, &token).is_err());
         authenticate(&state, "alice", &next).unwrap();
         assert!(reset_password(&state, "nobody").is_err());
+    }
+
+    #[test]
+    fn parked_is_per_user() {
+        let (_dir, state) = setup();
+        create_user(&state, "alice", Some("password1")).unwrap();
+        create_user(&state, "bob", Some("password1")).unwrap();
+        let alice = authenticate(&state, "alice", "password1").unwrap();
+        let bob = authenticate(&state, "bob", "password1").unwrap();
+        let item = create_parked(
+            &state,
+            alice.id,
+            "ask jim",
+            Some("n1"),
+            Some("Weekly"),
+            Some("ideas"),
+            Some("retry budget"),
+        )
+        .unwrap();
+        assert_eq!(item.body, "ask jim");
+        assert_eq!(item.source_title.as_deref(), Some("Weekly"));
+        assert_eq!(list_parked(&state, alice.id).unwrap().len(), 1);
+        assert!(list_parked(&state, bob.id).unwrap().is_empty());
+        assert!(get_parked(&state, bob.id, item.id).is_err());
+        assert!(delete_parked(&state, bob.id, item.id).is_err());
+        delete_parked(&state, alice.id, item.id).unwrap();
+        assert!(list_parked(&state, alice.id).unwrap().is_empty());
+        assert!(create_parked(&state, alice.id, "   ", None, None, None, None).is_err());
     }
 }

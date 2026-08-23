@@ -25,6 +25,7 @@ data/                      # bind-mount this
   db/mnote.db              # users + sessions
   vaults/<user>/notes/     # markdown
   vaults/<user>/assets/    # pasted images
+  vaults/<user>/history/   # edit snapshots per note id
   logs/mnote.log.YYYY-MM-DD
 ```
 
@@ -121,6 +122,9 @@ Then open http://localhost:3000.
 | POST | `/api/notes` | `{ title, folder?, content? }` |
 | GET/PUT | `/api/notes/daily/:date` | daily note |
 | GET/PUT | `/api/notes/:id` | page |
+| GET | `/api/notes/:id/history` | snapshot list |
+| GET | `/api/notes/:id/history/:rev` | snapshot |
+| POST | `/api/notes/:id/restore` | `{ rev }` restore body |
 | GET | `/api/notes/recent` | recently opened notes |
 | GET | `/api/notes/title-search?q=` | search notes by title, then folder |
 | GET | `/api/favorites` | favorite notes |

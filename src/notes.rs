@@ -42,6 +42,23 @@ pub struct Asset {
     pub markdown: String,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct HistoryEntry {
+    pub rev: String,
+    pub created_at: String,
+    pub bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct HistoryRev {
+    pub rev: String,
+    pub created_at: String,
+    pub bytes: u64,
+    pub title: String,
+    pub folder: String,
+    pub content: String,
+}
+
 const ALLOWED_IMAGE_TYPES: &[(&str, &str)] = &[
     ("image/png", "png"),
     ("image/jpeg", "jpg"),
@@ -125,6 +142,38 @@ pub fn normalize_title(raw: &str) -> Result<String, AppError> {
         ));
     }
     Ok(title.to_string())
+}
+
+pub fn parked_note_title(body: &str) -> String {
+    let line = body
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("");
+    if normalize_title(line).is_ok() {
+        line.to_string()
+    } else {
+        format!("Quick note {}", chrono::Utc::now().format("%Y-%m-%d %H:%M"))
+    }
+}
+
+pub fn parked_note_body(body: &str, source_title: Option<&str>, excerpt: Option<&str>) -> String {
+    let mut out = body.trim().to_string();
+    let Some(title) = source_title.filter(|title| !title.is_empty()) else {
+        return out;
+    };
+    out.push_str("\n\nCaptured while in [[");
+    out.push_str(title);
+    out.push_str("]]:");
+    if let Some(excerpt) = excerpt.filter(|excerpt| !excerpt.is_empty()) {
+        out.push('\n');
+        for line in excerpt.lines() {
+            out.push_str("> ");
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
 }
 
 pub fn normalize_folder(raw: &str) -> Result<String, AppError> {
@@ -225,13 +274,174 @@ fn render_file(note: &Note) -> String {
     out
 }
 
+const SESSION_IDLE: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+const CONFLICT_MARK: &str = "<<<<<<< this device";
+
+fn history_dir(vault: &Path, id: &str) -> PathBuf {
+    vault.join("history").join(id)
+}
+
+fn last_edit_path(vault: &Path, id: &str) -> PathBuf {
+    history_dir(vault, id).join("last_edit")
+}
+
+fn read_last_edit(vault: &Path, id: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    let raw = std::fs::read_to_string(last_edit_path(vault, id)).ok()?;
+    chrono::DateTime::parse_from_rfc3339(raw.trim())
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
+fn write_last_edit(vault: &Path, id: &str) -> Result<(), AppError> {
+    let dir = history_dir(vault, id);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(last_edit_path(vault, id), chrono::Utc::now().to_rfc3339())?;
+    Ok(())
+}
+
+fn session_ended(vault: &Path, id: &str) -> bool {
+    match read_last_edit(vault, id) {
+        None => true,
+        Some(at) => {
+            let age = chrono::Utc::now()
+                .signed_duration_since(at)
+                .to_std()
+                .unwrap_or(std::time::Duration::ZERO);
+            age >= SESSION_IDLE
+        }
+    }
+}
+
+fn find_existing(vault: &Path, id: &str) -> Result<Option<Note>, AppError> {
+    let root = vault.join("notes");
+    if !root.exists() {
+        return Ok(None);
+    }
+    for entry in WalkDir::new(&root).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if !path.is_file() || path.extension().and_then(|s| s.to_str()) != Some("md") {
+            continue;
+        }
+        if let Ok(note) = load_note_file(vault, path) {
+            if note.id == id {
+                return Ok(Some(note));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn latest_snapshot(vault: &Path, id: &str) -> Result<Option<HistoryRev>, AppError> {
+    Ok(list_history_files(vault, id)?.into_iter().next())
+}
+
+fn allocate_snapshot_name(dir: &Path) -> String {
+    let stem = chrono::Utc::now().format("%Y-%m-%dT%H-%M-%SZ").to_string();
+    let first = format!("{stem}.md");
+    if !dir.join(&first).exists() {
+        return first;
+    }
+    for n in 2..1000 {
+        let name = format!("{stem}-{n}.md");
+        if !dir.join(&name).exists() {
+            return name;
+        }
+    }
+    format!("{stem}-{}.md", uuid::Uuid::new_v4())
+}
+
+fn created_at_from_rev(rev: &str) -> Option<String> {
+    let core = rev
+        .strip_suffix(|c: char| c.is_ascii_digit())
+        .and_then(|s| s.strip_suffix('-'))
+        .filter(|s| s.ends_with('Z'))
+        .unwrap_or(rev);
+    if core.len() >= 20 && core.as_bytes()[10] == b'T' && core.as_bytes()[19] == b'Z' {
+        let date = &core[..10];
+        let hour = &core[11..13];
+        let min = &core[14..16];
+        let sec = &core[17..19];
+        return Some(format!("{date}T{hour}:{min}:{sec}Z"));
+    }
+    None
+}
+
+fn parse_snapshot(file: &Path) -> Result<HistoryRev, AppError> {
+    let rev = file
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or(AppError::NotFound)?
+        .to_string();
+    let raw = std::fs::read_to_string(file)?;
+    let (fields, body) = parse_frontmatter(&raw);
+    let meta = std::fs::metadata(file)?;
+    let created_at = created_at_from_rev(&rev).unwrap_or(file_modified(file)?);
+    Ok(HistoryRev {
+        rev,
+        created_at,
+        bytes: meta.len(),
+        title: fields.get("title").cloned().unwrap_or_default(),
+        folder: fields.get("folder").cloned().unwrap_or_default(),
+        content: body,
+    })
+}
+
+fn list_history_files(vault: &Path, id: &str) -> Result<Vec<HistoryRev>, AppError> {
+    let dir = history_dir(vault, id);
+    let mut items = Vec::new();
+    if !dir.is_dir() {
+        return Ok(items);
+    }
+    for entry in std::fs::read_dir(&dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("md") {
+            continue;
+        }
+        if let Ok(item) = parse_snapshot(&path) {
+            items.push(item);
+        }
+    }
+    items.sort_by(|a, b| b.created_at.cmp(&a.created_at).then(b.rev.cmp(&a.rev)));
+    Ok(items)
+}
+
+fn snapshot_note(vault: &Path, note: &Note) -> Result<(), AppError> {
+    let dir = history_dir(vault, &note.id);
+    std::fs::create_dir_all(&dir)?;
+    let name = allocate_snapshot_name(&dir);
+    std::fs::write(dir.join(name), render_file(note))?;
+    Ok(())
+}
+
+fn maybe_snapshot(vault: &Path, id: &str, force: bool) -> Result<(), AppError> {
+    let Some(disk) = find_existing(vault, id)? else {
+        return Ok(());
+    };
+    if let Some(latest) = latest_snapshot(vault, id)? {
+        if latest.content == disk.content
+            && latest.title == disk.title
+            && latest.folder == disk.folder
+        {
+            return Ok(());
+        }
+    }
+    if !force && !session_ended(vault, id) {
+        return Ok(());
+    }
+    snapshot_note(vault, &disk)
+}
+
 fn write_note(vault: &Path, note: &Note) -> Result<(), AppError> {
     ensure_vault(vault)?;
+    let force = note.content.contains(CONFLICT_MARK);
+    maybe_snapshot(vault, &note.id, force)?;
     let file = note_file(vault, &note.file_path);
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(&file, render_file(note))?;
+    write_last_edit(vault, &note.id)?;
     Ok(())
 }
 
@@ -260,7 +470,7 @@ fn allocate_file_path(vault: &Path, folder: &str, title: &str, ignore_id: Option
     format!("{base}-{}", uuid::Uuid::new_v4())
 }
 
-fn note_from_file(vault: &Path, file: &Path) -> Result<Note, AppError> {
+fn load_note_file(vault: &Path, file: &Path) -> Result<Note, AppError> {
     let root = vault.join("notes");
     let rel = file.strip_prefix(&root).unwrap_or(file);
     let rel = rel.with_extension("");
@@ -288,14 +498,20 @@ fn note_from_file(vault: &Path, file: &Path) -> Result<Note, AppError> {
         .map(|s| s.trim().trim_matches('/').to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or(parent);
-    let note = Note {
+    Ok(Note {
         id,
         title,
         folder,
         content: body,
         modified_at: file_modified(file)?,
         file_path,
-    };
+    })
+}
+
+fn note_from_file(vault: &Path, file: &Path) -> Result<Note, AppError> {
+    let raw = std::fs::read_to_string(file)?;
+    let (fields, _) = parse_frontmatter(&raw);
+    let note = load_note_file(vault, file)?;
     if fields.get("id").map(|s| s.trim()).unwrap_or("").is_empty() {
         write_note(vault, &note)?;
     }
@@ -394,6 +610,58 @@ pub fn put_note(vault: &Path, id: &str, content: &str) -> Result<Note, AppError>
     let mut note = get_note(vault, id)?;
     note.content = content.to_string();
     write_note(vault, &note)?;
+    get_note(vault, id)
+}
+
+pub fn normalize_rev(raw: &str) -> Result<String, AppError> {
+    let rev = raw.trim();
+    if rev.is_empty() {
+        return Err(AppError::BadRequest("revision is empty".into()));
+    }
+    if rev.len() > 80
+        || rev.contains('/')
+        || rev.contains('\\')
+        || rev.contains("..")
+        || rev.contains('\0')
+    {
+        return Err(AppError::BadRequest("invalid revision".into()));
+    }
+    Ok(rev.to_string())
+}
+
+pub fn list_history(vault: &Path, id: &str) -> Result<Vec<HistoryEntry>, AppError> {
+    get_note(vault, id)?;
+    Ok(list_history_files(vault, id)?
+        .into_iter()
+        .map(|item| HistoryEntry {
+            rev: item.rev,
+            created_at: item.created_at,
+            bytes: item.bytes,
+        })
+        .collect())
+}
+
+pub fn get_history(vault: &Path, id: &str, rev: &str) -> Result<HistoryRev, AppError> {
+    get_note(vault, id)?;
+    let rev = normalize_rev(rev)?;
+    let path = history_dir(vault, id).join(format!("{rev}.md"));
+    if !path.is_file() {
+        return Err(AppError::NotFound);
+    }
+    parse_snapshot(&path)
+}
+
+pub fn restore_note(vault: &Path, id: &str, rev: &str) -> Result<Note, AppError> {
+    let snap = get_history(vault, id, rev)?;
+    maybe_snapshot(vault, id, true)?;
+    let mut note = get_note(vault, id)?;
+    note.content = snap.content;
+    let file = note_file(vault, &note.file_path);
+    if let Some(parent) = file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&file, render_file(&note))?;
+    write_last_edit(vault, &note.id)?;
     get_note(vault, id)
 }
 
@@ -680,6 +948,13 @@ mod tests {
         assert!(normalize_title("").is_err());
         assert!(normalize_title("***").is_err());
         assert!(normalize_title("-dash").is_err());
+        assert_eq!(parked_note_title("ask jim\nmore"), "ask jim");
+        assert!(parked_note_title("***").starts_with("Quick note "));
+        assert_eq!(
+            parked_note_body("ask jim", Some("Weekly"), Some("retry")),
+            "ask jim\n\nCaptured while in [[Weekly]]:\n> retry\n"
+        );
+        assert_eq!(parked_note_body("ask jim", None, Some("retry")), "ask jim");
     }
 
     #[test]
@@ -780,5 +1055,77 @@ mod tests {
         let s = snippet("abcdefghijklmnopqrstuvwxyz", 10, 2);
         assert!(s.contains('k'));
         assert_eq!(snippet("", 0, 1), "");
+    }
+
+    fn age_last_edit(vault: &Path, id: &str, minutes: i64) {
+        let at = chrono::Utc::now() - chrono::Duration::minutes(minutes);
+        std::fs::create_dir_all(history_dir(vault, id)).unwrap();
+        std::fs::write(last_edit_path(vault, id), at.to_rfc3339()).unwrap();
+    }
+
+    #[test]
+    fn history_snapshots_after_idle_session() {
+        let dir = tempdir().unwrap();
+        let vault = dir.path();
+        let note = create_note(vault, "One", "", Some("v0")).unwrap();
+        put_note(vault, &note.id, "v1").unwrap();
+        assert!(list_history(vault, &note.id).unwrap().is_empty());
+
+        age_last_edit(vault, &note.id, 6);
+        put_note(vault, &note.id, "v2").unwrap();
+        put_note(vault, &note.id, "v2b").unwrap();
+        let hist = list_history(vault, &note.id).unwrap();
+        assert_eq!(hist.len(), 1);
+        let snap = get_history(vault, &note.id, &hist[0].rev).unwrap();
+        assert_eq!(snap.content, "v1");
+        assert_eq!(snap.title, "One");
+    }
+
+    #[test]
+    fn history_survives_rename_and_restore() {
+        let dir = tempdir().unwrap();
+        let vault = dir.path();
+        let note = create_note(vault, "One", "", Some("v0")).unwrap();
+        put_note(vault, &note.id, "keep").unwrap();
+        age_last_edit(vault, &note.id, 6);
+        put_note(vault, &note.id, "newer").unwrap();
+        let hist = list_history(vault, &note.id).unwrap();
+        assert_eq!(hist.len(), 1);
+
+        update_meta(vault, &note.id, Some("Two"), Some("work")).unwrap();
+        let hist = list_history(vault, &note.id).unwrap();
+        assert_eq!(hist.len(), 1);
+
+        let restored = restore_note(vault, &note.id, &hist[0].rev).unwrap();
+        assert_eq!(restored.content, "keep");
+        assert_eq!(restored.title, "Two");
+        let hist = list_history(vault, &note.id).unwrap();
+        assert_eq!(hist.len(), 2);
+        let current_snap = get_history(vault, &note.id, &hist[0].rev).unwrap();
+        assert_eq!(current_snap.content, "newer");
+        assert!(normalize_rev("../x").is_err());
+        assert!(get_history(vault, &note.id, "missing").is_err());
+    }
+
+    #[test]
+    fn conflict_write_force_snapshots() {
+        let dir = tempdir().unwrap();
+        let vault = dir.path();
+        let note = create_note(vault, "One", "", Some("clean")).unwrap();
+        put_note(vault, &note.id, "session").unwrap();
+        put_note(
+            vault,
+            &note.id,
+            "<<<<<<< this device\nleft\n=======\nright\n>>>>>>> other device",
+        )
+        .unwrap();
+        let hist = list_history(vault, &note.id).unwrap();
+        assert_eq!(hist.len(), 1);
+        assert_eq!(
+            get_history(vault, &note.id, &hist[0].rev)
+                .unwrap()
+                .content,
+            "session"
+        );
     }
 }

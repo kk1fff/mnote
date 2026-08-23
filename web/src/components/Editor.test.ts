@@ -25,4 +25,15 @@ describe("Editor", () => {
     expect(wrapper.props("modelValue")).toBe("hello");
     wrapper.unmount();
   });
+
+  it("reveals an excerpt", async () => {
+    const wrapper = mount(Editor, { props: { modelValue: "aaa retry budget bbb" } });
+    await flushPromises();
+    const exposed = wrapper.vm as unknown as {
+      excerpt: () => string;
+      revealExcerpt: (quote: string) => boolean;
+    };
+    expect(exposed.revealExcerpt("retry budget")).toBe(true);
+    wrapper.unmount();
+  });
 });
