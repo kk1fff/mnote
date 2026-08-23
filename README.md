@@ -134,4 +134,4 @@ Then open http://localhost:3000.
 | POST | `/api/assets` | multipart field `file` |
 | GET | `/api/assets/:id` | image |
 
-Wiki links use `[[title]]` or `[[title|label]]`. Titles are unique. Daily notes are titled `YYYY-MM-DD`. File names stay on the server.
+Wiki links use `[[title]]` at the vault root or `[[folder/title]]` (optional `|label`). Titles are unique per folder. Daily notes are the root note titled `YYYY-MM-DD`. File names stay on the server.

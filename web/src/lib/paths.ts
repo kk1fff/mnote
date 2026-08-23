@@ -19,6 +19,18 @@ export function noteIdFromRoute(param: unknown): string {
   }
 }
 
+export function wikiPath(folder: string, title: string): string {
+  return folder ? `${folder}/${title}` : title;
+}
+
+export function parseWikiPath(target: string): { title: string; folder: string } | null {
+  return parseCreateQuery(target);
+}
+
+export function sameWikiPath(folder: string, title: string, target: string): boolean {
+  return wikiPath(folder, title).toLowerCase() === target.trim().toLowerCase();
+}
+
 export function parseCreateQuery(raw: string): { title: string; folder: string } | null {
   const trimmed = raw.trim().replace(/^\/+/, "").replace(/\.md$/i, "");
   if (!trimmed || trimmed.includes("\\") || trimmed.includes("\0") || trimmed.length > 200) {

@@ -43,7 +43,12 @@ export function buildPickerSections(input: {
   const notes = folderQuery ? notesInFolder(input.notes, folderQuery) : input.notes;
   const draft = folderQuery ? null : parseCreateQuery(input.query);
   const canCreate =
-    !!draft && !input.notes.some((note) => note.title.toLowerCase() === draft.title.toLowerCase());
+    !!draft &&
+    !input.notes.some(
+      (note) =>
+        (note.folder ?? "").toLowerCase() === draft.folder.toLowerCase() &&
+        note.title.toLowerCase() === draft.title.toLowerCase(),
+    );
 
   return [
     ...section(

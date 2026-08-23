@@ -133,7 +133,7 @@ pub fn normalize_title(raw: &str) -> Result<String, AppError> {
     if title.len() > 200 {
         return Err(AppError::BadRequest("title is too long".into()));
     }
-    if title.contains('\n') || title.contains('\r') || title.contains('\0') {
+    if title.contains('\n') || title.contains('\r') || title.contains('\0') || title.contains('/') {
         return Err(AppError::BadRequest("invalid title".into()));
     }
     if !title_first_char_ok(title) {
@@ -157,13 +157,19 @@ pub fn parked_note_title(body: &str) -> String {
     }
 }
 
-pub fn parked_note_body(body: &str, source_title: Option<&str>, excerpt: Option<&str>) -> String {
+pub fn parked_note_body(
+    body: &str,
+    source_title: Option<&str>,
+    source_folder: Option<&str>,
+    excerpt: Option<&str>,
+) -> String {
     let mut out = body.trim().to_string();
     let Some(title) = source_title.filter(|title| !title.is_empty()) else {
         return out;
     };
+    let path = wiki_path(source_folder.unwrap_or(""), title);
     out.push_str("\n\nCaptured while in [[");
-    out.push_str(title);
+    out.push_str(&path);
     out.push_str("]]:");
     if let Some(excerpt) = excerpt.filter(|excerpt| !excerpt.is_empty()) {
         out.push('\n');
@@ -186,6 +192,37 @@ pub fn normalize_folder(raw: &str) -> Result<String, AppError> {
 
 fn title_key(title: &str) -> String {
     title.trim().to_lowercase()
+}
+
+pub fn wiki_path(folder: &str, title: &str) -> String {
+    if folder.is_empty() {
+        title.to_string()
+    } else {
+        format!("{folder}/{title}")
+    }
+}
+
+fn path_key(folder: &str, title: &str) -> String {
+    title_key(&wiki_path(folder, title))
+}
+
+pub fn parse_wiki_path(target: &str) -> Option<(String, String)> {
+    let target = target.trim().trim_matches('/');
+    if target.is_empty() || target.contains("..") {
+        return None;
+    }
+    match target.rsplit_once('/') {
+        Some((folder, title)) => {
+            let folder = folder.trim_matches('/');
+            let title = title.trim();
+            if folder.is_empty() || title.is_empty() {
+                None
+            } else {
+                Some((folder.to_string(), title.to_string()))
+            }
+        }
+        None => Some((String::new(), target.to_string())),
+    }
 }
 
 pub fn slugify(title: &str) -> String {
@@ -439,12 +476,17 @@ fn write_note(vault: &Path, note: &Note) -> Result<(), AppError> {
     ensure_vault(vault)?;
     let force = note.content.contains(CONFLICT_MARK);
     maybe_snapshot(vault, &note.id, force)?;
+    write_note_file(vault, note)?;
+    write_last_edit(vault, &note.id)?;
+    Ok(())
+}
+
+fn write_note_file(vault: &Path, note: &Note) -> Result<(), AppError> {
     let file = note_file(vault, &note.file_path);
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(&file, render_file(note))?;
-    write_last_edit(vault, &note.id)?;
     Ok(())
 }
 
@@ -585,6 +627,13 @@ pub fn find_by_title(vault: &Path, title: &str) -> Result<Option<Note>, AppError
         .find(|note| title_key(&note.title) == key))
 }
 
+pub fn find_by_path(vault: &Path, folder: &str, title: &str) -> Result<Option<Note>, AppError> {
+    let key = path_key(folder, title);
+    Ok(list_notes_internal(vault)?
+        .into_iter()
+        .find(|note| path_key(&note.folder, &note.title) == key))
+}
+
 pub fn create_note(
     vault: &Path,
     title: &str,
@@ -593,7 +642,7 @@ pub fn create_note(
 ) -> Result<Note, AppError> {
     let title = normalize_title(title)?;
     let folder = normalize_folder(folder)?;
-    if let Some(existing) = find_by_title(vault, &title)? {
+    if let Some(existing) = find_by_path(vault, &folder, &title)? {
         return Err(AppError::Conflict(format!("title_exists:{}", existing.id)));
     }
     let file_path = allocate_file_path(vault, &folder, &title, None);
@@ -674,7 +723,18 @@ pub fn update_meta(
     title: Option<&str>,
     folder: Option<&str>,
 ) -> Result<Note, AppError> {
+    Ok(update_meta_and_rewrites(vault, id, title, folder)?.0)
+}
+
+pub fn update_meta_and_rewrites(
+    vault: &Path,
+    id: &str,
+    title: Option<&str>,
+    folder: Option<&str>,
+) -> Result<(Note, Vec<Note>), AppError> {
     let mut note = get_note(vault, id)?;
+    let old_title = note.title.clone();
+    let old_folder = note.folder.clone();
     let new_title = match title {
         Some(raw) => normalize_title(raw)?,
         None => note.title.clone(),
@@ -684,32 +744,37 @@ pub fn update_meta(
         None => note.folder.clone(),
     };
     if new_title == note.title && new_folder == note.folder {
-        return Ok(note);
+        return Ok((note, Vec::new()));
     }
-    if title_key(&new_title) != title_key(&note.title) {
-        if let Some(existing) = find_by_title(vault, &new_title)? {
+    if path_key(&new_folder, &new_title) != path_key(&old_folder, &old_title) {
+        if let Some(existing) = find_by_path(vault, &new_folder, &new_title)? {
             if existing.id != note.id {
                 return Err(AppError::Conflict(format!("title_exists:{}", existing.id)));
             }
         }
     }
-    let old_path = note.file_path.clone();
+    let old_file = note.file_path.clone();
     note.title = new_title;
     note.folder = new_folder;
     note.file_path = allocate_file_path(vault, &note.folder, &note.title, Some(&note.id));
     write_note(vault, &note)?;
-    if old_path != note.file_path {
-        let old = note_file(vault, &old_path);
+    if old_file != note.file_path {
+        let old = note_file(vault, &old_file);
         if old.exists() {
             std::fs::remove_file(old)?;
         }
     }
-    get_note(vault, id)
+    let rewritten = rewrite_wiki_targets(
+        vault,
+        &path_key(&old_folder, &old_title),
+        &wiki_path(&note.folder, &note.title),
+    )?;
+    Ok((get_note(vault, id)?, rewritten))
 }
 
 pub fn get_or_create_daily(vault: &Path, date: &str) -> Result<Note, AppError> {
     let date = parse_daily_date(date)?;
-    if let Some(existing) = find_by_title(vault, &date)? {
+    if let Some(existing) = find_by_path(vault, "", &date)? {
         return Ok(existing);
     }
     create_note(vault, &date, "", Some(&format!("# {date}\n\n")))
@@ -738,9 +803,105 @@ pub fn extract_wiki_targets(content: &str) -> Vec<String> {
         .collect()
 }
 
+fn rewrite_wiki_content(content: &str, mut map: impl FnMut(&str) -> Option<String>) -> String {
+    let mut out = String::with_capacity(content.len());
+    let mut last = 0;
+    for caps in wiki_re().captures_iter(content) {
+        let Some(full) = caps.get(0) else {
+            continue;
+        };
+        out.push_str(&content[last..full.start()]);
+        let inner = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+        let (target_raw, label) = match inner.split_once('|') {
+            Some((target, label)) => (target, Some(label)),
+            None => (inner, None),
+        };
+        let target = target_raw.trim();
+        if let Some(new_target) = map(target) {
+            out.push_str("[[");
+            out.push_str(&new_target);
+            if let Some(label) = label {
+                out.push('|');
+                out.push_str(label);
+            }
+            out.push_str("]]");
+        } else {
+            out.push_str(full.as_str());
+        }
+        last = full.end();
+    }
+    out.push_str(&content[last..]);
+    out
+}
+
+pub fn rewrite_wiki_targets(
+    vault: &Path,
+    old_key: &str,
+    new_path: &str,
+) -> Result<Vec<Note>, AppError> {
+    let mut rewritten = Vec::new();
+    for mut note in list_notes_internal(vault)? {
+        let next = rewrite_wiki_content(&note.content, |target| {
+            if title_key(target) == old_key {
+                Some(new_path.to_string())
+            } else {
+                None
+            }
+        });
+        if next == note.content {
+            continue;
+        }
+        note.content = next;
+        write_note_file(vault, &note)?;
+        rewritten.push(note);
+    }
+    Ok(rewritten)
+}
+
+pub fn migrate_wiki_paths(vault: &Path) -> Result<Vec<Note>, AppError> {
+    let notes = list_notes_internal(vault)?;
+    let mut by_title: HashMap<String, Vec<&Note>> = HashMap::new();
+    for note in &notes {
+        by_title
+            .entry(title_key(&note.title))
+            .or_default()
+            .push(note);
+    }
+    let path_keys: std::collections::HashSet<String> = notes
+        .iter()
+        .map(|note| path_key(&note.folder, &note.title))
+        .collect();
+    let mut rewritten = Vec::new();
+    for mut note in notes.clone() {
+        let next = rewrite_wiki_content(&note.content, |target| {
+            let key = title_key(target);
+            if path_keys.contains(&key) {
+                return None;
+            }
+            let matches = by_title.get(&key)?;
+            if matches.len() != 1 {
+                return None;
+            }
+            let path = wiki_path(&matches[0].folder, &matches[0].title);
+            if title_key(&path) == key {
+                None
+            } else {
+                Some(path)
+            }
+        });
+        if next == note.content {
+            continue;
+        }
+        note.content = next;
+        write_note_file(vault, &note)?;
+        rewritten.push(note);
+    }
+    Ok(rewritten)
+}
+
 pub fn backlinks(vault: &Path, id: &str) -> Result<Vec<NoteMeta>, AppError> {
     let target = get_note(vault, id)?;
-    let key = title_key(&target.title);
+    let key = path_key(&target.folder, &target.title);
     let mut hits = Vec::new();
     for note in list_notes_internal(vault)? {
         if note.id == target.id {
@@ -977,13 +1138,26 @@ mod tests {
         assert!(normalize_title("").is_err());
         assert!(normalize_title("***").is_err());
         assert!(normalize_title("-dash").is_err());
+        assert!(normalize_title("ideas/one").is_err());
+        assert_eq!(wiki_path("ideas", "One"), "ideas/One");
+        assert_eq!(wiki_path("", "One"), "One");
+        assert_eq!(parse_wiki_path("ideas/One"), Some(("ideas".into(), "One".into())));
+        assert_eq!(parse_wiki_path("One"), Some(("".into(), "One".into())));
+        assert!(parse_wiki_path("../x").is_none());
         assert_eq!(parked_note_title("ask jim\nmore"), "ask jim");
         assert!(parked_note_title("***").starts_with("Quick note "));
         assert_eq!(
-            parked_note_body("ask jim", Some("Weekly"), Some("retry")),
+            parked_note_body("ask jim", Some("Weekly"), None, Some("retry")),
             "ask jim\n\nCaptured while in [[Weekly]]:\n> retry\n"
         );
-        assert_eq!(parked_note_body("ask jim", None, Some("retry")), "ask jim");
+        assert_eq!(
+            parked_note_body("ask jim", Some("Weekly"), Some("ideas"), Some("retry")),
+            "ask jim\n\nCaptured while in [[ideas/Weekly]]:\n> retry\n"
+        );
+        assert_eq!(
+            parked_note_body("ask jim", None, Some("ideas"), Some("retry")),
+            "ask jim"
+        );
     }
 
     #[test]
@@ -999,13 +1173,18 @@ mod tests {
         assert!(get_note(vault, "missing").is_err());
         assert!(normalize_note_id("../x").is_err());
         assert!(normalize_note_id("").is_err());
-        let conflict = create_note(vault, "one", "", None).unwrap_err();
+        let root = create_note(vault, "one", "", None).unwrap();
+        assert_eq!(root.folder, "");
+        let conflict = create_note(vault, "one", "ideas", None).unwrap_err();
         assert!(conflict_id(&conflict).is_some());
         let daily = get_or_create_daily(vault, "2026-08-22").unwrap();
         assert!(daily.content.contains("2026-08-22"));
         let again = get_or_create_daily(vault, "2026-08-22").unwrap();
         assert_eq!(again.id, daily.id);
-        assert_eq!(list_notes(vault).unwrap().len(), 2);
+        create_note(vault, "2026-08-22", "ideas", Some("other day")).unwrap();
+        let still = get_or_create_daily(vault, "2026-08-22").unwrap();
+        assert_eq!(still.id, daily.id);
+        assert_eq!(list_notes(vault).unwrap().len(), 4);
 
         let renamed = update_meta(vault, &note.id, Some("Two"), None).unwrap();
         assert_eq!(renamed.title, "Two");
@@ -1015,7 +1194,8 @@ mod tests {
         let moved = update_meta(vault, &note.id, None, Some("work")).unwrap();
         assert_eq!(moved.folder, "work");
         assert_eq!(moved.title, "Two");
-        let conflict = update_meta(vault, &daily.id, Some("two"), None).unwrap_err();
+        create_note(vault, "Two", "", None).unwrap();
+        let conflict = update_meta(vault, &root.id, Some("two"), None).unwrap_err();
         assert!(conflict_id(&conflict).is_some());
         assert!(update_meta(vault, &note.id, Some("***"), None).is_err());
         let same = update_meta(vault, &note.id, Some("Two"), Some("work")).unwrap();
@@ -1040,6 +1220,52 @@ mod tests {
         assert!(search(vault, &"q".repeat(201)).is_err());
         assert!(extract_wiki_targets("[[../x]]").is_empty());
         assert!(normalize_note_path(&"a".repeat(201)).is_err());
+
+        let nested = create_note(vault, "gamma", "ideas", Some("g")).unwrap();
+        let linker = create_note(vault, "delta", "", Some("see [[ideas/gamma]]")).unwrap();
+        let nested_links = backlinks(vault, &nested.id).unwrap();
+        assert_eq!(nested_links.len(), 1);
+        assert_eq!(nested_links[0].id, linker.id);
+    }
+
+    #[test]
+    fn migrate_and_rename_rewrites_paths() {
+        let dir = tempdir().unwrap();
+        let vault = dir.path();
+        let one = create_note(vault, "One", "ideas", Some("body")).unwrap();
+        let src = create_note(
+            vault,
+            "Src",
+            "",
+            Some("see [[One|label]] and [[ideas/One]] and [[Other]]"),
+        )
+        .unwrap();
+        age_last_edit(vault, &src.id, 6);
+        put_note(vault, &src.id, &src.content).unwrap();
+        let hist_before = list_history(vault, &src.id).unwrap();
+        assert_eq!(hist_before.len(), 1);
+
+        let migrated = migrate_wiki_paths(vault).unwrap();
+        assert_eq!(migrated.len(), 1);
+        let src = get_note(vault, &src.id).unwrap();
+        assert_eq!(src.content, "see [[ideas/One|label]] and [[ideas/One]] and [[Other]]");
+        assert_eq!(
+            get_history(vault, &src.id, &hist_before[0].rev)
+                .unwrap()
+                .content,
+            "see [[One|label]] and [[ideas/One]] and [[Other]]"
+        );
+
+        update_meta(vault, &one.id, Some("Two"), Some("work")).unwrap();
+        let src = get_note(vault, &src.id).unwrap();
+        assert_eq!(src.content, "see [[work/Two|label]] and [[work/Two]] and [[Other]]");
+        assert_eq!(
+            get_history(vault, &src.id, &hist_before[0].rev)
+                .unwrap()
+                .content,
+            "see [[One|label]] and [[ideas/One]] and [[Other]]"
+        );
+        assert!(migrate_wiki_paths(vault).unwrap().is_empty());
     }
 
     #[test]

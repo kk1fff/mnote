@@ -12,6 +12,8 @@ vi.mock("../api", async () => {
         url: "/api/assets/1.png",
         markdown: "![](/api/assets/1.png)",
       }),
+      titleSearch: vi.fn().mockResolvedValue([]),
+      recentNotes: vi.fn().mockResolvedValue([]),
     },
   };
 });

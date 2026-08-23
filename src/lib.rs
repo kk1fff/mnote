@@ -24,6 +24,13 @@ impl AppState {
         ensure_data_layout(&data_dir)?;
         let conn = Connection::open(db_path(&data_dir))?;
         db::init(&conn)?;
+        if let Ok(entries) = std::fs::read_dir(vaults_dir(&data_dir)) {
+            for entry in entries.flatten() {
+                if entry.path().is_dir() {
+                    notes::migrate_wiki_paths(&entry.path())?;
+                }
+            }
+        }
         Ok(Self {
             data_dir,
             db: Arc::new(Mutex::new(conn)),

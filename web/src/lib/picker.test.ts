@@ -31,13 +31,23 @@ describe("buildPickerSections", () => {
     ]);
   });
 
-  it("hides create when a title matches exactly", () => {
-    const sections = buildPickerSections({
+  it("hides create when the folder and title match", () => {
+    const sameFolder = buildPickerSections({
+      query: "work/Plan",
+      notes: [note("p1", "Plan", "work")],
+      folders: [],
+    });
+    expect(sameFolder.map((section) => section.id)).toEqual(["note"]);
+
+    const root = buildPickerSections({
       query: "Plan",
       notes: [note("p1", "Plan", "work")],
       folders: [],
     });
-    expect(sections.map((section) => section.id)).toEqual(["note"]);
+    expect(pickerItems(root)).toMatchObject([
+      { type: "note", note: { id: "p1" } },
+      { type: "create", draft: { title: "Plan", folder: "" } },
+    ]);
   });
 
   it("lists notes only for a trailing-slash folder browse", () => {

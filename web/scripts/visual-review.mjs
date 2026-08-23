@@ -79,6 +79,17 @@ if ((await page.locator(".cm-content").innerText()).trim().length < 8) {
   await page.waitForTimeout(300);
 }
 await shot(page, "02-note-desktop-light");
+await page.locator(".cm-content").click();
+await page.keyboard.press("End");
+await page.keyboard.press("Enter");
+await page.keyboard.type("/");
+await page.waitForSelector('[data-testid="suggest"]');
+await shot(page, "02b-slash-light");
+await page.keyboard.press("Escape");
+await page.keyboard.type("[[");
+await page.waitForSelector('[data-testid="suggest"]');
+await shot(page, "02c-wiki-light");
+await page.keyboard.press("Escape");
 
 const barBefore = await page.locator(".bar").evaluate((el) => el.getBoundingClientRect().height);
 await page.getByTestId("note-title").click();
@@ -117,6 +128,13 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(150);
 await shot(page, "08-note-desktop-dark");
+await page.locator(".cm-content").click();
+await page.keyboard.press("End");
+await page.keyboard.press("Enter");
+await page.keyboard.type("/");
+await page.waitForSelector('[data-testid="suggest"]');
+await shot(page, "08b-slash-dark");
+await page.keyboard.press("Escape");
 await page.getByTestId("history").click();
 await page.waitForSelector('[data-testid="history-panel"]');
 await shot(page, "09-history-dark");

@@ -3,20 +3,22 @@ import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
 import { renderMarkdown } from "../lib/markdown";
-import { noteHref } from "../lib/paths";
+import { noteHref, parseWikiPath, sameWikiPath } from "../lib/paths";
 
 const props = defineProps<{ source: string }>();
 const router = useRouter();
 const html = computed(() => renderMarkdown(props.source));
 
-async function openWiki(title: string) {
-  const hits = await api.titleSearch(title).catch(() => []);
-  const exact = hits.find((note) => note.title.toLowerCase() === title.toLowerCase());
+async function openWiki(target: string) {
+  const parsed = parseWikiPath(target);
+  if (!parsed) return;
+  const hits = await api.titleSearch(target).catch(() => []);
+  const exact = hits.find((note) => sameWikiPath(note.folder ?? "", note.title, target));
   if (exact) {
     await router.push(noteHref(exact.id));
     return;
   }
-  const note = await api.createNote(title);
+  const note = await api.createNote(parsed.title, parsed.folder || undefined);
   await router.push(noteHref(note.id));
 }
 

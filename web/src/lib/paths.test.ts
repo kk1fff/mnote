@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { noteHref, noteIdFromRoute, parseCreateQuery, todayDate } from "./paths";
+import { noteHref, noteIdFromRoute, parseCreateQuery, parseWikiPath, sameWikiPath, todayDate, wikiPath } from "./paths";
 
 describe("paths", () => {
   it("formats today as YYYY-MM-DD", () => {
@@ -12,6 +12,14 @@ describe("paths", () => {
     expect(parseCreateQuery("plan")).toEqual({ title: "plan", folder: "" });
     expect(parseCreateQuery("../x")).toBeNull();
     expect(parseCreateQuery("")).toBeNull();
+  });
+
+  it("builds wiki paths", () => {
+    expect(wikiPath("ideas", "One")).toBe("ideas/One");
+    expect(wikiPath("", "One")).toBe("One");
+    expect(parseWikiPath("ideas/One")).toEqual({ title: "One", folder: "ideas" });
+    expect(sameWikiPath("ideas", "One", "ideas/one")).toBe(true);
+    expect(sameWikiPath("", "One", "ideas/One")).toBe(false);
   });
 
   it("encodes note ids", () => {

@@ -70,6 +70,7 @@ async function openSource() {
     return;
   }
   pendingExcerpt.value = selected.value.excerpt ?? null;
+  close();
   await router.push(noteHref(selected.value.source_id));
 }
 

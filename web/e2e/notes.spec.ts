@@ -203,3 +203,47 @@ test("pasting a png inserts an asset", async ({ page }) => {
   }, [...png]);
   await expect(page.locator(".cm-content")).toContainText("/api/assets/");
 });
+
+test("slash date inserts today", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await createNote(page, uid("Slash"));
+  await typeInEditor(page, "/date");
+  await expect(page.getByTestId("suggest")).toBeVisible();
+  await page.keyboard.press("Enter");
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  await expect(page.locator(".cm-content")).toContainText(today);
+});
+
+test("page command inserts a folder wiki path", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  const target = uid("LinkT");
+  await createNote(page, `ideas/${target}`);
+  await createNote(page, uid("LinkS"));
+  await typeInEditor(page, `/page ${target}`);
+  await expect(page.getByTestId("suggest")).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("suggest")).toContainText(target);
+  await page.getByTestId("suggest").getByText(target, { exact: true }).click();
+  await expect(page.locator(".cm-content")).toContainText(`[[ideas/${target}]]`);
+});
+
+test("wiki create row inserts a link without creating", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await createNote(page, uid("From"));
+  const missing = uid("NewPg");
+  const created: string[] = [];
+  page.on("request", (req) => {
+    if (req.method() === "POST" && new URL(req.url()).pathname === "/api/notes") {
+      created.push(req.url());
+    }
+  });
+  await typeInEditor(page, `[[${missing}`);
+  await expect(page.getByTestId("suggest")).toContainText(`Create “${missing}”`);
+  await page.getByTestId("suggest").getByText(`Create “${missing}”`).click();
+  await expect(page.locator(".cm-content")).toContainText(`[[${missing}]]`);
+  expect(created).toEqual([]);
+});

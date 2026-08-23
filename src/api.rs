@@ -380,13 +380,16 @@ async fn patch_note(
     Json(body): Json<PatchNote>,
 ) -> Result<Json<notes::Note>, AppError> {
     require_ready(&user)?;
-    let note = notes::update_meta(
+    let (note, rewritten) = notes::update_meta_and_rewrites(
         &state.vault_dir(&user.username),
         &id,
         body.title.as_deref(),
         body.folder.as_deref(),
     )?;
     state.live.index(user.id, notes::to_meta(&note));
+    for other in rewritten {
+        state.live.force_replace(user.id, &other.id, &other.content);
+    }
     Ok(Json(note))
 }
 
@@ -447,6 +450,7 @@ async fn parked_to_note(
     let content = notes::parked_note_body(
         &item.body,
         item.source_title.as_deref(),
+        item.source_folder.as_deref(),
         item.excerpt.as_deref(),
     );
     let vault = state.vault_dir(&user.username);

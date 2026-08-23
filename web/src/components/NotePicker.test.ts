@@ -57,7 +57,7 @@ describe("NotePicker", () => {
     expect(wrapper.text()).toMatch(/⌘↵ create|Ctrl\+↵ create/);
   });
 
-  it("hides create for an exact title and creates with the shortcut", async () => {
+  it("hides create for an exact folder path and creates with the shortcut", async () => {
     vi.useFakeTimers();
     vi.mocked(api.titleSearch).mockResolvedValue([
       { id: "p1", title: "Plan", folder: "work", modified_at: "" },
@@ -69,10 +69,10 @@ describe("NotePicker", () => {
       modified_at: "",
     });
     const { wrapper, router } = await openPicker();
-    await wrapper.get("input").setValue("Plan");
+    await wrapper.get("input").setValue("work/Plan");
     await vi.advanceTimersByTimeAsync(120);
     await flushPromises();
-    expect(wrapper.text()).not.toContain("Create “Plan”");
+    expect(wrapper.text()).not.toContain("Create “work/Plan”");
 
     await wrapper.get("input").setValue("draft");
     await vi.advanceTimersByTimeAsync(120);

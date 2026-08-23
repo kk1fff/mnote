@@ -256,7 +256,7 @@ async fn daily_crud_list_search_backlinks() {
             Method::PUT,
             "/api/notes/daily/2026-08-22",
             &cookie,
-            Some(json!({ "content": "# 2026-08-22\n\nsee [[One]]\n" })),
+            Some(json!({ "content": "# 2026-08-22\n\nsee [[ideas/One]]\n" })),
         ))
         .await;
     assert_eq!(status, StatusCode::OK);
@@ -280,6 +280,17 @@ async fn daily_crud_list_search_backlinks() {
             "/api/notes",
             &cookie,
             Some(json!({ "title": "one" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_ne!(body["id"], one_id);
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &cookie,
+            Some(json!({ "title": "one", "folder": "ideas" })),
         ))
         .await;
     assert_eq!(status, StatusCode::CONFLICT);
@@ -306,7 +317,7 @@ async fn daily_crud_list_search_backlinks() {
         .call(h.authed(Method::GET, "/api/notes", &cookie, None))
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body.as_array().unwrap().len(), 3);
+    assert_eq!(body.as_array().unwrap().len(), 4);
 
     let (status, _, body) = h
         .call(h.authed(Method::GET, "/api/search?q=searchterm", &cookie, None))
@@ -315,7 +326,7 @@ async fn daily_crud_list_search_backlinks() {
     assert_eq!(body[0]["id"], one_id);
 
     let (status, _, body) = h
-        .call(h.authed(Method::GET, "/api/notes/title-search?q=one", &cookie, None))
+        .call(h.authed(Method::GET, "/api/notes/title-search?q=ideas/one", &cookie, None))
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body[0]["id"], one_id);
@@ -599,7 +610,7 @@ async fn patch_renames_and_moves() {
             Method::POST,
             "/api/notes",
             &cookie,
-            Some(json!({ "title": "Other" })),
+            Some(json!({ "title": "Other", "folder": "work" })),
         ))
         .await;
     assert_eq!(status, StatusCode::CREATED);
@@ -678,7 +689,7 @@ async fn parked_crud_and_make_note() {
     assert!(body["content"]
         .as_str()
         .unwrap()
-        .contains("Captured while in [[Weekly]]"));
+        .contains("Captured while in [[ideas/Weekly]]"));
 
     let (status, _, body) = h
         .call(h.authed(Method::GET, "/api/parked", &cookie, None))
