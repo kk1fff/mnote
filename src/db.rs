@@ -360,6 +360,18 @@ pub fn favorite_paths(state: &AppState, user_id: i64) -> Result<Vec<String>, App
     Ok(paths)
 }
 
+pub fn clear_note_state(state: &AppState, user_id: i64, path: &str) -> Result<(), AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    conn.execute(
+        "DELETE FROM user_note_state WHERE user_id = ?1 AND path = ?2",
+        params![user_id, path],
+    )?;
+    Ok(())
+}
+
 pub fn recent_paths(state: &AppState, user_id: i64) -> Result<Vec<String>, AppError> {
     let conn = state
         .db

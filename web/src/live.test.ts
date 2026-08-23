@@ -42,8 +42,12 @@ describe("live", () => {
     listeners.message?.({
       data: JSON.stringify({ type: "index", note: { id: "n1", title: "Time" } }),
     });
+    listeners.message?.({
+      data: JSON.stringify({ type: "deleted", id: "n1" }),
+    });
     expect(events).toContain("cursor");
     expect(events).toContain("index");
+    expect(events).toContain("deleted");
     stop();
   });
 

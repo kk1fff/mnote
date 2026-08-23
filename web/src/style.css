@@ -835,6 +835,14 @@ button.icon-btn,
   gap: 0.6rem;
 }
 
+.delete-note-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: min(12rem, 30vh);
+  overflow: auto;
+}
+
 .history-panel,
 .parked-panel {
   min-height: 0;

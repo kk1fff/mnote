@@ -128,6 +128,33 @@ test("wiki link creates a missing note", async ({ page }) => {
   await expect(page.getByTestId("note-title")).toHaveText(missing);
 });
 
+test("delete warns about backlinks and leaves the link", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  const target = uid("DelT");
+  const source = uid("DelS");
+  await createNote(page, target);
+  await createNote(page, source);
+  await typeInEditor(page, `[[${target}]]`);
+  await page.getByTestId("save").click();
+  await expect(page.getByTestId("note-status")).toHaveText("Saved");
+  await openPicker(page);
+  await page.getByTestId("picker-input").fill(target);
+  await page.getByTestId("picker").getByRole("button", { name: target }).click();
+  await expect(page.getByTestId("note-title")).toHaveText(target);
+  await expect(page.locator(".backlinks")).toContainText(source);
+  await page.getByTestId("delete-note-open").click();
+  await expect(page.getByTestId("delete-note")).toContainText(source);
+  await page.getByTestId("delete-note-confirm").click();
+  await page.waitForURL(/\/n\//);
+  await expect(page.getByTestId("sidebar")).not.toContainText(target);
+  await openPicker(page);
+  await page.getByTestId("picker-input").fill(source);
+  await page.getByTestId("picker").getByRole("button", { name: source }).click();
+  await expect(page.getByTestId("note-title")).toHaveText(source);
+  await expect(page.locator(".cm-content")).toContainText(`[[${target}]]`);
+});
+
 test("backlinks list the linking note", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);

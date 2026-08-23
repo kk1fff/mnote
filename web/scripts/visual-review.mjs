@@ -106,6 +106,12 @@ await page.waitForSelector('[data-testid="history-panel"]');
 await shot(page, "04-history-sheet");
 await closeSheet(page);
 
+await page.getByTestId("delete-note-open").click();
+await page.waitForSelector('[data-testid="delete-note"]');
+await shot(page, "04b-delete-confirm");
+await page.keyboard.press("Escape");
+await page.waitForSelector('[data-testid="delete-note"]', { state: "hidden" });
+
 await page.getByTestId("park").click();
 await page.waitForSelector('[data-testid="park-capture"]');
 await page.getByTestId("park-body").fill("Ask Jim about onboarding");

@@ -121,7 +121,7 @@ Then open http://localhost:3000.
 | GET | `/api/notes` | list |
 | POST | `/api/notes` | `{ title, folder?, content? }` |
 | GET/PUT | `/api/notes/daily/:date` | daily note |
-| GET/PUT | `/api/notes/:id` | page |
+| GET/PUT/PATCH/DELETE | `/api/notes/:id` | page |
 | GET | `/api/notes/:id/history` | snapshot list |
 | GET | `/api/notes/:id/history/:rev` | snapshot |
 | POST | `/api/notes/:id/restore` | `{ rev }` restore body |

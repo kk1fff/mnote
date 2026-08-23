@@ -160,5 +160,8 @@ describe("Sidebar", () => {
     expect(wrapper.text()).toContain("Time");
     expect(api.listNotes).not.toHaveBeenCalled();
     expect(live.connect).toHaveBeenCalled();
+    liveHandlers[0]({ type: "deleted", id: "t1" });
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("Time");
   });
 });

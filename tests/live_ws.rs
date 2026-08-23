@@ -1,7 +1,7 @@
 use axum::body::Body;
 use axum::http::{header, Method, Request, StatusCode};
-use http_body_util::BodyExt;
 use futures_util::{SinkExt, StreamExt};
+use http_body_util::BodyExt;
 use mnote::{api, db, AppState};
 use serde_json::{json, Value};
 use tempfile::TempDir;
@@ -98,10 +98,8 @@ async fn live_relays_between_same_user() {
         .await
         .unwrap();
     assert_eq!(created.status(), StatusCode::CREATED);
-    let created_body: Value = serde_json::from_slice(
-        &created.into_body().collect().await.unwrap().to_bytes(),
-    )
-    .unwrap();
+    let created_body: Value =
+        serde_json::from_slice(&created.into_body().collect().await.unwrap().to_bytes()).unwrap();
     let note_id = created_body["id"].as_str().unwrap();
 
     let mut a = connect(addr, &alice).await;
@@ -140,8 +138,7 @@ async fn live_relays_between_same_user() {
     assert_eq!(next_json(&mut a).await["type"], "peers");
     assert_eq!(next_json(&mut b).await["type"], "opened");
     assert_eq!(next_json(&mut b).await["type"], "peers");
-    assert_eq!(next_json(&mut c).await["type"], "opened");
-    assert_eq!(next_json(&mut c).await["type"], "peers");
+    assert_eq!(next_json(&mut c).await["type"], "deleted");
 
     a.send(Message::Text(
         format!(
@@ -190,10 +187,8 @@ async fn live_keeps_peers_after_http_put_and_stale_reconnect() {
         .await
         .unwrap();
     assert_eq!(created.status(), StatusCode::CREATED);
-    let created_body: Value = serde_json::from_slice(
-        &created.into_body().collect().await.unwrap().to_bytes(),
-    )
-    .unwrap();
+    let created_body: Value =
+        serde_json::from_slice(&created.into_body().collect().await.unwrap().to_bytes()).unwrap();
     let note_id = created_body["id"].as_str().unwrap();
 
     let mut stale = connect(addr, &alice).await;
@@ -201,9 +196,7 @@ async fn live_keeps_peers_after_http_put_and_stale_reconnect() {
     let mut b = connect(addr, &alice).await;
 
     stale
-        .send(Message::Text(
-            r#"{"type":"hello","client_id":"a"}"#.into(),
-        ))
+        .send(Message::Text(r#"{"type":"hello","client_id":"a"}"#.into()))
         .await
         .unwrap();
     a.send(Message::Text(r#"{"type":"hello","client_id":"a"}"#.into()))
@@ -306,10 +299,8 @@ async fn live_index_on_create() {
         .await
         .unwrap();
     assert_eq!(created.status(), StatusCode::CREATED);
-    let body: Value = serde_json::from_slice(
-        &created.into_body().collect().await.unwrap().to_bytes(),
-    )
-    .unwrap();
+    let body: Value =
+        serde_json::from_slice(&created.into_body().collect().await.unwrap().to_bytes()).unwrap();
     let note_id = body["id"].as_str().unwrap();
 
     let idx_a = next_json(&mut a).await;
@@ -349,10 +340,8 @@ async fn live_index_on_patch() {
         .await
         .unwrap();
     assert_eq!(created.status(), StatusCode::CREATED);
-    let body: Value = serde_json::from_slice(
-        &created.into_body().collect().await.unwrap().to_bytes(),
-    )
-    .unwrap();
+    let body: Value =
+        serde_json::from_slice(&created.into_body().collect().await.unwrap().to_bytes()).unwrap();
     let note_id = body["id"].as_str().unwrap().to_string();
 
     let mut a = connect(addr, &alice).await;

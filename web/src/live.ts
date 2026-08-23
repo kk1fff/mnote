@@ -10,6 +10,7 @@ export type LiveEvent =
   | { type: "peers"; peers: LivePeer[] }
   | { type: "gone"; client_id: string }
   | { type: "index"; note: NoteMeta }
+  | { type: "deleted"; id: string }
   | { type: "status"; connected: boolean };
 
 type Handler = (event: LiveEvent) => void;
@@ -97,7 +98,8 @@ class Live {
           data.type === "cursor" ||
           data.type === "peers" ||
           data.type === "gone" ||
-          data.type === "index"
+          data.type === "index" ||
+          data.type === "deleted"
         ) {
           this.emit(data as LiveEvent);
         }

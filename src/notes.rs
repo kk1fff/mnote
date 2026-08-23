@@ -665,6 +665,44 @@ pub fn put_note(vault: &Path, id: &str, content: &str) -> Result<Note, AppError>
     get_note(vault, id)
 }
 
+fn prune_empty_note_dirs(vault: &Path, file_path: &str) {
+    let notes_root = vault.join("notes");
+    let mut dir = match note_file(vault, file_path).parent() {
+        Some(parent) => parent.to_path_buf(),
+        None => return,
+    };
+    while dir.starts_with(&notes_root) && dir != notes_root {
+        let empty = match std::fs::read_dir(&dir) {
+            Ok(mut entries) => entries.next().is_none(),
+            Err(_) => break,
+        };
+        if !empty {
+            break;
+        }
+        if std::fs::remove_dir(&dir).is_err() {
+            break;
+        }
+        match dir.parent() {
+            Some(parent) => dir = parent.to_path_buf(),
+            None => break,
+        }
+    }
+}
+
+pub fn delete_note(vault: &Path, id: &str) -> Result<Note, AppError> {
+    let note = get_note(vault, id)?;
+    let file = note_file(vault, &note.file_path);
+    if file.exists() {
+        std::fs::remove_file(&file)?;
+    }
+    prune_empty_note_dirs(vault, &note.file_path);
+    let hist = history_dir(vault, &note.id);
+    if hist.exists() {
+        std::fs::remove_dir_all(hist)?;
+    }
+    Ok(note)
+}
+
 pub fn normalize_rev(raw: &str) -> Result<String, AppError> {
     let rev = raw.trim();
     if rev.is_empty() {
@@ -1141,7 +1179,10 @@ mod tests {
         assert!(normalize_title("ideas/one").is_err());
         assert_eq!(wiki_path("ideas", "One"), "ideas/One");
         assert_eq!(wiki_path("", "One"), "One");
-        assert_eq!(parse_wiki_path("ideas/One"), Some(("ideas".into(), "One".into())));
+        assert_eq!(
+            parse_wiki_path("ideas/One"),
+            Some(("ideas".into(), "One".into()))
+        );
         assert_eq!(parse_wiki_path("One"), Some(("".into(), "One".into())));
         assert!(parse_wiki_path("../x").is_none());
         assert_eq!(parked_note_title("ask jim\nmore"), "ask jim");
@@ -1203,6 +1244,25 @@ mod tests {
     }
 
     #[test]
+    fn delete_removes_file_history_and_empty_folders() {
+        let dir = tempdir().unwrap();
+        let vault = dir.path();
+        let note = create_note(vault, "One", "ideas/nested", Some("hi")).unwrap();
+        let linker = create_note(vault, "Index", "", Some("see [[ideas/nested/One]]")).unwrap();
+        age_last_edit(vault, &note.id, 6);
+        put_note(vault, &note.id, "v2").unwrap();
+        assert!(!list_history(vault, &note.id).unwrap().is_empty());
+
+        delete_note(vault, &note.id).unwrap();
+        assert!(get_note(vault, &note.id).is_err());
+        assert!(!vault.join("notes/ideas").exists());
+        assert!(!history_dir(vault, &note.id).exists());
+        assert!(delete_note(vault, &note.id).is_err());
+        let kept = get_note(vault, &linker.id).unwrap();
+        assert!(kept.content.contains("[[ideas/nested/One]]"));
+    }
+
+    #[test]
     fn wiki_backlinks_and_search() {
         let dir = tempdir().unwrap();
         let vault = dir.path();
@@ -1248,7 +1308,10 @@ mod tests {
         let migrated = migrate_wiki_paths(vault).unwrap();
         assert_eq!(migrated.len(), 1);
         let src = get_note(vault, &src.id).unwrap();
-        assert_eq!(src.content, "see [[ideas/One|label]] and [[ideas/One]] and [[Other]]");
+        assert_eq!(
+            src.content,
+            "see [[ideas/One|label]] and [[ideas/One]] and [[Other]]"
+        );
         assert_eq!(
             get_history(vault, &src.id, &hist_before[0].rev)
                 .unwrap()
@@ -1258,7 +1321,10 @@ mod tests {
 
         update_meta(vault, &one.id, Some("Two"), Some("work")).unwrap();
         let src = get_note(vault, &src.id).unwrap();
-        assert_eq!(src.content, "see [[work/Two|label]] and [[work/Two]] and [[Other]]");
+        assert_eq!(
+            src.content,
+            "see [[work/Two|label]] and [[work/Two]] and [[Other]]"
+        );
         assert_eq!(
             get_history(vault, &src.id, &hist_before[0].rev)
                 .unwrap()

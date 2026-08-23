@@ -15,6 +15,7 @@ vi.mock("../api", async () => {
       getNote: vi.fn(),
       putNote: vi.fn(),
       patchNote: vi.fn(),
+      deleteNote: vi.fn(),
       putDaily: vi.fn(),
       backlinks: vi.fn().mockResolvedValue([]),
       favorites: vi.fn().mockResolvedValue([]),
@@ -230,6 +231,37 @@ describe("NoteView", () => {
     expect(api.restoreNote).toHaveBeenCalledWith("n1", "r1");
     expect(wrapper.get(".fake-editor").element).toHaveProperty("value", "keep");
     expect(wrapper.get('[data-testid="note-status"]').text()).toBe("Restored");
+  });
+
+  it("warns about backlinks then deletes the note", async () => {
+    vi.mocked(api.getNote).mockResolvedValue({
+      id: "n1",
+      title: "One",
+      content: "hi",
+      modified_at: "",
+    });
+    vi.mocked(api.backlinks).mockResolvedValue([
+      { id: "n2", title: "Index", folder: "ideas", modified_at: "" },
+    ]);
+    vi.mocked(api.deleteNote).mockResolvedValue(undefined);
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/n/:id", component: NoteView },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/n/n1");
+    await router.isReady();
+    const wrapper = mount(NoteView, { global: { plugins: [router] } });
+    await flushPromises();
+    await wrapper.get('[data-testid="delete-note-open"]').trigger("click");
+    expect(wrapper.get('[data-testid="delete-note"]').text()).toContain("ideas / Index");
+    expect(wrapper.get('[data-testid="delete-note"]').text()).toContain("Linked from 1 page");
+    await wrapper.get('[data-testid="delete-note-confirm"]').trigger("click");
+    await flushPromises();
+    expect(api.deleteNote).toHaveBeenCalledWith("n1");
+    expect(router.currentRoute.value.path).toBe("/today");
   });
 });
 

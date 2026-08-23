@@ -151,6 +151,8 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(meta),
     }),
+  deleteNote: (id: string) =>
+    request<void>(`/api/notes/${encodeURIComponent(id)}`, { method: "DELETE" }),
   createNote: async (title: string, folder?: string, content?: string) => {
     try {
       return await request<Note>("/api/notes", {

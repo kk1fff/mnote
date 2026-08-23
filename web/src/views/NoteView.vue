@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { api, ApiError, type Note, type NoteMeta } from "../api";
 import AppShell from "../components/AppShell.vue";
 import Backlinks from "../components/Backlinks.vue";
+import DeleteNoteDialog from "../components/DeleteNoteDialog.vue";
 import Editor, { type RemoteCaret } from "../components/Editor.vue";
 import HistoryPanel from "../components/HistoryPanel.vue";
 import Preview from "../components/Preview.vue";
@@ -15,6 +16,7 @@ import { live, type LiveEvent } from "../live";
 import { pendingExcerpt, setParkContext, showParkCapture } from "../parked";
 
 const route = useRoute();
+const router = useRouter();
 const noteId = computed(() => noteIdFromRoute(route.params.id));
 const title = ref("");
 const folder = ref("");
@@ -32,6 +34,9 @@ const editor = ref<{ excerpt: () => string; revealExcerpt: (quote: string) => bo
 const history = ref<{ show: () => void } | null>(null);
 const actionsOpen = ref(false);
 const actionsEl = ref<HTMLElement | null>(null);
+const deleteOpen = ref(false);
+const deleteBusy = ref(false);
+const deleteError = ref("");
 let replacing = false;
 const parkShortcut = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘↵" : "Ctrl+↵";
 let saveTimer: number | undefined;
@@ -164,6 +169,22 @@ function onLive(event: LiveEvent) {
     title.value = event.note.title;
     folder.value = event.note.folder ?? "";
   }
+  if (event.type === "deleted" && event.id === id) {
+    if (deleteBusy.value) return;
+    markGone();
+  }
+}
+
+function markGone() {
+  if (loadedId) clearDraft(loadedId);
+  loadedId = "";
+  title.value = "";
+  folder.value = "";
+  content.value = "";
+  links.value = [];
+  remotes.value = [];
+  deleteOpen.value = false;
+  status.value = "Note not found";
 }
 
 function onLiveChange(change: { from: number; to: number; insert: string; content: string }) {
@@ -259,6 +280,37 @@ function queueSave() {
 
 function closeActions() {
   actionsOpen.value = false;
+}
+
+function showDelete() {
+  if (!loadedId) return;
+  deleteError.value = "";
+  deleteOpen.value = true;
+}
+
+function closeDelete() {
+  if (deleteBusy.value) return;
+  deleteOpen.value = false;
+  deleteError.value = "";
+}
+
+async function confirmDelete() {
+  const id = loadedId || noteId.value;
+  if (!id || deleteBusy.value) return;
+  deleteBusy.value = true;
+  deleteError.value = "";
+  try {
+    await api.deleteNote(id);
+    clearDraft(id);
+    loadedId = "";
+    deleteOpen.value = false;
+    await shell.value?.load();
+    await router.push("/today");
+  } catch {
+    deleteError.value = "Could not delete";
+  } finally {
+    deleteBusy.value = false;
+  }
 }
 
 function runAction(action: () => void) {
@@ -384,6 +436,9 @@ onBeforeUnmount(() => {
             <button type="button" class="ghost" data-testid="history" @click="runAction(() => history?.show())">
               History
             </button>
+            <button type="button" class="ghost" data-testid="delete-note-open" @click="runAction(showDelete)">
+              Delete
+            </button>
             <button type="button" data-testid="save" @click="runAction(() => void save())">Save</button>
           </div>
         </div>
@@ -404,6 +459,15 @@ onBeforeUnmount(() => {
         :note-id="noteId"
         :current="content"
         @restored="onRestored"
+      />
+      <DeleteNoteDialog
+        v-if="deleteOpen"
+        :title="title"
+        :links="links"
+        :error="deleteError"
+        :busy="deleteBusy"
+        @cancel="closeDelete"
+        @confirm="void confirmDelete()"
       />
     </main>
   </AppShell>

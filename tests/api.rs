@@ -326,7 +326,12 @@ async fn daily_crud_list_search_backlinks() {
     assert_eq!(body[0]["id"], one_id);
 
     let (status, _, body) = h
-        .call(h.authed(Method::GET, "/api/notes/title-search?q=ideas/one", &cookie, None))
+        .call(h.authed(
+            Method::GET,
+            "/api/notes/title-search?q=ideas/one",
+            &cookie,
+            None,
+        ))
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body[0]["id"], one_id);
@@ -388,6 +393,106 @@ async fn isolation_and_traversal() {
         .call(h.authed(Method::GET, "/api/notes/daily/not-a-date", &alice, None))
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::DELETE,
+            &format!("/api/notes/{secret_id}"),
+            &bob,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn delete_note_leaves_backlinks_and_clears_state() {
+    let h = Harness::new();
+    let cookie = h.login("alice", "password1").await;
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &cookie,
+            Some(json!({ "title": "One", "folder": "ideas", "content": "target" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let one_id = body["id"].as_str().unwrap().to_string();
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &cookie,
+            Some(json!({ "title": "Index", "content": "see [[ideas/One]]" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let index_id = body["id"].as_str().unwrap().to_string();
+
+    let (status, _, _) = h
+        .call(h.authed(Method::GET, &format!("/api/notes/{one_id}"), &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::PUT,
+            &format!("/api/favorites/{one_id}"),
+            &cookie,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::DELETE,
+            &format!("/api/notes/{one_id}"),
+            &cookie,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, _, _) = h
+        .call(h.authed(Method::GET, &format!("/api/notes/{one_id}"), &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/favorites", &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!([]));
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/notes/recent", &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!body
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|note| note["id"] == one_id));
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::GET,
+            &format!("/api/notes/{index_id}"),
+            &cookie,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["content"].as_str().unwrap().contains("[[ideas/One]]"));
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::DELETE,
+            &format!("/api/notes/{one_id}"),
+            &cookie,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -708,12 +813,7 @@ async fn parked_crud_and_make_note() {
     assert_eq!(status, StatusCode::CREATED);
     let id = body["id"].as_i64().unwrap();
     let (status, _, _) = h
-        .call(h.authed(
-            Method::DELETE,
-            &format!("/api/parked/{id}"),
-            &cookie,
-            None,
-        ))
+        .call(h.authed(Method::DELETE, &format!("/api/parked/{id}"), &cookie, None))
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
@@ -744,7 +844,12 @@ async fn note_history_and_restore() {
     assert_eq!(status, StatusCode::OK);
 
     let (status, _, body) = h
-        .call(h.authed(Method::GET, &format!("/api/notes/{id}/history"), &cookie, None))
+        .call(h.authed(
+            Method::GET,
+            &format!("/api/notes/{id}/history"),
+            &cookie,
+            None,
+        ))
         .await;
     assert_eq!(status, StatusCode::OK);
     assert!(body.as_array().unwrap().is_empty());
@@ -769,7 +874,12 @@ async fn note_history_and_restore() {
     assert_eq!(status, StatusCode::OK);
 
     let (status, _, body) = h
-        .call(h.authed(Method::GET, &format!("/api/notes/{id}/history"), &cookie, None))
+        .call(h.authed(
+            Method::GET,
+            &format!("/api/notes/{id}/history"),
+            &cookie,
+            None,
+        ))
         .await;
     assert_eq!(status, StatusCode::OK);
     let hist = body.as_array().unwrap();

@@ -41,6 +41,9 @@ function upsert(note: NoteMeta) {
 
 function onLive(event: LiveEvent) {
   if (event.type === "index") upsert(event.note);
+  if (event.type === "deleted") {
+    notes.value = notes.value.filter((note) => note.id !== event.id);
+  }
   if (event.type === "status" && event.connected) void load();
 }
 

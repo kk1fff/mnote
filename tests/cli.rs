@@ -85,13 +85,7 @@ fn warns_when_data_is_web_subdir() {
 
     let web_data = root.path().join("web").join("data");
     bin()
-        .args([
-            "--data",
-            web_data.to_str().unwrap(),
-            "user",
-            "add",
-            "bob",
-        ])
+        .args(["--data", web_data.to_str().unwrap(), "user", "add", "bob"])
         .assert()
         .success()
         .stderr(predicate::str::contains("cwd-relative"))

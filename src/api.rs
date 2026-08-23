@@ -32,7 +32,13 @@ pub fn router(state: AppState) -> Router {
         .route("/notes/{id}/history", get(list_history))
         .route("/notes/{id}/history/{rev}", get(get_history))
         .route("/notes/{id}/restore", post(restore_note))
-        .route("/notes/{id}", get(get_note).put(put_note).patch(patch_note))
+        .route(
+            "/notes/{id}",
+            get(get_note)
+                .put(put_note)
+                .patch(patch_note)
+                .delete(delete_note),
+        )
         .route("/favorites", get(favorites))
         .route("/favorites/{id}", put(favorite).delete(unfavorite))
         .route("/search", get(search_notes))
@@ -343,6 +349,19 @@ struct RestoreNote {
     rev: String,
 }
 
+async fn delete_note(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    require_ready(&user)?;
+    let id = notes::normalize_note_id(&id)?;
+    notes::delete_note(&state.vault_dir(&user.username), &id)?;
+    db::clear_note_state(&state, user.id, &id)?;
+    state.live.remove(user.id, &id);
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn restore_note(
     State(state): State<AppState>,
     Auth(user): Auth,
@@ -615,14 +634,16 @@ fn handle_live_text(
             });
         }
         ClientMsg::Open { path, content } => match notes::normalize_note_id(&path) {
-            Ok(id) => {
-                let disk = notes::get_note(&state.vault_dir(&user.username), &id)
-                    .ok()
-                    .map(|n| n.content);
-                state
-                    .live
-                    .open(user.id, client_id, &id, disk.as_deref(), &content);
-            }
+            Ok(id) => match notes::get_note(&state.vault_dir(&user.username), &id) {
+                Ok(note) => {
+                    state
+                        .live
+                        .open(user.id, client_id, &id, Some(&note.content), &content);
+                }
+                Err(_) => {
+                    let _ = tx.send(ServerMsg::Deleted { id });
+                }
+            },
             Err(err) => {
                 let _ = tx.send(ServerMsg::Error {
                     error: err.message(),

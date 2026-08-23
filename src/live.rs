@@ -1,7 +1,7 @@
 use crate::merge;
 use crate::notes::NoteMeta;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
@@ -77,6 +77,9 @@ pub enum ServerMsg {
     Index {
         note: NoteMeta,
     },
+    Deleted {
+        id: String,
+    },
     Error {
         error: String,
     },
@@ -103,6 +106,7 @@ struct Inner {
 struct UserLive {
     conns: HashMap<String, Conn>,
     notes: HashMap<String, NoteBuf>,
+    deleted: HashSet<String>,
 }
 
 struct Conn {
@@ -185,6 +189,14 @@ impl LiveHub {
         let Some(user) = inner.users.get_mut(&user_id) else {
             return;
         };
+        if user.deleted.contains(path) {
+            if let Some(conn) = user.conns.get(client_id) {
+                let _ = conn.tx.send(ServerMsg::Deleted {
+                    id: path.to_string(),
+                });
+            }
+            return;
+        }
         let prev = user
             .conns
             .get(client_id)
@@ -251,6 +263,14 @@ impl LiveHub {
     pub fn change(&self, user_id: i64, client_id: &str, change: Change) -> Option<Persist> {
         let mut inner = self.inner.lock().expect("live lock");
         let user = inner.users.get_mut(&user_id)?;
+        if user.deleted.contains(&change.path) {
+            if let Some(conn) = user.conns.get(client_id) {
+                let _ = conn.tx.send(ServerMsg::Deleted {
+                    id: change.path.clone(),
+                });
+            }
+            return None;
+        }
         let path = change.path;
         let buf = user.notes.entry(path.clone()).or_insert_with(|| NoteBuf {
             content: change.content.clone(),
@@ -301,6 +321,14 @@ impl LiveHub {
     ) -> Option<Persist> {
         let mut inner = self.inner.lock().expect("live lock");
         let user = inner.users.get_mut(&user_id)?;
+        if user.deleted.contains(path) {
+            if let Some(conn) = user.conns.get(client_id) {
+                let _ = conn.tx.send(ServerMsg::Deleted {
+                    id: path.to_string(),
+                });
+            }
+            return None;
+        }
         let buf = user
             .notes
             .entry(path.to_string())
@@ -333,6 +361,22 @@ impl LiveHub {
             return;
         };
         fanout(user, "", None, ServerMsg::Index { note });
+    }
+
+    pub fn remove(&self, user_id: i64, id: &str) {
+        let mut inner = self.inner.lock().expect("live lock");
+        let Some(user) = inner.users.get_mut(&user_id) else {
+            return;
+        };
+        user.notes.remove(id);
+        user.deleted.insert(id.to_string());
+        for conn in user.conns.values_mut() {
+            if conn.path.as_deref() == Some(id) {
+                conn.path = None;
+                conn.cursor = None;
+            }
+        }
+        fanout(user, "", None, ServerMsg::Deleted { id: id.to_string() });
     }
 
     pub fn force_replace(&self, user_id: i64, path: &str, content: &str) -> Option<u64> {
@@ -373,11 +417,7 @@ impl LiveHub {
         {
             return None;
         }
-        if user
-            .conns
-            .values()
-            .any(|c| c.path.as_deref() == Some(path))
-        {
+        if user.conns.values().any(|c| c.path.as_deref() == Some(path)) {
             return user.notes.get(path).map(|b| b.rev);
         }
         let buf = user
@@ -678,5 +718,41 @@ mod tests {
         assert!(persist.content.contains("ONE"));
         assert!(persist.content.contains("TWO"));
         assert!(!persist.content.contains("<<<<<<<"));
+    }
+
+    #[test]
+    fn remove_broadcasts_and_blocks_changes() {
+        let (hub, mut a_rx, mut b_rx) = pair();
+        drain(&mut a_rx);
+        drain(&mut b_rx);
+        hub.open(1, "a", "n", Some("x"), "x");
+        hub.open(1, "b", "n", Some("x"), "x");
+        drain(&mut a_rx);
+        drain(&mut b_rx);
+        hub.remove(1, "n");
+        assert!(drain(&mut a_rx)
+            .iter()
+            .any(|m| matches!(m, ServerMsg::Deleted { id } if id == "n")));
+        assert!(drain(&mut b_rx)
+            .iter()
+            .any(|m| matches!(m, ServerMsg::Deleted { id } if id == "n")));
+        assert_eq!(hub.rev(1, "n"), None);
+        assert!(hub
+            .change(
+                1,
+                "a",
+                Change {
+                    path: "n".into(),
+                    rev: 0,
+                    content: "y".into(),
+                    from: 0,
+                    to: 1,
+                    insert: "y".into(),
+                },
+            )
+            .is_none());
+        assert!(drain(&mut a_rx)
+            .iter()
+            .any(|m| matches!(m, ServerMsg::Deleted { id } if id == "n")));
     }
 }
