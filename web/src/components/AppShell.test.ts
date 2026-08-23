@@ -45,6 +45,10 @@ describe("AppShell", () => {
     expect(wrapper.find(".note-picker").exists()).toBe(true);
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true }));
     await flushPromises();
+    expect(wrapper.find('[data-testid="park-capture"]').exists()).toBe(false);
+    await wrapper.get('[data-testid="picker-input"]').trigger("keydown", { key: "Escape" });
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true }));
+    await flushPromises();
     expect(wrapper.find('[data-testid="park-capture"]').exists()).toBe(true);
   });
 });

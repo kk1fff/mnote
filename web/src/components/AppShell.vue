@@ -8,7 +8,7 @@ import ParkedPanel from "./ParkedPanel.vue";
 import Sidebar from "./Sidebar.vue";
 
 const sidebar = ref<{ load: () => Promise<void> } | null>(null);
-const picker = ref<{ show: () => void } | null>(null);
+const picker = ref<{ show: () => void; open: boolean } | null>(null);
 const parked = ref<{ show: () => void } | null>(null);
 const open = ref(false);
 const route = useRoute();
@@ -34,6 +34,7 @@ function onKey(event: KeyboardEvent) {
     showParkCapture();
   }
   if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key === "Enter") {
+    if (picker.value?.open) return;
     event.preventDefault();
     showParkCapture();
   }

@@ -142,6 +142,7 @@ function onKey(event: KeyboardEvent) {
   }
   if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
     event.preventDefault();
+    event.stopPropagation();
     void create();
     return;
   }
@@ -194,7 +195,7 @@ watch(items, () => {
   if (selected.value > maxIndex.value || selected.value < 0) clampSelected();
 });
 
-defineExpose({ show });
+defineExpose({ show, open });
 </script>
 
 <template>
