@@ -15,8 +15,8 @@ describe("buildPickerSections", () => {
         label: "Go to",
         items: [
           { type: "jump", key: "today", to: "/today", label: "Today" },
-          { type: "jump", key: "recent", to: "/recent", label: "Recent" },
-          { type: "jump", key: "favorites", to: "/favorites", label: "Favorites" },
+          { type: "collection", key: "recent", label: "Recent" },
+          { type: "collection", key: "favorites", label: "Favorites" },
         ],
       },
       {
@@ -30,7 +30,7 @@ describe("buildPickerSections", () => {
   it("filters Go to destinations by prefix", () => {
     const sections = buildPickerSections({ query: "fav", notes: [], folders: [] });
     expect(pickerItems(sections)).toMatchObject([
-      { type: "jump", to: "/favorites", label: "Favorites" },
+      { type: "collection", key: "favorites", label: "Favorites" },
       { type: "create", label: "fav" },
     ]);
   });
@@ -122,6 +122,33 @@ describe("buildPickerSections", () => {
     expect(pickerItems(sections)).toMatchObject([
       { type: "note", note: { title: "Alpha" } },
       { type: "create", label: "ideas/alp", draft: { title: "alp", folder: "ideas" } },
+    ]);
+  });
+
+  it("lists a collection with back when that mode is open", () => {
+    const empty = buildPickerSections({
+      query: "",
+      notes: [],
+      folders: [],
+      collection: "recent",
+    });
+    expect(empty).toEqual([
+      {
+        id: "recent",
+        label: "Recent",
+        items: [{ type: "back", key: "back" }],
+      },
+    ]);
+
+    const listed = buildPickerSections({
+      query: "",
+      notes: [note("r1", "Opened", "work")],
+      folders: [],
+      collection: "favorites",
+    });
+    expect(pickerItems(listed)).toMatchObject([
+      { type: "back" },
+      { type: "note", note: { id: "r1", title: "Opened" } },
     ]);
   });
 

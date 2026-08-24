@@ -13,6 +13,8 @@ vi.mock("../api", async () => {
       titleSearch: vi.fn(),
       createNote: vi.fn(),
       listNotes: vi.fn(),
+      recentNotes: vi.fn(),
+      favorites: vi.fn(),
     },
   };
 });
@@ -42,6 +44,8 @@ describe("NotePicker", () => {
     vi.mocked(api.titleSearch).mockReset();
     vi.mocked(api.createNote).mockReset();
     vi.mocked(api.listNotes).mockReset();
+    vi.mocked(api.recentNotes).mockReset();
+    vi.mocked(api.favorites).mockReset();
     resetWorkspace(emptyWorkspace());
   });
 
@@ -111,6 +115,37 @@ describe("NotePicker", () => {
     await flushPromises();
     expect(router.currentRoute.value.path).toBe("/today");
     expect(wrapper.find('[data-testid="picker"]').exists()).toBe(false);
+  });
+
+  it("lists recent notes in the picker and goes back", async () => {
+    vi.mocked(api.recentNotes).mockResolvedValue([
+      { id: "r1", title: "Opened", folder: "work", modified_at: "" },
+    ]);
+    const { wrapper, router } = await openPicker();
+    await wrapper.get('[data-testid="picker-recent"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="picker"]').exists()).toBe(true);
+    expect(router.currentRoute.value.path).toBe("/");
+    expect(wrapper.text()).toContain("Opened");
+    expect(wrapper.text()).toContain("work");
+    expect(wrapper.text()).toContain("← Go to");
+    await wrapper.get('[data-testid="picker-back"]').trigger("click");
+    expect(wrapper.find('[data-testid="picker-recent"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain("Go to");
+  });
+
+  it("returns from favorites with Escape", async () => {
+    vi.mocked(api.favorites).mockResolvedValue([
+      { id: "f1", title: "Starred", folder: "", modified_at: "" },
+    ]);
+    const { wrapper, router } = await openPicker();
+    await wrapper.get('[data-testid="picker-favorites"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Starred");
+    expect(router.currentRoute.value.path).toBe("/");
+    await wrapper.get("input").trigger("keydown", { key: "Escape" });
+    expect(wrapper.find('[data-testid="picker"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="picker-favorites"]').exists()).toBe(true);
   });
 
   it("enters folder search and fills the folder prefix", async () => {

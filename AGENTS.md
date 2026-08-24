@@ -64,12 +64,13 @@ After any visual, CSS, layout, or theme change, capture screenshots and inspect 
    ```
 4. Read every PNG in `web/artifacts/visual/` with the image Read tool. Fix issues, then recapture the affected screens.
 
-Required shots: login light/dark, note desktop light/dark, title editing, history, park capture, parked list/detail, mobile note, mobile More menu, mobile nav.
+Required shots: login light/dark, note desktop light/dark, title editing, history, park capture, parked list/detail, mobile note, mobile More menu, mobile nav, picker light/dark, picker recent light/dark, picker favorites light, picker mobile, picker recent mobile.
 
 Check all of the following:
 
 - Header height does not change when the title or folder becomes an input.
 - Mobile top bar stays one row (Menu, title, More). Actions must not wrap.
 - History and parked sheets have a fixed shell. Selecting a revision or parked item must not move the page underneath or resize the chrome.
+- The picker overlay stays put when Recent or Favorites opens. Input chrome must not jump; the page underneath must not move.
 - Light and dark both keep editor, sidebar, and dialog text readable against their backgrounds.
 - Empty or short content still looks designed: no raw unstyled boxes, clipped buttons, or overlapping chrome.

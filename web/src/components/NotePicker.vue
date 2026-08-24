@@ -2,7 +2,12 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api, ApiError, type NoteMeta } from "../api";
-import { buildPickerSections, pickerItems, type PickerItem } from "../lib/picker";
+import {
+  buildPickerSections,
+  pickerItems,
+  type PickerCollection,
+  type PickerItem,
+} from "../lib/picker";
 import { noteFolderLabel } from "../lib/paths";
 import { openInWorkspace, type OpenMode } from "../workspace";
 
@@ -12,6 +17,7 @@ const query = ref("");
 const results = ref<NoteMeta[]>([]);
 const folders = ref<string[]>([]);
 const foldersReady = ref(false);
+const collection = ref<PickerCollection | null>(null);
 const open = ref(false);
 const openMode = ref<OpenMode>("replace");
 const error = ref("");
@@ -26,7 +32,12 @@ const trimmed = computed(() => query.value.trim());
 const bang = computed(() => trimmed.value.startsWith("!"));
 const folderQuery = computed(() => (trimmed.value.endsWith("/") ? trimmed.value.slice(0, -1) : ""));
 const sections = computed(() =>
-  buildPickerSections({ query: query.value, notes: results.value, folders: folders.value }),
+  buildPickerSections({
+    query: query.value,
+    notes: results.value,
+    folders: folders.value,
+    collection: collection.value,
+  }),
 );
 const items = computed(() => pickerItems(sections.value));
 const createItem = computed(() => {
@@ -48,6 +59,7 @@ function show(mode: OpenMode = "replace") {
   results.value = [];
   folders.value = [];
   foldersReady.value = false;
+  collection.value = null;
   error.value = "";
   selected.value = 0;
   void nextTick(() => input.value?.focus());
@@ -111,6 +123,30 @@ async function ensureFolders() {
   foldersReady.value = true;
 }
 
+function leaveCollection() {
+  collection.value = null;
+  query.value = "";
+  results.value = [];
+  error.value = "";
+  selected.value = 0;
+  void nextTick(() => input.value?.focus());
+}
+
+async function enterCollection(kind: PickerCollection) {
+  collection.value = kind;
+  query.value = "";
+  results.value = [];
+  error.value = "";
+  selected.value = 0;
+  try {
+    results.value = kind === "recent" ? await api.recentNotes() : await api.favorites();
+  } catch {
+    error.value = "Could not load notes";
+  }
+  clampSelected();
+  void nextTick(() => input.value?.focus());
+}
+
 function enterFolderMode() {
   query.value = "!";
   results.value = [];
@@ -129,6 +165,8 @@ function activate(item: PickerItem) {
   if (item.type === "note") void select(item.note);
   else if (item.type === "folder") pickFolder(item.path);
   else if (item.type === "search-folder") enterFolderMode();
+  else if (item.type === "collection") void enterCollection(item.key);
+  else if (item.type === "back") leaveCollection();
   else if (item.type === "jump") void jump(item.to);
   else void create();
 }
@@ -141,6 +179,10 @@ function submit() {
 function onKey(event: KeyboardEvent) {
   if (event.key === "Escape") {
     event.preventDefault();
+    if (collection.value) {
+      leaveCollection();
+      return;
+    }
     if (bang.value) {
       query.value = "";
       selected.value = 0;
@@ -171,6 +213,7 @@ watch(query, () => {
   const requestId = ++searchId;
   error.value = "";
   if (bang.value) {
+    collection.value = null;
     results.value = [];
     selected.value = 0;
     void ensureFolders();
@@ -178,8 +221,12 @@ watch(query, () => {
     return;
   }
   const q = trimmed.value;
-  if (!q) {
+  if (collection.value && q) {
+    collection.value = null;
     results.value = [];
+  }
+  if (!q) {
+    if (!collection.value) results.value = [];
     selected.value = 0;
     return;
   }
@@ -266,6 +313,24 @@ defineExpose({ show, open });
                 <span>{{ item.label }}</span>
               </button>
               <button
+                v-else-if="item.type === 'collection'"
+                type="button"
+                :data-testid="`picker-${item.key}`"
+                :class="{ active: selected === indexOf(item) }"
+                @click="enterCollection(item.key)"
+              >
+                <span>{{ item.label }}</span>
+              </button>
+              <button
+                v-else-if="item.type === 'back'"
+                type="button"
+                data-testid="picker-back"
+                :class="{ active: selected === indexOf(item) }"
+                @click="leaveCollection"
+              >
+                <span>← Go to</span>
+              </button>
+              <button
                 v-else
                 type="button"
                 data-testid="picker-create"
@@ -280,13 +345,14 @@ defineExpose({ show, open });
           </ul>
         </section>
         <p v-if="bang && !sections.length" class="muted picker-message">No folders yet</p>
+        <p v-else-if="collection && !results.length" class="muted picker-message">No notes yet</p>
         <p
           v-else-if="!bang && folderQuery && trimmed && !sections.some((section) => section.id === 'note')"
           class="muted picker-message"
         >
           No notes in {{ trimmed }}
         </p>
-        <p v-else-if="!trimmed" class="muted picker-message">Type a title to search or create a note</p>
+        <p v-else-if="!trimmed && !collection" class="muted picker-message">Type a title to search or create a note</p>
         <p v-if="!bang && folderQuery && !canCreate" class="muted picker-message">
           Type a name to create in {{ trimmed }}
         </p>

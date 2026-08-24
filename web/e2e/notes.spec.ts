@@ -196,14 +196,15 @@ test("favorite appears on favorites then unfavorite removes it", async ({ page }
   await createNote(page, title);
   await noteAction(page, "favorite");
   await openPicker(page);
-  await page.getByTestId("picker").getByRole("button", { name: "Favorites" }).click();
-  await expect(page.getByRole("heading", { name: "Favorites" })).toBeVisible();
-  await expect(page.locator(".results")).toContainText(title);
-  await page.getByRole("main").getByRole("link", { name: title }).click();
+  await page.getByTestId("picker-favorites").click();
+  await expect(page.getByTestId("picker")).toBeVisible();
+  await expect(page.getByTestId("picker")).toContainText(title);
+  await page.getByTestId("picker").getByRole("button", { name: title }).click();
+  await expect(page.getByTestId("picker")).toHaveCount(0);
   await noteAction(page, "favorite");
   await openPicker(page);
-  await page.getByTestId("picker").getByRole("button", { name: "Favorites" }).click();
-  await expect(page.locator(".results")).not.toContainText(title);
+  await page.getByTestId("picker-favorites").click();
+  await expect(page.getByTestId("picker")).not.toContainText(title);
 });
 
 test("recent lists an opened note", async ({ page }) => {
@@ -212,9 +213,11 @@ test("recent lists an opened note", async ({ page }) => {
   const title = uid("Rec");
   await createNote(page, title);
   await openPicker(page);
-  await page.getByTestId("picker").getByRole("button", { name: "Recent" }).click();
-  await expect(page.getByRole("heading", { name: "Recent notes" })).toBeVisible();
-  await expect(page.locator(".results")).toContainText(title);
+  await page.getByTestId("picker-recent").click();
+  await expect(page.getByTestId("picker")).toBeVisible();
+  await expect(page.getByTestId("picker")).toContainText(title);
+  await page.getByTestId("picker-back").click();
+  await expect(page.getByTestId("picker-recent")).toBeVisible();
 });
 
 test("tree collapse and open a note", async ({ page }) => {

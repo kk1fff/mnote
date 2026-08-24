@@ -74,6 +74,40 @@ async function closeSheet(page) {
   await page.waitForTimeout(150);
 }
 
+async function openPicker(page) {
+  await page.getByTestId("sidebar").getByRole("button", { name: "Go to…" }).click();
+  await page.waitForSelector('[data-testid="picker"]');
+}
+
+async function closePicker(page) {
+  for (let i = 0; i < 3; i++) {
+    if (!(await page.locator('[data-testid="picker"]').count())) return;
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(80);
+  }
+}
+
+async function pickerChrome(page) {
+  return page.locator(".note-picker").evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const field = el.querySelector(".picker-field")?.getBoundingClientRect();
+    return { x: box.x, y: box.y, w: box.width, fieldH: field?.height ?? 0 };
+  });
+}
+
+function sameChrome(before, after, label) {
+  if (
+    Math.abs(before.x - after.x) > 1 ||
+    Math.abs(before.y - after.y) > 1 ||
+    Math.abs(before.w - after.w) > 1 ||
+    Math.abs(before.fieldH - after.fieldH) > 1
+  ) {
+    console.warn(
+      `picker chrome moved on ${label}: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`,
+    );
+  }
+}
+
 const browser = await chromium.launch({ headless: true });
 
 const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -140,10 +174,25 @@ if ((await treeLinks.count()) > 1) {
   await page.getByTestId("picker-create").click();
 }
 await page.waitForSelector('[data-testid="editor"]');
-await page.waitForTimeout(200);
-await shot(page, "14-tabs-light");
+  await page.waitForTimeout(200);
+  await shot(page, "14-tabs-light");
 
-await page.locator(".tree-row").first().hover();
+  await openPicker(page);
+  const homeChrome = await pickerChrome(page);
+  await shot(page, "18-picker-light");
+  await page.getByTestId("picker-recent").click();
+  await page.waitForSelector('[data-testid="picker-back"]');
+  sameChrome(homeChrome, await pickerChrome(page), "recent light");
+  await shot(page, "18b-picker-recent-light");
+  await page.getByTestId("picker-back").click();
+  await page.waitForSelector('[data-testid="picker-favorites"]');
+  await page.getByTestId("picker-favorites").click();
+  await page.waitForSelector('[data-testid="picker-back"]');
+  sameChrome(homeChrome, await pickerChrome(page), "favorites light");
+  await shot(page, "18c-picker-favorites-light");
+  await closePicker(page);
+
+  await page.locator(".tree-row").first().hover();
 await page.getByTestId("tree-more").first().click();
 await page.getByTestId("tree-open-beside").click();
 await page.waitForSelector('[data-testid="pane-beside"] [data-testid="editor"]');
@@ -186,8 +235,16 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(150);
 await shot(page, "08-note-desktop-dark");
-await shot(page, "15-tabs-dark");
-await shot(page, "17-split-dark");
+  await shot(page, "15-tabs-dark");
+  await shot(page, "17-split-dark");
+  await openPicker(page);
+  const darkChrome = await pickerChrome(page);
+  await shot(page, "19-picker-dark");
+  await page.getByTestId("picker-recent").click();
+  await page.waitForSelector('[data-testid="picker-back"]');
+  sameChrome(darkChrome, await pickerChrome(page), "recent dark");
+  await shot(page, "19b-picker-recent-dark");
+  await closePicker(page);
 await page.locator(".tree-row").first().hover();
 await page.getByTestId("tree-more").first().click();
 await page.waitForSelector('[data-testid="tree-menu"]');
@@ -225,8 +282,16 @@ await m.getByRole("button", { name: "Menu" }).click();
 await shot(m, "12-note-mobile-nav");
 await m.getByTestId("tree-more").first().click();
 await m.waitForSelector('[data-testid="tree-menu"]');
-await shot(m, "12b-sidebar-menu-mobile");
-await mobile.close();
+  await shot(m, "12b-sidebar-menu-mobile");
+  await m.keyboard.press("Escape");
+  await m.waitForSelector('[data-testid="tree-menu"]', { state: "hidden" });
+  await openPicker(m);
+  await shot(m, "20-picker-mobile");
+  await m.getByTestId("picker-recent").click();
+  await m.waitForSelector('[data-testid="picker-back"]');
+  await shot(m, "20b-picker-recent-mobile");
+  await closePicker(m);
+  await mobile.close();
 
 const loginDark = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const ld = await loginDark.newPage();
