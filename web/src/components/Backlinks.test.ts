@@ -15,12 +15,18 @@ describe("Backlinks", () => {
       props: { links: [] },
       global: { plugins: [router] },
     });
-    expect(empty.text()).toContain("No backlinks");
+    expect(empty.text()).toContain("Backlinks");
+    expect(empty.text()).not.toContain("No backlinks");
+    expect(empty.find("#backlinks-content").exists()).toBe(false);
     const filled = mount(Backlinks, {
       props: { links: [{ id: "a", title: "A", modified_at: "" }] },
       global: { plugins: [router] },
     });
+    expect(filled.text()).toContain("1");
+    expect(filled.text()).not.toContain("A");
+    await filled.get("button").trigger("click");
     expect(filled.text()).toContain("A");
+    expect(filled.get("button").attributes("aria-expanded")).toBe("true");
     await filled.get("button").trigger("click");
     expect(filled.text()).not.toContain("A");
     expect(filled.get("button").attributes("aria-expanded")).toBe("false");

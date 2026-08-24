@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, type NoteMeta } from "../api";
 import { clearDraft } from "../lib/drafts";
@@ -121,11 +121,17 @@ function openMenu(note: NoteMeta, event: MouseEvent) {
     return;
   }
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  const width = 168;
-  menuLeft.value = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
   menuTop.value = rect.bottom + 6;
-  if (menuTop.value + 48 > window.innerHeight) menuTop.value = Math.max(8, rect.top - 48);
+  menuLeft.value = Math.max(8, rect.right - 128);
   menuNote.value = note;
+  void nextTick(() => {
+    const box = menuEl.value?.getBoundingClientRect();
+    if (!box) return;
+    menuLeft.value = Math.max(8, Math.min(rect.right - box.width, window.innerWidth - box.width - 8));
+    if (menuTop.value + box.height > window.innerHeight) {
+      menuTop.value = Math.max(8, rect.top - box.height - 6);
+    }
+  });
 }
 
 async function showDelete() {
@@ -223,19 +229,22 @@ defineExpose({ load });
         Close
       </button>
     </div>
-    <button class="new-note-button" type="button" @click="emit('open-picker')">Go to…</button>
-    <button class="parked-button ghost" type="button" data-testid="sidebar-park" @click="showParkCapture({})">
-      Park
-    </button>
-    <button
-      v-if="parkedItems.length"
-      class="parked-button ghost"
-      type="button"
-      data-testid="parked-count"
-      @click="emit('open-parked')"
-    >
-      {{ parkedItems.length }} parked
-    </button>
+    <button class="new-note-button ghost" type="button" @click="emit('open-picker')">Go to…</button>
+    <div class="park-row">
+      <button class="parked-button" type="button" data-testid="sidebar-park" @click="showParkCapture({})">
+        Park
+      </button>
+      <button
+        v-if="parkedItems.length"
+        class="parked-count"
+        type="button"
+        data-testid="parked-count"
+        :aria-label="`${parkedItems.length} parked`"
+        @click="emit('open-parked')"
+      >
+        {{ parkedItems.length }}
+      </button>
+    </div>
     <div class="note-library">
       <p class="section-label">Notes</p>
       <div class="note-tree">

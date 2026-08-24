@@ -142,6 +142,7 @@ test("delete warns about backlinks and leaves the link", async ({ page }) => {
   await page.getByTestId("picker-input").fill(target);
   await page.getByTestId("picker").getByRole("button", { name: target }).click();
   await expect(page.getByTestId("note-title")).toHaveText(target);
+  await page.locator(".backlinks-toggle").click();
   await expect(page.locator(".backlinks")).toContainText(source);
   await noteAction(page, "delete-note-open");
   await expect(page.getByTestId("delete-note")).toContainText(source);
@@ -184,6 +185,7 @@ test("backlinks list the linking note", async ({ page }) => {
   await page.getByTestId("picker-input").fill(target);
   await page.getByTestId("picker").getByRole("button", { name: target }).click();
   await expect(page.getByTestId("note-title")).toHaveText(target);
+  await page.locator(".backlinks-toggle").click();
   await expect(page.locator(".backlinks")).toContainText(source);
 });
 

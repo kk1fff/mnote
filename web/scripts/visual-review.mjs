@@ -125,7 +125,7 @@ await page.getByTestId("note-title-input").press("Escape");
 const strip = page.getByTestId("tab-strip");
 await strip.waitFor();
 const stripH = await strip.evaluate((el) => el.getBoundingClientRect().height);
-if (Math.abs(stripH - 32) > 2) console.warn(`tab strip height ${stripH}px`);
+if (Math.abs(stripH - 36) > 3) console.warn(`tab strip height ${stripH}px`);
 await page.getByRole("button", { name: "More actions" }).click();
 const fav = page.getByTestId("favorite");
 if ((await fav.getAttribute("aria-pressed")) !== "true") await fav.click();

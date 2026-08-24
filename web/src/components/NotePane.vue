@@ -592,8 +592,14 @@ onBeforeUnmount(() => {
         </form>
         <template v-else>
           <h1 data-testid="note-title" title="Rename note" @click="beginMeta">{{ title || "Note" }}</h1>
-          <p class="muted note-folder" data-testid="note-folder" title="Move note" @click="beginMeta">
-            {{ folder || "No folder" }}
+          <p
+            class="muted note-folder"
+            :class="{ 'is-empty': !folder }"
+            data-testid="note-folder"
+            title="Move note"
+            @click="beginMeta"
+          >
+            {{ folder }}
           </p>
         </template>
       </div>

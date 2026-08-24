@@ -220,14 +220,45 @@ button.icon-btn,
   font-size: 0.8rem;
 }
 
-.new-note-button,
-.parked-button {
+.new-note-button {
+  display: flex;
   width: 100%;
+  justify-content: flex-start;
   margin-top: 0.55rem;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-weight: 450;
+}
+
+.park-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-top: 0.2rem;
 }
 
 .parked-button {
-  margin-top: 0.35rem;
+  display: inline-flex;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  align-items: center;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+}
+
+.parked-button:hover {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+.parked-count {
+  flex: 0 0 auto;
+  min-width: 1.75rem;
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent);
 }
 
 .picker-scrim,
@@ -580,6 +611,9 @@ button.icon-btn,
   flex-direction: column;
   position: fixed;
   z-index: 32;
+  min-width: 0;
+  width: max-content;
+  padding: 0.2rem;
 }
 
 .sidebar .folder {
@@ -686,23 +720,24 @@ button.icon-btn,
 
 .tab-strip {
   display: none;
-  align-items: center;
+  align-items: flex-end;
   flex-shrink: 0;
-  height: 2rem;
-  min-height: 2rem;
-  padding: 0 0.35rem 0 0.4rem;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0.3rem 0.3rem 0;
   gap: 0.15rem;
-  background: var(--surface-muted);
-  border-bottom: 1px solid var(--border);
+  overflow: visible;
+  background: var(--bg);
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 
 .tab-strip-scroll {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   flex: 1;
   min-width: 0;
-  height: 2rem;
-  gap: 0.15rem;
+  height: 100%;
+  gap: 0.1rem;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -713,42 +748,58 @@ button.icon-btn,
 }
 
 .tab-split {
+  align-self: center;
   flex-shrink: 0;
   width: 1px;
-  height: 1rem;
-  margin: 0 0.2rem;
+  height: 0.9rem;
+  margin: 0 0.3rem 0.15rem;
   background: var(--border);
 }
 
 .tab-chip {
   display: inline-flex;
   align-items: center;
+  position: relative;
   flex: 0 0 auto;
   gap: 0.2rem;
-  min-width: 5.5rem;
   max-width: 10rem;
-  height: 1.7rem;
+  height: calc(2.25rem - 0.3rem);
   margin: 0;
-  padding: 0 0.35rem 0 0.4rem;
-  border: 0;
-  border-radius: 8px;
+  padding: 0 0.55rem;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
   background: transparent;
   color: var(--text-muted);
   font-size: 0.78rem;
 }
 
-.tab-chip:hover {
+.tab-chip:hover:not(.active) {
   background: var(--accent-soft);
+}
+
+.tab-strip.focused .tab-chip.active,
+.tab-strip:not(.focused) .tab-chip.active {
+  background: var(--surface);
+  border-color: var(--border);
 }
 
 .tab-strip.focused .tab-chip.active {
-  background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--text);
 }
 
 .tab-strip:not(.focused) .tab-chip.active {
+  color: var(--text-muted);
+}
+
+.tab-chip.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
   background: var(--surface);
-  color: var(--text);
 }
 
 .tab-title {
@@ -804,12 +855,17 @@ button.icon-btn,
   min-width: 1.7rem;
   height: 1.7rem;
   min-height: 1.7rem;
-  margin: 0;
+  margin: 0 0 0.2rem;
   padding: 0;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--text-muted);
+}
+
+.tab-add:hover {
+  background: var(--accent-soft);
+  color: var(--text);
 }
 
 .bar {
@@ -879,6 +935,16 @@ button.icon-btn,
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.note-folder.is-empty::after {
+  content: "Folder";
+  opacity: 0.55;
+}
+
+.note-heading:hover .note-folder.is-empty::after,
+.note-folder.is-empty:focus-visible::after {
+  opacity: 1;
 }
 
 .note-meta-form {
@@ -1081,11 +1147,10 @@ button.icon-btn,
   align-items: center;
   border-radius: 0;
   border: 0;
-  padding: 0.7rem 1rem;
+  padding: 0.55rem 0.75rem;
   font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   text-align: left;
+  color: var(--text-muted);
 }
 
 .backlinks-content {
@@ -1576,12 +1641,11 @@ button.icon-btn,
     font-size: 0.95rem;
   }
 
-  .new-note-button,
-  .parked-button {
+  .new-note-button {
     margin-top: 0.35rem;
   }
 
-  .parked-button {
+  .park-row {
     margin-top: 0.25rem;
   }
 

@@ -164,7 +164,7 @@ describe("Sidebar", () => {
     await router.isReady();
     const wrapper = mount(Sidebar, { global: { plugins: [router] } });
     await flushPromises();
-    expect(wrapper.get('[data-testid="parked-count"]').text()).toBe("1 parked");
+    expect(wrapper.get('[data-testid="parked-count"]').text()).toBe("1");
     await wrapper.get('[data-testid="parked-count"]').trigger("click");
     expect(wrapper.emitted("open-parked")).toHaveLength(1);
   });

@@ -18,7 +18,7 @@ test("park from a note and make a note", async ({ page }) => {
   await page.getByTestId("park-body").fill(`${dump}\nmore detail`);
   await page.getByTestId("park-save").click();
   await expect(page.getByTestId("park-capture")).toHaveCount(0);
-  await expect(page.getByTestId("parked-count")).toHaveText("1 parked");
+  await expect(page.getByTestId("parked-count")).toHaveText("1");
   await expect(page.locator(".cm-content")).toBeVisible();
 
   await page.getByTestId("parked-count").click();
