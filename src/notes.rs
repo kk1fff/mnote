@@ -33,6 +33,12 @@ pub struct SearchHit {
     pub id: String,
     pub title: String,
     pub snippet: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parked_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -973,6 +979,9 @@ pub fn search(vault: &Path, query: &str) -> Result<Vec<SearchHit>, AppError> {
                 id: note.id,
                 title: note.title,
                 snippet: snippet(&note.content, offset, q.len()),
+                kind: None,
+                parked_id: None,
+                context: None,
             });
         }
     }

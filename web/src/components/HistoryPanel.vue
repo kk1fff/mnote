@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { api, type HistoryEntry, type HistoryRev, type Note } from "../api";
+import { api, type ContextEvent, type HistoryEntry, type HistoryRev, type Note } from "../api";
+import { contextLine } from "../lib/context";
 import { ageLabel } from "../lib/excerpt";
 import Preview from "./Preview.vue";
 
 const props = defineProps<{
   noteId: string;
   current: string;
+  events?: ContextEvent[];
 }>();
 
-const emit = defineEmits<{ restored: [note: Note] }>();
+const emit = defineEmits<{ restored: [note: Note]; reveal: [event: ContextEvent] }>();
+
+const selectedContext = ref<number | null>(null);
 
 const open = ref(false);
 const items = ref<HistoryEntry[]>([]);
@@ -32,6 +36,7 @@ async function show() {
   error.value = "";
   confirming.value = false;
   selected.value = "now";
+  selectedContext.value = null;
   revision.value = null;
   open.value = true;
   try {
@@ -62,6 +67,7 @@ async function select(rev: string) {
   error.value = "";
   confirming.value = false;
   selected.value = rev;
+  selectedContext.value = null;
   if (rev === "now") {
     revision.value = null;
     return;
@@ -135,6 +141,18 @@ defineExpose({ show, open });
             >
               <span>{{ ageLabel(item.created_at) }}</span>
               <small>{{ item.created_at }}</small>
+            </button>
+          </li>
+          <li v-if="events?.length" class="history-context-label">Context</li>
+          <li v-for="event in events" :key="event.id">
+            <button
+              type="button"
+              data-testid="history-context"
+              :aria-current="selectedContext === event.id ? 'true' : undefined"
+              @click="selectedContext = event.id; emit('reveal', event)"
+            >
+              <span>{{ contextLine(event) }}</span>
+              <small>{{ event.device || event.surface }}</small>
             </button>
           </li>
         </ul>

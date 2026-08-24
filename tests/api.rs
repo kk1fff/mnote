@@ -974,3 +974,119 @@ async fn note_history_and_restore() {
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn note_context_does_not_change_markdown() {
+    let h = Harness::new();
+    let cookie = h.login("alice", "password1").await;
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &cookie,
+            Some(json!({ "title": "Ctx", "content": "hello\nworld\n" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let id = body["id"].as_str().unwrap().to_string();
+    let content = body["content"].as_str().unwrap().to_string();
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            &format!("/api/notes/{id}/context"),
+            &cookie,
+            Some(json!({
+                "paragraphs": ["hello", "world", ""],
+                "events": [{
+                    "tmp_id": "t1",
+                    "ordinal": 0,
+                    "captured_at": "2026-08-23T14:05:00Z",
+                    "local_time": "2026-08-23 14:05",
+                    "timezone": "America/Los_Angeles",
+                    "surface": "editor",
+                    "device": "desktop",
+                    "lat": 37.77,
+                    "lon": -122.42,
+                    "source": "auto"
+                }]
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["events"].as_array().unwrap().len(), 1);
+    assert_eq!(body["events"][0]["lat"], 37.77);
+    assert!(body["events"][0]["weather_label"].is_null());
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, &format!("/api/notes/{id}"), &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["content"], content);
+
+    let bob = h.login("bob", "password1").await;
+    let (status, _, _) = h
+        .call(h.authed(
+            Method::GET,
+            &format!("/api/notes/{id}/context"),
+            &bob,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::GET,
+            "/api/search?from=2026-08-23T00:00:00Z&to=2026-08-24T00:00:00Z",
+            &cookie,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body.as_array().unwrap().len(), 1);
+    assert_eq!(body[0]["kind"], "note");
+}
+
+#[tokio::test]
+async fn parked_stamp_stays_out_of_markdown() {
+    let h = Harness::new();
+    let cookie = h.login("alice", "password1").await;
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/parked",
+            &cookie,
+            Some(json!({
+                "body": "ask jim",
+                "source_title": "Weekly",
+                "source_folder": "ideas",
+                "excerpt": "retry",
+                "surface": "park",
+                "device": "phone",
+                "local_time": "2026-08-23 14:05",
+                "timezone": "America/Los_Angeles",
+                "lat": 37.77,
+                "lon": -122.42
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let id = body["id"].as_i64().unwrap();
+    assert_eq!(body["lat"], 37.77);
+    assert_eq!(body["surface"], "park");
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            &format!("/api/parked/{id}/note"),
+            &cookie,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let md = body["content"].as_str().unwrap();
+    assert!(md.contains("ask jim"));
+    assert!(!md.contains("37.77"));
+    assert!(!md.contains("lat"));
+}

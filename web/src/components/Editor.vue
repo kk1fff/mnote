@@ -12,7 +12,7 @@ import {
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
-import { defineExpose, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { excerptAround, findExcerpt } from "../lib/excerpt";
 import { imageFileFromList, insertAt, isAllowedImage } from "../lib/images";
 import { api, type NoteMeta } from "../api";
@@ -25,11 +25,16 @@ const props = defineProps<{
   modelValue: string;
   disabled?: boolean;
   remotes?: RemoteCaret[];
+  showContext?: boolean;
+  contextOrdinals?: number[];
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: string];
   "live-change": [change: { from: number; to: number; insert: string; content: string }];
   cursor: [pos: { from: number; to: number }];
+  "paragraph-commit": [payload: { ordinal: number; text: string }];
+  "paragraph-leave": [payload: { ordinal: number; text: string }];
+  "select-paragraph": [ordinal: number];
 }>();
 
 type MenuItem =
@@ -42,10 +47,12 @@ const menu = ref<{ mode: "command" | "page"; from: number; query: string; items:
   null,
 );
 const selected = ref(0);
+const menuEl = ref<HTMLDivElement | null>(null);
 const menuPos = ref({ top: 0, left: 0 });
 let view: EditorView | null = null;
 let searchTimer: number | undefined;
 let searchId = 0;
+let dirtyLine = -1;
 
 const remoteAnn = Annotation.define<boolean>();
 const setRemotes = StateEffect.define<RemoteCaret[]>();
@@ -56,6 +63,48 @@ class CaretWidget extends WidgetType {
     el.className = "cm-remote-caret";
     return el;
   }
+}
+
+const setContextLines = StateEffect.define<number[]>();
+const contextField = StateField.define<number[]>({
+  create: () => [],
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setContextLines)) return effect.value;
+    }
+    return value;
+  },
+});
+
+const contextPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = contextDecos(view.state);
+    }
+    update(update: ViewUpdate) {
+      if (
+        update.docChanged ||
+        update.transactions.some((tr) => tr.effects.some((e) => e.is(setContextLines)))
+      ) {
+        this.decorations = contextDecos(update.state);
+      }
+    }
+  },
+  { decorations: (v) => v.decorations },
+);
+
+function contextDecos(state: EditorState): DecorationSet {
+  const ords = state.field(contextField);
+  if (!ords.length) return Decoration.none;
+  const decos = [];
+  for (const ord of ords) {
+    const lineNo = ord + 1;
+    if (lineNo < 1 || lineNo > state.doc.lines) continue;
+    const line = state.doc.line(lineNo);
+    decos.push(Decoration.line({ class: "cm-context-line" }).range(line.from));
+  }
+  return Decoration.set(decos, true);
 }
 
 const setFlash = StateEffect.define<{ from: number; to: number } | null>();
@@ -117,16 +166,21 @@ const remotesPlugin = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 );
 
-function placeMenu(from: number) {
+function placeMenu(from: number, measured = false) {
   if (!view) return;
   const coords = view.coordsAtPos(from);
   if (!coords) return;
   const pad = 8;
-  const width = 240;
+  const gap = 6;
+  const width = menuEl.value?.offsetWidth || 240;
+  const height = menuEl.value?.offsetHeight || 0;
   const left = Math.min(Math.max(pad, coords.left), window.innerWidth - width - pad);
-  let top = coords.bottom + 6;
-  if (top + 220 > window.innerHeight) top = Math.max(pad, coords.top - 226);
+  let top = coords.bottom + gap;
+  if (height && top + height + pad > window.innerHeight) {
+    top = Math.max(pad, coords.top - height - gap);
+  }
   menuPos.value = { top, left };
+  if (!height && !measured) void nextTick(() => placeMenu(from, true));
 }
 
 function closeMenu() {
@@ -286,6 +340,8 @@ onMounted(() => {
         EditorView.lineWrapping,
         remotesField,
         remotesPlugin,
+        contextField,
+        contextPlugin,
         flashField,
         EditorView.updateListener.of((update) => {
           const remote = update.transactions.some((tr) => tr.annotation(remoteAnn));
@@ -295,9 +351,19 @@ onMounted(() => {
             if (!remote) {
               let sent = false;
               update.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+                const insert = inserted.toString();
+                if (insert === "\n" && fromA === toA) {
+                  const line = update.startState.doc.lineAt(fromA);
+                  if (line.text.trim()) {
+                    emit("paragraph-commit", { ordinal: line.number - 1, text: line.text });
+                  }
+                  dirtyLine = -1;
+                } else {
+                  dirtyLine = update.startState.doc.lineAt(fromA).number;
+                }
                 if (sent) return;
                 sent = true;
-                emit("live-change", { from: fromA, to: toA, insert: inserted.toString(), content });
+                emit("live-change", { from: fromA, to: toA, insert, content });
               });
             }
           }
@@ -307,9 +373,24 @@ onMounted(() => {
           if (update.selectionSet && !remote) {
             const sel = update.state.selection.main;
             emit("cursor", { from: sel.from, to: sel.to });
+            const lineNo = update.state.doc.lineAt(sel.head).number;
+            if (dirtyLine > 0 && lineNo !== dirtyLine) {
+              const line = update.state.doc.line(Math.min(dirtyLine, update.state.doc.lines));
+              if (line.text.trim()) {
+                emit("paragraph-leave", { ordinal: line.number - 1, text: line.text });
+              }
+              dirtyLine = -1;
+            }
           }
         }),
         EditorView.domEventHandlers({
+          mousedown(event, vw) {
+            if (!props.showContext) return false;
+            const pos = vw.posAtCoords({ x: event.clientX, y: event.clientY });
+            if (pos == null) return false;
+            emit("select-paragraph", vw.state.doc.lineAt(pos).number - 1);
+            return false;
+          },
           paste(event) {
             const file = imageFileFromList(event.clipboardData?.items ?? []);
             if (!file) return false;
@@ -340,6 +421,7 @@ onMounted(() => {
             color: "var(--text)",
           },
           ".cm-line": { color: "var(--text)" },
+          ".cm-context-line": { boxShadow: "inset -2px 0 0 var(--accent)" },
           ".cm-placeholder": { color: "var(--text-muted)" },
           "&.cm-focused": { outline: "none" },
         }),
@@ -348,6 +430,9 @@ onMounted(() => {
   });
   if (props.remotes?.length) {
     view.dispatch({ effects: setRemotes.of(props.remotes) });
+  }
+  if (props.contextOrdinals?.length) {
+    view.dispatch({ effects: setContextLines.of(props.contextOrdinals) });
   }
   document.addEventListener("mousedown", onDocClick);
 });
@@ -364,10 +449,37 @@ watch(
   },
 );
 
+watch(
+  () => props.contextOrdinals,
+  (ords) => {
+    view?.dispatch({ effects: setContextLines.of(ords ?? []) });
+  },
+);
+
 function excerpt(): string {
   if (!view) return "";
   const sel = view.state.selection.main;
   return excerptAround(view.state.doc.toString(), sel.from, sel.to);
+}
+
+function currentOrdinal(): number {
+  if (!view) return 0;
+  return view.state.doc.lineAt(view.state.selection.main.head).number - 1;
+}
+
+function revealRange(from: number, to: number): boolean {
+  if (!view) return false;
+  const len = view.state.doc.length;
+  const start = Math.max(0, Math.min(from, len));
+  const end = Math.max(start, Math.min(to, len));
+  view.dispatch({
+    selection: { anchor: start, head: end },
+    effects: [setFlash.of({ from: start, to: end }), EditorView.scrollIntoView(start, { y: "center" })],
+  });
+  window.setTimeout(() => {
+    view?.dispatch({ effects: setFlash.of(null) });
+  }, 1600);
+  return true;
 }
 
 function revealExcerpt(quote: string): boolean {
@@ -387,7 +499,7 @@ function revealExcerpt(quote: string): boolean {
   return true;
 }
 
-defineExpose({ excerpt, revealExcerpt });
+defineExpose({ excerpt, revealExcerpt, revealRange, currentOrdinal });
 
 onBeforeUnmount(() => {
   document.removeEventListener("mousedown", onDocClick);
@@ -402,6 +514,7 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <div
       v-if="menu"
+      ref="menuEl"
       class="suggest-menu"
       data-testid="suggest"
       role="listbox"

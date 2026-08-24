@@ -64,8 +64,92 @@ pub fn init(conn: &rusqlite::Connection) -> Result<(), AppError> {
             folder TEXT NOT NULL,
             PRIMARY KEY (user_id, folder)
         );
+        CREATE TABLE IF NOT EXISTS note_blocks (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            note_id TEXT NOT NULL,
+            ordinal INTEGER,
+            text_norm TEXT NOT NULL,
+            preview TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            deleted_at TEXT
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS note_blocks_ord
+            ON note_blocks (user_id, note_id, ordinal) WHERE ordinal IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS note_blocks_note
+            ON note_blocks (user_id, note_id);
+        CREATE TABLE IF NOT EXISTS context_events (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            block_id TEXT NOT NULL REFERENCES note_blocks(id) ON DELETE CASCADE,
+            note_id TEXT NOT NULL,
+            captured_at TEXT NOT NULL,
+            local_time TEXT NOT NULL,
+            timezone TEXT NOT NULL,
+            surface TEXT NOT NULL,
+            device TEXT,
+            lat REAL,
+            lon REAL,
+            accuracy_m REAL,
+            weather_code INTEGER,
+            weather_label TEXT,
+            temp_c REAL,
+            source TEXT NOT NULL DEFAULT 'auto'
+        );
+        CREATE INDEX IF NOT EXISTS context_events_block
+            ON context_events (user_id, block_id, captured_at);
+        CREATE INDEX IF NOT EXISTS context_events_note
+            ON context_events (user_id, note_id, captured_at);
+        CREATE INDEX IF NOT EXISTS context_events_when
+            ON context_events (user_id, captured_at);
+        CREATE TABLE IF NOT EXISTS weather_cache (
+            cell TEXT PRIMARY KEY,
+            fetched_at TEXT NOT NULL,
+            weather_code INTEGER,
+            weather_label TEXT,
+            temp_c REAL
+        );
         ",
     )?;
+    migrate_parked_context(conn)?;
+    Ok(())
+}
+
+fn table_has_column(conn: &rusqlite::Connection, table: &str, column: &str) -> Result<bool, AppError> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let cols = stmt.query_map([], |row| row.get::<_, String>(1))?;
+    for col in cols {
+        if col? == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn add_column(
+    conn: &rusqlite::Connection,
+    table: &str,
+    column: &str,
+    decl: &str,
+) -> Result<(), AppError> {
+    if !table_has_column(conn, table, column)? {
+        conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"), [])?;
+    }
+    Ok(())
+}
+
+fn migrate_parked_context(conn: &rusqlite::Connection) -> Result<(), AppError> {
+    add_column(conn, "parked", "surface", "TEXT")?;
+    add_column(conn, "parked", "device", "TEXT")?;
+    add_column(conn, "parked", "local_time", "TEXT")?;
+    add_column(conn, "parked", "timezone", "TEXT")?;
+    add_column(conn, "parked", "lat", "REAL")?;
+    add_column(conn, "parked", "lon", "REAL")?;
+    add_column(conn, "parked", "accuracy_m", "REAL")?;
+    add_column(conn, "parked", "weather_code", "INTEGER")?;
+    add_column(conn, "parked", "weather_label", "TEXT")?;
+    add_column(conn, "parked", "temp_c", "REAL")?;
     Ok(())
 }
 
@@ -433,7 +517,7 @@ pub fn set_folder_collapsed(
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Parked {
     pub id: i64,
     pub body: String,
@@ -446,17 +530,51 @@ pub struct Parked {
     pub source_folder: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub excerpt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub surface: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_time: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timezone: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lat: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lon: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accuracy_m: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weather_code: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weather_label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temp_c: Option<f64>,
 }
+
+const PARKED_COLS: &str = "id, body, created_at, source_id, source_title, source_folder, excerpt,
+         surface, device, local_time, timezone, lat, lon, accuracy_m,
+         weather_code, weather_label, temp_c";
 
 fn parked_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Parked> {
     Ok(Parked {
-        id: row.get(0)?,
-        body: row.get(1)?,
-        created_at: row.get(2)?,
-        source_id: row.get(3)?,
-        source_title: row.get(4)?,
-        source_folder: row.get(5)?,
-        excerpt: row.get(6)?,
+        id: row.get("id")?,
+        body: row.get("body")?,
+        created_at: row.get("created_at")?,
+        source_id: row.get("source_id")?,
+        source_title: row.get("source_title")?,
+        source_folder: row.get("source_folder")?,
+        excerpt: row.get("excerpt")?,
+        surface: row.get("surface")?,
+        device: row.get("device")?,
+        local_time: row.get("local_time")?,
+        timezone: row.get("timezone")?,
+        lat: row.get("lat")?,
+        lon: row.get("lon")?,
+        accuracy_m: row.get("accuracy_m")?,
+        weather_code: row.get("weather_code")?,
+        weather_label: row.get("weather_label")?,
+        temp_c: row.get("temp_c")?,
     })
 }
 
@@ -465,22 +583,26 @@ pub fn list_parked(state: &AppState, user_id: i64) -> Result<Vec<Parked>, AppErr
         .db
         .lock()
         .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
-    let mut stmt = conn.prepare(
-        "SELECT id, body, created_at, source_id, source_title, source_folder, excerpt
-         FROM parked WHERE user_id = ?1 ORDER BY created_at DESC, id DESC",
-    )?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {PARKED_COLS} FROM parked WHERE user_id = ?1 ORDER BY created_at DESC, id DESC"
+    ))?;
     let rows = stmt.query_map(params![user_id], parked_from_row)?;
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
+pub struct ParkedSource<'a> {
+    pub source_id: Option<&'a str>,
+    pub source_title: Option<&'a str>,
+    pub source_folder: Option<&'a str>,
+    pub excerpt: Option<&'a str>,
 }
 
 pub fn create_parked(
     state: &AppState,
     user_id: i64,
     body: &str,
-    source_id: Option<&str>,
-    source_title: Option<&str>,
-    source_folder: Option<&str>,
-    excerpt: Option<&str>,
+    source: ParkedSource<'_>,
+    stamp: &crate::context::ContextStamp,
 ) -> Result<Parked, AppError> {
     let body = body.trim();
     if body.is_empty() {
@@ -490,14 +612,39 @@ pub fn create_parked(
         return Err(AppError::BadRequest("body is too long".into()));
     }
     let now = Utc::now().to_rfc3339();
+    let weather = match (stamp.lat, stamp.lon) {
+        (Some(lat), Some(lon)) => crate::context::lookup_weather(state, lat, lon).ok().flatten(),
+        _ => None,
+    };
     let conn = state
         .db
         .lock()
         .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
     conn.execute(
-        "INSERT INTO parked (user_id, body, created_at, source_id, source_title, source_folder, excerpt)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![user_id, body, now, source_id, source_title, source_folder, excerpt],
+        "INSERT INTO parked (
+            user_id, body, created_at, source_id, source_title, source_folder, excerpt,
+            surface, device, local_time, timezone, lat, lon, accuracy_m,
+            weather_code, weather_label, temp_c
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+        params![
+            user_id,
+            body,
+            now,
+            source.source_id,
+            source.source_title,
+            source.source_folder,
+            source.excerpt,
+            stamp.surface,
+            stamp.device,
+            stamp.local_time,
+            stamp.timezone,
+            stamp.lat,
+            stamp.lon,
+            stamp.accuracy_m,
+            weather.as_ref().map(|w| w.weather_code),
+            weather.as_ref().map(|w| w.weather_label.as_str()),
+            weather.as_ref().map(|w| w.temp_c),
+        ],
     )?;
     let id = conn.last_insert_rowid();
     drop(conn);
@@ -510,8 +657,7 @@ pub fn get_parked(state: &AppState, user_id: i64, id: i64) -> Result<Parked, App
         .lock()
         .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
     conn.query_row(
-        "SELECT id, body, created_at, source_id, source_title, source_folder, excerpt
-         FROM parked WHERE id = ?1 AND user_id = ?2",
+        &format!("SELECT {PARKED_COLS} FROM parked WHERE id = ?1 AND user_id = ?2"),
         params![id, user_id],
         parked_from_row,
     )
@@ -625,10 +771,13 @@ mod tests {
             &state,
             alice.id,
             "ask jim",
-            Some("n1"),
-            Some("Weekly"),
-            Some("ideas"),
-            Some("retry budget"),
+            ParkedSource {
+                source_id: Some("n1"),
+                source_title: Some("Weekly"),
+                source_folder: Some("ideas"),
+                excerpt: Some("retry budget"),
+            },
+            &crate::context::ContextStamp::default(),
         )
         .unwrap();
         assert_eq!(item.body, "ask jim");
@@ -639,7 +788,64 @@ mod tests {
         assert!(delete_parked(&state, bob.id, item.id).is_err());
         delete_parked(&state, alice.id, item.id).unwrap();
         assert!(list_parked(&state, alice.id).unwrap().is_empty());
-        assert!(create_parked(&state, alice.id, "   ", None, None, None, None).is_err());
+        assert!(create_parked(
+            &state,
+            alice.id,
+            "   ",
+            ParkedSource {
+                source_id: None,
+                source_title: None,
+                source_folder: None,
+                excerpt: None,
+            },
+            &crate::context::ContextStamp::default()
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn context_is_per_user() {
+        let (_dir, state) = setup();
+        create_user(&state, "alice", Some("password1")).unwrap();
+        create_user(&state, "bob", Some("password1")).unwrap();
+        let alice = authenticate(&state, "alice", "password1").unwrap();
+        let bob = authenticate(&state, "bob", "password1").unwrap();
+        let vault = state.vault_dir("alice");
+        crate::notes::ensure_vault(&vault).unwrap();
+        let note = crate::notes::create_note(&vault, "Weekly", "", Some("hello\n")).unwrap();
+        let body = crate::context::IngestBody {
+            paragraphs: vec!["hello".into()],
+            events: vec![crate::context::IngestEvent {
+                tmp_id: "t1".into(),
+                ordinal: 0,
+                captured_at: "2026-08-23T14:05:00Z".into(),
+                local_time: "2026-08-23 14:05".into(),
+                timezone: "America/Los_Angeles".into(),
+                surface: "editor".into(),
+                device: Some("desktop".into()),
+                lat: Some(37.77),
+                lon: Some(-122.42),
+                accuracy_m: Some(12.0),
+                source: Some("auto".into()),
+            }],
+        };
+        crate::context::ingest(&state, alice.id, &note.id, body).unwrap();
+        assert_eq!(
+            crate::context::get_context(&state, alice.id, &note.id)
+                .unwrap()
+                .events
+                .len(),
+            1
+        );
+        assert!(crate::context::get_context(&state, bob.id, &note.id)
+            .unwrap()
+            .events
+            .is_empty());
+        crate::context::delete_note_context(&state, alice.id, &note.id).unwrap();
+        assert!(crate::context::get_context(&state, alice.id, &note.id)
+            .unwrap()
+            .events
+            .is_empty());
     }
 
     #[test]

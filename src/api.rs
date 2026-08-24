@@ -1,3 +1,4 @@
+use crate::context::{self, ContextStamp, IngestBody, SearchParams, WeatherNow};
 use crate::db::{self, User, SESSION_COOKIE, SESSION_DAYS};
 use crate::error::AppError;
 use crate::live::{self, ClientMsg, ServerMsg};
@@ -32,6 +33,8 @@ pub fn router(state: AppState) -> Router {
         .route("/notes/{id}/history", get(list_history))
         .route("/notes/{id}/history/{rev}", get(get_history))
         .route("/notes/{id}/restore", post(restore_note))
+        .route("/notes/{id}/context", get(get_context).post(post_context))
+        .route("/weather", get(get_weather))
         .route(
             "/notes/{id}",
             get(get_note)
@@ -399,6 +402,7 @@ async fn delete_note(
     let id = notes::normalize_note_id(&id)?;
     notes::delete_note(&state.vault_dir(&user.username), &id)?;
     db::clear_note_state(&state, user.id, &id)?;
+    context::delete_note_context(&state, user.id, &id)?;
     state.live.remove(user.id, &id);
     Ok(StatusCode::NO_CONTENT)
 }
@@ -460,6 +464,13 @@ struct CreateParked {
     source_title: Option<String>,
     source_folder: Option<String>,
     excerpt: Option<String>,
+    surface: Option<String>,
+    device: Option<String>,
+    local_time: Option<String>,
+    timezone: Option<String>,
+    lat: Option<f64>,
+    lon: Option<f64>,
+    accuracy_m: Option<f64>,
 }
 
 async fn list_parked(
@@ -476,15 +487,46 @@ async fn create_parked(
     Json(body): Json<CreateParked>,
 ) -> Result<(StatusCode, Json<db::Parked>), AppError> {
     require_ready(&user)?;
+    let stamp = ContextStamp {
+        surface: body.surface.clone(),
+        device: body.device.clone(),
+        local_time: body.local_time.clone(),
+        timezone: body.timezone.clone(),
+        lat: body.lat,
+        lon: body.lon,
+        accuracy_m: body.accuracy_m,
+    };
     let item = db::create_parked(
         &state,
         user.id,
         &body.body,
-        body.source_id.as_deref(),
-        body.source_title.as_deref(),
-        body.source_folder.as_deref(),
-        body.excerpt.as_deref(),
+        db::ParkedSource {
+            source_id: body.source_id.as_deref(),
+            source_title: body.source_title.as_deref(),
+            source_folder: body.source_folder.as_deref(),
+            excerpt: body.excerpt.as_deref(),
+        },
+        &stamp,
     )?;
+    if item.weather_label.is_none() {
+        if let (Some(lat), Some(lon)) = (body.lat, body.lon) {
+            let state2 = state.clone();
+            let user_id = user.id;
+            let parked_id = item.id;
+            tokio::spawn(async move {
+                let fetch = state2.clone();
+                let Some(weather) = tokio::task::spawn_blocking(move || {
+                    context::resolve_weather(&fetch, lat, lon)
+                })
+                .await
+                .ok()
+                .flatten() else {
+                    return;
+                };
+                let _ = context::apply_weather_to_parked(&state2, user_id, parked_id, &weather);
+            });
+        }
+    }
     Ok((StatusCode::CREATED, Json(item)))
 }
 
@@ -549,13 +591,68 @@ struct SearchQuery {
 async fn search_notes(
     State(state): State<AppState>,
     Auth(user): Auth,
-    Query(query): Query<SearchQuery>,
+    Query(query): Query<SearchParams>,
 ) -> Result<Json<Vec<notes::SearchHit>>, AppError> {
     require_ready(&user)?;
-    Ok(Json(notes::search(
+    Ok(Json(context::search(
+        &state,
+        user.id,
         &state.vault_dir(&user.username),
-        &query.q,
+        &query,
     )?))
+}
+
+async fn get_context(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(id): Path<String>,
+) -> Result<Json<context::ContextResponse>, AppError> {
+    require_ready(&user)?;
+    let id = notes::normalize_note_id(&id)?;
+    notes::get_note(&state.vault_dir(&user.username), &id)?;
+    Ok(Json(context::get_context(&state, user.id, &id)?))
+}
+
+async fn post_context(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(id): Path<String>,
+    Json(body): Json<IngestBody>,
+) -> Result<Json<context::ContextResponse>, AppError> {
+    require_ready(&user)?;
+    let id = notes::normalize_note_id(&id)?;
+    notes::get_note(&state.vault_dir(&user.username), &id)?;
+    let (resp, pending) = context::ingest(&state, user.id, &id, body)?;
+    if !pending.is_empty() {
+        let state2 = state.clone();
+        tokio::spawn(async move {
+            let _ = tokio::task::spawn_blocking(move || {
+                context::fill_pending_weather(&state2, pending);
+            })
+            .await;
+        });
+    }
+    Ok(Json(resp))
+}
+
+#[derive(Deserialize)]
+struct WeatherQuery {
+    lat: f64,
+    lon: f64,
+}
+
+async fn get_weather(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Query(query): Query<WeatherQuery>,
+) -> Result<Json<WeatherNow>, AppError> {
+    require_ready(&user)?;
+    if !(-90.0..=90.0).contains(&query.lat) || !(-180.0..=180.0).contains(&query.lon) {
+        return Err(AppError::BadRequest("invalid coordinates".into()));
+    }
+    context::resolve_weather(&state, query.lat, query.lon)
+        .map(Json)
+        .ok_or_else(|| AppError::NotFound)
 }
 
 async fn search_titles(

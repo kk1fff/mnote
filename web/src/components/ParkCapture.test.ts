@@ -35,13 +35,16 @@ describe("ParkCapture", () => {
     await wrapper.get('[data-testid="park-body"]').setValue("ask jim");
     await wrapper.get('[data-testid="park-save"]').trigger("click");
     await flushPromises();
-    expect(api.createParked).toHaveBeenCalledWith({
-      body: "ask jim",
-      source_id: "n1",
-      source_title: "Weekly",
-      source_folder: "ideas",
-      excerpt: "retry",
-    });
+    expect(api.createParked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: "ask jim",
+        source_id: "n1",
+        source_title: "Weekly",
+        source_folder: "ideas",
+        excerpt: "retry",
+        surface: "park",
+      }),
+    );
     expect(wrapper.find('[data-testid="park-capture"]').exists()).toBe(false);
     registerCapture(null);
     setParkContext(null);

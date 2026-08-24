@@ -34,8 +34,10 @@ describe("Editor", () => {
     const exposed = wrapper.vm as unknown as {
       excerpt: () => string;
       revealExcerpt: (quote: string) => boolean;
+      revealRange: (from: number, to: number) => boolean;
     };
     expect(exposed.revealExcerpt("retry budget")).toBe(true);
+    expect(exposed.revealRange(0, 3)).toBe(true);
     wrapper.unmount();
   });
 });

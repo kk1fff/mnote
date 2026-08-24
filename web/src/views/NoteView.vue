@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { api, ApiError, type Note, type NoteMeta } from "../api";
+import { api, ApiError, type ContextEvent, type Note, type NoteContext, type NoteMeta } from "../api";
 import AppShell from "../components/AppShell.vue";
 import Backlinks from "../components/Backlinks.vue";
 import DeleteNoteDialog from "../components/DeleteNoteDialog.vue";
@@ -10,6 +10,17 @@ import HistoryPanel from "../components/HistoryPanel.vue";
 import Preview from "../components/Preview.vue";
 import { clearDraft, loadDraft, saveDraft } from "../lib/drafts";
 import { threeWay } from "../lib/merge";
+import { clearQueue, enqueue, loadQueue, newTmpId } from "../lib/context-queue";
+import {
+  contextLine,
+  currentFix,
+  lineRange,
+  setLastWeather,
+  setWhereHook,
+  splitParagraphs,
+  stamp,
+  startGeoWatch,
+} from "../lib/context";
 import { excerptAround } from "../lib/excerpt";
 import { noteIdFromRoute } from "../lib/paths";
 import { live, type LiveEvent } from "../live";
@@ -30,7 +41,21 @@ const links = ref<NoteMeta[]>([]);
 const remotes = ref<RemoteCaret[]>([]);
 const isFavorite = ref(false);
 const shell = ref<{ load: () => Promise<void> } | null>(null);
-const editor = ref<{ excerpt: () => string; revealExcerpt: (quote: string) => boolean } | null>(null);
+const editor = ref<{
+  excerpt: () => string;
+  revealExcerpt: (quote: string) => boolean;
+  revealRange: (from: number, to: number) => boolean;
+  currentOrdinal: () => number;
+} | null>(null);
+const showContext = ref(false);
+try {
+  showContext.value = localStorage.getItem("mnote:show-context") === "1";
+} catch {
+  /* ignore */
+}
+const noteContext = ref<NoteContext>({ blocks: [], events: [] });
+const selectedOrdinal = ref<number | null>(null);
+let flushTimer: number | undefined;
 const history = ref<{ show: () => void } | null>(null);
 const actionsOpen = ref(false);
 const actionsEl = ref<HTMLElement | null>(null);
@@ -87,6 +112,9 @@ async function load() {
     pendingExcerpt.value = null;
     queueMicrotask(() => editor.value?.revealExcerpt(quote));
   }
+  selectedOrdinal.value = null;
+  noteContext.value = await api.noteContext(id).catch(() => ({ blocks: [], events: [] }));
+  void flushContext();
 }
 
 function applyRemote(next: string) {
@@ -271,6 +299,78 @@ async function toggleFavorite() {
   }
 }
 
+const contextOrdinals = computed(() =>
+  noteContext.value.blocks
+    .filter((block) => block.ordinal != null && noteContext.value.events.some((ev) => ev.block_id === block.id))
+    .map((block) => block.ordinal as number),
+);
+
+const selectedEvents = computed(() => {
+  if (selectedOrdinal.value == null) return [];
+  const block = noteContext.value.blocks.find((b) => b.ordinal === selectedOrdinal.value);
+  if (!block) return [];
+  return noteContext.value.events.filter((ev) => ev.block_id === block.id);
+});
+
+function toggleContext() {
+  showContext.value = !showContext.value;
+  try {
+    localStorage.setItem("mnote:show-context", showContext.value ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  if (!showContext.value) selectedOrdinal.value = null;
+}
+
+function queueContext(ordinal: number, source: "auto" | "where") {
+  const id = loadedId || noteId.value;
+  if (!id) return;
+  const text = splitParagraphs(content.value)[ordinal] ?? "";
+  if (!text.trim()) return;
+  enqueue(id, { ...stamp("editor"), tmp_id: newTmpId(), ordinal, source });
+  scheduleFlush();
+}
+
+function scheduleFlush() {
+  window.clearTimeout(flushTimer);
+  flushTimer = window.setTimeout(() => {
+    void flushContext();
+  }, 400);
+}
+
+async function flushContext() {
+  const id = loadedId || noteId.value;
+  if (!id) return;
+  const events = loadQueue(id);
+  if (!events.length) return;
+  try {
+    noteContext.value = await api.postNoteContext(id, {
+      paragraphs: splitParagraphs(content.value),
+      events,
+    });
+    clearQueue(id);
+    const fix = currentFix();
+    if (fix) {
+      const weather = await api.weather(fix.lat, fix.lon).catch(() => null);
+      if (weather) setLastWeather(weather);
+    }
+  } catch {
+    /* keep queue */
+  }
+}
+
+function onSelectParagraph(ordinal: number) {
+  if (!showContext.value) return;
+  selectedOrdinal.value = ordinal;
+}
+
+function revealContextEvent(event: ContextEvent) {
+  const block = noteContext.value.blocks.find((b) => b.id === event.block_id);
+  if (block?.ordinal == null) return;
+  const range = lineRange(content.value, block.ordinal);
+  if (range) editor.value?.revealRange(range.from, range.to);
+}
+
 function queueSave() {
   window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
@@ -355,7 +455,14 @@ watch(content, () => {
 
 onMounted(() => {
   live.connect();
+  startGeoWatch();
   document.addEventListener("click", onDocClick);
+  window.addEventListener("visibilitychange", onFlushNow);
+  window.addEventListener("online", onFlushNow);
+  setWhereHook(() => {
+    const ordinal = editor.value?.currentOrdinal() ?? 0;
+    queueContext(ordinal, "where");
+  });
   setParkContext(() => {
     if (!loadedId) return null;
     return {
@@ -367,10 +474,19 @@ onMounted(() => {
   });
 });
 
+function onFlushNow() {
+  void flushContext();
+}
+
 onBeforeUnmount(() => {
   stopLive?.();
   setParkContext(null);
+  setWhereHook(null);
+  window.clearTimeout(flushTimer);
+  void flushContext();
   document.removeEventListener("click", onDocClick);
+  window.removeEventListener("visibilitychange", onFlushNow);
+  window.removeEventListener("online", onFlushNow);
 });
 </script>
 
@@ -441,6 +557,15 @@ onBeforeUnmount(() => {
             <button type="button" class="ghost" data-testid="history" @click="runAction(() => history?.show())">
               History
             </button>
+            <button
+              type="button"
+              class="ghost"
+              data-testid="context-toggle"
+              :aria-pressed="showContext"
+              @click="runAction(toggleContext)"
+            >
+              {{ showContext ? "Hide context" : "Context" }}
+            </button>
             <button type="button" class="ghost" data-testid="delete-note-open" @click="runAction(showDelete)">
               Delete
             </button>
@@ -449,21 +574,32 @@ onBeforeUnmount(() => {
         </div>
       </header>
       <Preview v-if="preview" :source="content" />
-      <Editor
-        v-else
-        ref="editor"
-        v-model="content"
-        :remotes="remotes"
-        @live-change="onLiveChange"
-        @cursor="live.cursor($event.from, $event.to)"
-      />
+      <template v-else>
+        <p v-if="showContext && selectedEvents.length" class="muted context-strip" data-testid="context-strip">
+          <span v-for="event in selectedEvents" :key="event.id">{{ contextLine(event) }}</span>
+        </p>
+        <Editor
+          ref="editor"
+          v-model="content"
+          :remotes="remotes"
+          :show-context="showContext"
+          :context-ordinals="contextOrdinals"
+          @live-change="onLiveChange"
+          @cursor="live.cursor($event.from, $event.to)"
+          @paragraph-commit="queueContext($event.ordinal, 'auto')"
+          @paragraph-leave="queueContext($event.ordinal, 'auto')"
+          @select-paragraph="onSelectParagraph"
+        />
+      </template>
       <Backlinks :links="links" />
       <HistoryPanel
         v-if="noteId"
         ref="history"
         :note-id="noteId"
         :current="content"
+        :events="noteContext.events"
         @restored="onRestored"
+        @reveal="revealContextEvent"
       />
       <DeleteNoteDialog
         v-if="deleteOpen"

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, type Parked } from "../api";
 import { noteHref } from "../lib/paths";
+import { contextLine } from "../lib/context";
 import { ageLabel } from "../lib/excerpt";
 import { parkedItems, pendingExcerpt, refreshParked } from "../parked";
 
@@ -119,6 +120,21 @@ defineExpose({ show, open });
           <p class="muted parked-meta">
             {{ ageLabel(selected.created_at) }}
             <template v-if="selected.source_title"> · while in {{ selected.source_title }}</template>
+          </p>
+          <p
+            v-if="selected.local_time || selected.weather_label"
+            class="muted parked-context"
+            data-testid="parked-context"
+          >
+            {{
+              contextLine({
+                local_time: selected.local_time || selected.created_at,
+                timezone: selected.timezone || "",
+                device: selected.device,
+                weather_label: selected.weather_label,
+                temp_c: selected.temp_c,
+              })
+            }}
           </p>
           <p class="parked-body" data-testid="parked-detail">{{ selected.body }}</p>
           <blockquote v-if="selected.excerpt" class="parked-excerpt">{{ selected.excerpt }}</blockquote>

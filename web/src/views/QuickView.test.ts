@@ -42,7 +42,7 @@ describe("QuickView", () => {
     await wrapper.get('[data-testid="quick-body"]').setValue("milk");
     await wrapper.get('[data-testid="quick-form"]').trigger("submit");
     await flushPromises();
-    expect(api.createParked).toHaveBeenCalledWith({ body: "milk" });
+    expect(api.createParked).toHaveBeenCalledWith(expect.objectContaining({ body: "milk", surface: "quick" }));
     expect(wrapper.get('[data-testid="quick-done"]').text()).toContain("1 waiting");
   });
 });

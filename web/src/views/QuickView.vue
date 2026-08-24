@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { api } from "../api";
+import { stamp, startGeoWatch } from "../lib/context";
 import { refreshParked, parkedItems } from "../parked";
 
 const body = ref("");
@@ -9,6 +10,7 @@ const done = ref(false);
 const input = ref<HTMLTextAreaElement | null>(null);
 
 onMounted(async () => {
+  startGeoWatch();
   input.value?.focus();
   await refreshParked().catch(() => undefined);
 });
@@ -21,7 +23,17 @@ async function park() {
   }
   error.value = "";
   try {
-    await api.createParked({ body: text });
+    const s = stamp("quick");
+    await api.createParked({
+      body: text,
+      surface: s.surface,
+      device: s.device,
+      local_time: s.local_time,
+      timezone: s.timezone,
+      lat: s.lat,
+      lon: s.lon,
+      accuracy_m: s.accuracy_m,
+    });
     await refreshParked();
     body.value = "";
     done.value = true;

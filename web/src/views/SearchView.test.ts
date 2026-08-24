@@ -35,6 +35,21 @@ describe("SearchView", () => {
     await flushPromises();
     expect(wrapper.text()).toContain("One");
     expect(wrapper.text()).toContain("hello");
+    expect(api.search).toHaveBeenCalledWith("hello", {});
+  });
+
+  it("forwards weather and near filters", async () => {
+    vi.mocked(api.search).mockResolvedValue([]);
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [{ path: "/search", component: SearchView }],
+    });
+    await router.push("/search?q=rain&weather=rain&near=1,2");
+    await router.isReady();
+    const wrapper = mount(SearchView, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(api.search).toHaveBeenCalledWith("rain", { weather: "rain", near: "1,2" });
+    expect(wrapper.get('[data-testid="search-weather"]').element).toBeTruthy();
   });
 
   it("shows search errors", async () => {

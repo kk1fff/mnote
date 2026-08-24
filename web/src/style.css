@@ -1070,6 +1070,42 @@ button.icon-btn,
   background: var(--accent-soft);
 }
 
+.history-context-label {
+  padding: 0.55rem 0.7rem 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.context-strip {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.45rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.context-filters {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.75rem 1.25rem 0;
+}
+
+.context-filters input {
+  flex: 1;
+  min-width: 0;
+}
+
+.parked-context {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+}
+
 .history-list small,
 .parked-list small,
 .parked-empty {

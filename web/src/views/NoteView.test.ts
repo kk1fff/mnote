@@ -27,6 +27,9 @@ vi.mock("../api", async () => {
       noteHistory: vi.fn().mockResolvedValue([]),
       noteRevision: vi.fn(),
       restoreNote: vi.fn(),
+      noteContext: vi.fn().mockResolvedValue({ blocks: [], events: [] }),
+      postNoteContext: vi.fn().mockResolvedValue({ blocks: [], events: [] }),
+      weather: vi.fn().mockRejectedValue(new Error("no weather")),
     },
   };
 });

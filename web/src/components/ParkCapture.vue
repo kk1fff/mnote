@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { api } from "../api";
+import { stamp } from "../lib/context";
 import { parkContext, refreshParked, registerCapture, type ParkContext } from "../parked";
 
 const open = ref(false);
@@ -29,12 +30,20 @@ async function park() {
   }
   error.value = "";
   try {
+    const s = stamp("park");
     await api.createParked({
       body: text,
       source_id: ctx.value.source_id,
       source_title: ctx.value.source_title,
       source_folder: ctx.value.source_folder,
       excerpt: ctx.value.excerpt,
+      surface: s.surface,
+      device: s.device,
+      local_time: s.local_time,
+      timezone: s.timezone,
+      lat: s.lat,
+      lon: s.lon,
+      accuracy_m: s.accuracy_m,
     });
     await refreshParked();
     close();

@@ -266,6 +266,17 @@ test("pasting a png inserts an asset", async ({ page }) => {
   await expect(page.locator(".cm-content")).toContainText("/api/assets/");
 });
 
+test("slash where inserts a stamp without coordinates", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await createNote(page, uid("Where"));
+  await typeInEditor(page, "/where");
+  await expect(page.getByTestId("suggest")).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".cm-content")).toContainText(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
+  await expect(page.locator(".cm-content")).not.toContainText(/lat|lon/);
+});
+
 test("slash date inserts today", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);

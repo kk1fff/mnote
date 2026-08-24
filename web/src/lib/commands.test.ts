@@ -4,11 +4,11 @@ import { todayDate } from "./paths";
 
 describe("commands", () => {
   it("registers date, time, and page", () => {
-    expect(slashCommands().map((command) => command.id)).toEqual(["date", "time", "page"]);
+    expect(slashCommands().map((command) => command.id)).toEqual(["date", "time", "where", "page"]);
   });
 
   it("filters by the first token", () => {
-    expect(matchSlashCommands("").map((command) => command.id)).toEqual(["date", "time", "page"]);
+    expect(matchSlashCommands("").map((command) => command.id)).toEqual(["date", "time", "where", "page"]);
     expect(matchSlashCommands("d").map((command) => command.id)).toEqual(["date"]);
     expect(matchSlashCommands("page Meeting").map((command) => command.id)).toEqual(["page"]);
     expect(matchSlashCommands("xyz")).toEqual([]);
@@ -20,6 +20,14 @@ describe("commands", () => {
     if (!page) return;
     expect(commandRemainder("page Meeting", page)).toBe("Meeting");
     expect(commandRemainder("p", page)).toBe("");
+  });
+
+  it("inserts where without coordinates", () => {
+    const where = slashCommands().find((command) => command.id === "where");
+    let out = "";
+    where?.run({ query: "where", replace: (text) => (out = text), startPageLink: () => undefined });
+    expect(out).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
+    expect(out).not.toMatch(/lat|lon/);
   });
 
   it("inserts date and time", () => {

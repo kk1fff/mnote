@@ -1,3 +1,4 @@
+import { formatWhereStamp, runWhereHook } from "./context";
 import { todayDate } from "./paths";
 
 export type SlashContext = {
@@ -70,6 +71,16 @@ export function registerBuiltinCommands() {
     title: "Time",
     hint: "HH:mm",
     run: (ctx) => ctx.replace(formatTime()),
+  });
+  registerSlashCommand({
+    id: "where",
+    title: "Where",
+    hint: "time and weather",
+    keywords: ["context", "here"],
+    run: (ctx) => {
+      ctx.replace(formatWhereStamp());
+      runWhereHook();
+    },
   });
   registerSlashCommand({
     id: "page",

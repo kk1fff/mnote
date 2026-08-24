@@ -41,6 +41,43 @@ export interface SearchHit {
   id: string;
   title: string;
   snippet: string;
+  kind?: string;
+  parked_id?: number;
+  context?: string;
+}
+
+export interface ContextBlock {
+  id: string;
+  ordinal?: number;
+  preview: string;
+  tmp_id?: string;
+}
+
+export interface ContextEvent {
+  id: number;
+  block_id: string;
+  captured_at: string;
+  local_time: string;
+  timezone: string;
+  device?: string;
+  surface: string;
+  lat?: number;
+  lon?: number;
+  weather_code?: number;
+  weather_label?: string;
+  temp_c?: number;
+  source: string;
+}
+
+export interface NoteContext {
+  blocks: ContextBlock[];
+  events: ContextEvent[];
+}
+
+export interface WeatherNow {
+  weather_code: number;
+  weather_label: string;
+  temp_c: number;
 }
 
 export interface Asset {
@@ -72,6 +109,16 @@ export interface Parked {
   source_title?: string;
   source_folder?: string;
   excerpt?: string;
+  surface?: string;
+  device?: string;
+  local_time?: string;
+  timezone?: string;
+  lat?: number;
+  lon?: number;
+  accuracy_m?: number;
+  weather_code?: number;
+  weather_label?: string;
+  temp_c?: number;
 }
 
 function folderPath(folder: string): string {
@@ -185,7 +232,39 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ content }),
     }),
-  search: (q: string) => request<SearchHit[]>(`/api/search?q=${encodeURIComponent(q)}`),
+  search: (q: string, extra: Record<string, string> = {}) => {
+    const params = new URLSearchParams({ q });
+    for (const [key, value] of Object.entries(extra)) {
+      if (value) params.set(key, value);
+    }
+    return request<SearchHit[]>(`/api/search?${params}`);
+  },
+  noteContext: (id: string) => request<NoteContext>(`/api/notes/${encodeURIComponent(id)}/context`),
+  postNoteContext: (
+    id: string,
+    body: {
+      paragraphs: string[];
+      events: Array<{
+        tmp_id: string;
+        ordinal: number;
+        captured_at: string;
+        local_time: string;
+        timezone: string;
+        surface: string;
+        device?: string;
+        lat?: number;
+        lon?: number;
+        accuracy_m?: number;
+        source?: string;
+      }>;
+    },
+  ) =>
+    request<NoteContext>(`/api/notes/${encodeURIComponent(id)}/context`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  weather: (lat: number, lon: number) =>
+    request<WeatherNow>(`/api/weather?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`),
   backlinks: (id: string) => request<NoteMeta[]>(`/api/backlinks/${encodeURIComponent(id)}`),
   noteHistory: (id: string) =>
     request<HistoryEntry[]>(`/api/notes/${encodeURIComponent(id)}/history`),
@@ -203,6 +282,13 @@ export const api = {
     source_title?: string;
     source_folder?: string;
     excerpt?: string;
+    surface?: string;
+    device?: string;
+    local_time?: string;
+    timezone?: string;
+    lat?: number;
+    lon?: number;
+    accuracy_m?: number;
   }) => request<Parked>("/api/parked", { method: "POST", body: JSON.stringify(body) }),
   deleteParked: (id: number) =>
     request<void>(`/api/parked/${id}`, { method: "DELETE" }),

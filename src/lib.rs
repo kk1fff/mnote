@@ -1,21 +1,37 @@
 pub mod api;
 pub mod auth;
+pub mod context;
 pub mod db;
 pub mod error;
 pub mod live;
 pub mod merge;
 pub mod notes;
 
+use crate::context::WeatherNow;
 use crate::error::AppError;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+
+pub type WeatherFn = Arc<dyn Fn(f64, f64) -> Option<WeatherNow> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct AppState {
     pub data_dir: PathBuf,
     pub db: Arc<Mutex<Connection>>,
     pub live: live::LiveHub,
+    pub weather: WeatherFn,
+}
+
+fn default_weather() -> WeatherFn {
+    #[cfg(test)]
+    {
+        Arc::new(|_, _| None)
+    }
+    #[cfg(not(test))]
+    {
+        Arc::new(context::fetch_open_meteo)
+    }
 }
 
 impl AppState {
@@ -35,6 +51,7 @@ impl AppState {
             data_dir,
             db: Arc::new(Mutex::new(conn)),
             live: live::LiveHub::new(),
+            weather: default_weather(),
         })
     }
 
