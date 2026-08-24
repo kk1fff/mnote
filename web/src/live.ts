@@ -22,7 +22,7 @@ function newClientId(): string {
   return `c-${Math.random().toString(36).slice(2)}`;
 }
 
-class Live {
+export class Live {
   private ws: WebSocket | null = null;
   private handlers = new Set<Handler>();
   private openPath: { path: string; content: string } | null = null;
@@ -133,4 +133,8 @@ class Live {
   }
 }
 
-export const live = new Live();
+export function createLive() {
+  return new Live();
+}
+
+export const live = createLive();
