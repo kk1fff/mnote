@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, ApiError, type ContextEvent, type Note, type NoteContext, type NoteMeta } from "../api";
 import AppShell from "../components/AppShell.vue";
@@ -46,6 +46,7 @@ const editor = ref<{
   revealExcerpt: (quote: string) => boolean;
   revealRange: (from: number, to: number) => boolean;
   currentOrdinal: () => number;
+  lineCoords: (ordinal: number) => { top: number; bottom: number; left: number } | null;
 } | null>(null);
 const showContext = ref(false);
 try {
@@ -55,6 +56,8 @@ try {
 }
 const noteContext = ref<NoteContext>({ blocks: [], events: [] });
 const selectedOrdinal = ref<number | null>(null);
+const contextPopEl = ref<HTMLElement | null>(null);
+const contextPos = ref({ top: 0, left: 0 });
 let flushTimer: number | undefined;
 const history = ref<{ show: () => void } | null>(null);
 const actionsOpen = ref(false);
@@ -319,7 +322,7 @@ function toggleContext() {
   } catch {
     /* ignore */
   }
-  if (!showContext.value) selectedOrdinal.value = null;
+  if (!showContext.value) closeContextPop();
 }
 
 function queueContext(ordinal: number, source: "auto" | "where") {
@@ -359,9 +362,43 @@ async function flushContext() {
   }
 }
 
+function closeContextPop() {
+  selectedOrdinal.value = null;
+}
+
+function placeContextPop(ordinal: number) {
+  const coords = editor.value?.lineCoords(ordinal);
+  if (!coords) return;
+  const pad = 8;
+  const gap = 6;
+  contextPos.value = { top: coords.bottom + gap, left: coords.left };
+  void nextTick(() => {
+    const box = contextPopEl.value?.getBoundingClientRect();
+    const height = box?.height ?? 0;
+    const width = box?.width ?? 240;
+    let top = coords.bottom + gap;
+    if (height && top + height + pad > window.innerHeight) {
+      top = Math.max(pad, coords.top - height - gap);
+    }
+    const left = Math.min(Math.max(pad, coords.left), window.innerWidth - width - pad);
+    contextPos.value = { top, left };
+  });
+}
+
 function onSelectParagraph(ordinal: number) {
   if (!showContext.value) return;
+  if (selectedOrdinal.value === ordinal) {
+    closeContextPop();
+    return;
+  }
+  const block = noteContext.value.blocks.find((b) => b.ordinal === ordinal);
+  const events = block ? noteContext.value.events.filter((ev) => ev.block_id === block.id) : [];
+  if (!events.length) {
+    closeContextPop();
+    return;
+  }
   selectedOrdinal.value = ordinal;
+  placeContextPop(ordinal);
 }
 
 function revealContextEvent(event: ContextEvent) {
@@ -419,11 +456,21 @@ function runAction(action: () => void) {
 }
 
 function onDocClick(event: MouseEvent) {
-  if (!actionsOpen.value || !actionsEl.value) return;
-  if (!actionsEl.value.contains(event.target as Node)) closeActions();
+  const target = event.target;
+  if (actionsOpen.value && actionsEl.value && !actionsEl.value.contains(target as Node)) {
+    closeActions();
+  }
+  if (selectedOrdinal.value == null || !(target instanceof Element)) return;
+  if (target.closest("[data-testid='context-pop']") || target.closest(".cm-editor")) return;
+  closeContextPop();
 }
 
 function onKey(event: KeyboardEvent) {
+  if (event.key === "Escape" && selectedOrdinal.value != null) {
+    event.preventDefault();
+    closeContextPop();
+    return;
+  }
   if ((event.metaKey || event.ctrlKey) && event.key === "s") {
     event.preventDefault();
     window.clearTimeout(saveTimer);
@@ -574,23 +621,30 @@ onBeforeUnmount(() => {
         </div>
       </header>
       <Preview v-if="preview" :source="content" />
-      <template v-else>
-        <p v-if="showContext && selectedEvents.length" class="muted context-strip" data-testid="context-strip">
-          <span v-for="event in selectedEvents" :key="event.id">{{ contextLine(event) }}</span>
-        </p>
-        <Editor
-          ref="editor"
-          v-model="content"
-          :remotes="remotes"
-          :show-context="showContext"
-          :context-ordinals="contextOrdinals"
-          @live-change="onLiveChange"
-          @cursor="live.cursor($event.from, $event.to)"
-          @paragraph-commit="queueContext($event.ordinal, 'auto')"
-          @paragraph-leave="queueContext($event.ordinal, 'auto')"
-          @select-paragraph="onSelectParagraph"
-        />
-      </template>
+      <Editor
+        v-else
+        ref="editor"
+        v-model="content"
+        :remotes="remotes"
+        :show-context="showContext"
+        :context-ordinals="contextOrdinals"
+        @live-change="onLiveChange"
+        @cursor="live.cursor($event.from, $event.to)"
+        @paragraph-commit="queueContext($event.ordinal, 'auto')"
+        @paragraph-leave="queueContext($event.ordinal, 'auto')"
+        @select-paragraph="onSelectParagraph"
+      />
+      <Teleport to="body">
+        <div
+          v-if="showContext && selectedEvents.length"
+          ref="contextPopEl"
+          class="context-pop"
+          data-testid="context-pop"
+          :style="{ top: `${contextPos.top}px`, left: `${contextPos.left}px` }"
+        >
+          <p v-for="event in selectedEvents" :key="event.id">{{ contextLine(event) }}</p>
+        </div>
+      </Teleport>
       <Backlinks :links="links" />
       <HistoryPanel
         v-if="noteId"

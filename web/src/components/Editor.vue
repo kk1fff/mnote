@@ -467,6 +467,15 @@ function currentOrdinal(): number {
   return view.state.doc.lineAt(view.state.selection.main.head).number - 1;
 }
 
+function lineCoords(ordinal: number): { top: number; bottom: number; left: number } | null {
+  if (!view) return null;
+  const lineNo = ordinal + 1;
+  if (lineNo < 1 || lineNo > view.state.doc.lines) return null;
+  const coords = view.coordsAtPos(view.state.doc.line(lineNo).from);
+  if (!coords) return null;
+  return { top: coords.top, bottom: coords.bottom, left: coords.left };
+}
+
 function revealRange(from: number, to: number): boolean {
   if (!view) return false;
   const len = view.state.doc.length;
@@ -499,7 +508,7 @@ function revealExcerpt(quote: string): boolean {
   return true;
 }
 
-defineExpose({ excerpt, revealExcerpt, revealRange, currentOrdinal });
+defineExpose({ excerpt, revealExcerpt, revealRange, currentOrdinal, lineCoords });
 
 onBeforeUnmount(() => {
   document.removeEventListener("mousedown", onDocClick);

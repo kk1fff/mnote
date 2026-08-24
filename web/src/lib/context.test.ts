@@ -3,6 +3,7 @@ import {
   deviceClass,
   formatWhereStamp,
   lineRange,
+  tzAbbrev,
   rememberFix,
   resetGeoForTests,
   splitParagraphs,
@@ -19,6 +20,11 @@ describe("context", () => {
   it("splits paragraphs and ranges", () => {
     expect(splitParagraphs("a\n\nb")).toEqual(["a", "", "b"]);
     expect(lineRange("hello\nworld", 1)).toEqual({ from: 6, to: 11 });
+  });
+
+  it("uses short timezone names", () => {
+    expect(tzAbbrev("America/Los_Angeles", "2026-08-23T21:05:00Z")).toBe("PDT");
+    expect(tzAbbrev("America/Los_Angeles", "2026-01-15T21:05:00Z")).toBe("PST");
   });
 
   it("formats /where without coordinates", () => {

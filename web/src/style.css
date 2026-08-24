@@ -1078,15 +1078,27 @@ button.icon-btn,
   text-transform: uppercase;
 }
 
-.context-strip {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+.context-pop {
+  position: fixed;
+  z-index: 20;
+  min-width: 14rem;
+  max-width: 22rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+
+.context-pop p {
   margin: 0;
-  padding: 0.45rem 1.25rem;
-  border-bottom: 1px solid var(--border);
   font-size: 0.85rem;
+}
+
+.context-pop p + p {
+  margin-top: 0.25rem;
+  color: var(--text-muted);
 }
 
 .context-filters {
@@ -1102,7 +1114,8 @@ button.icon-btn,
 }
 
 .parked-context {
-  margin: 0 0 0.75rem;
+  margin: 0;
+  padding: 0 1rem 0.75rem;
   font-size: 0.85rem;
 }
 

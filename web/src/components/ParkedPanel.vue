@@ -130,6 +130,7 @@ defineExpose({ show, open });
               contextLine({
                 local_time: selected.local_time || selected.created_at,
                 timezone: selected.timezone || "",
+                captured_at: selected.created_at,
                 device: selected.device,
                 weather_label: selected.weather_label,
                 temp_c: selected.temp_c,

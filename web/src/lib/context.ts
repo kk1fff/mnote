@@ -71,9 +71,26 @@ export function capturedAt(now = new Date()): string {
   return now.toISOString();
 }
 
+export function tzAbbrev(iana: string, at?: Date | string): string {
+  if (!iana) return "";
+  const date = at instanceof Date ? at : at ? new Date(at) : new Date();
+  const instant = Number.isNaN(date.getTime()) ? new Date() : date;
+  try {
+    const name = new Intl.DateTimeFormat("en-US", {
+      timeZone: iana,
+      timeZoneName: "short",
+    })
+      .formatToParts(instant)
+      .find((part) => part.type === "timeZoneName")?.value;
+    if (name && name !== iana) return name;
+  } catch {
+    /* invalid zone */
+  }
+  return iana.split("/").pop()?.replaceAll("_", " ") || iana;
+}
+
 export function formatWhereStamp(now = new Date(), weather = lastWeather): string {
-  const tz = timezone().split("/").pop() || timezone();
-  const base = `${localTime(now)} ${tz}`;
+  const base = `${localTime(now)} ${tzAbbrev(timezone(), now)}`;
   if (!weather) return base;
   return `${base} · ${Math.round(weather.temp_c)}°C, ${weather.weather_label}`;
 }
@@ -137,12 +154,13 @@ export function rememberFix(fix: GeoFix) {
 export function contextLine(event: {
   local_time: string;
   timezone: string;
+  captured_at?: string;
   device?: string;
   weather_label?: string;
   temp_c?: number;
 }): string {
-  const tz = event.timezone.split("/").pop() || event.timezone;
-  const bits = [`${event.local_time} ${tz}`];
+  const tz = tzAbbrev(event.timezone, event.captured_at);
+  const bits = [`${event.local_time}${tz ? ` ${tz}` : ""}`];
   if (event.device) bits.push(event.device);
   if (event.weather_label && event.temp_c != null) {
     bits.push(`${Math.round(event.temp_c)}°C, ${event.weather_label}`);
