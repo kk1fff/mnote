@@ -8,7 +8,7 @@ import { noteTree } from "../lib/tree";
 import { live, type LiveEvent } from "../live";
 import { collapsed, refreshCollapsed, toggleCollapsed } from "../folders";
 import { parkedItems, refreshParked, showParkCapture } from "../parked";
-import { applyOpen, layoutHref, openBeside } from "../workspace";
+import { applyOpen, forgetNote, layoutHref, openBeside, visibleIds } from "../workspace";
 import { currentUser, logout } from "../session";
 import { cycleTheme, setThemeMode, themeMode, type ThemeMode } from "../theme";
 import DeleteNoteDialog from "./DeleteNoteDialog.vue";
@@ -45,6 +45,11 @@ const tree = computed(() => noteTree(notes.value));
 const activeId = computed(() =>
   route.name === "note" || route.path.startsWith("/n/") ? noteIdFromRoute(route.params.id) : "",
 );
+const openIds = computed(() => {
+  const ids = visibleIds();
+  if (activeId.value && !ids.includes(activeId.value)) ids.push(activeId.value);
+  return ids;
+});
 
 function upsert(note: NoteMeta) {
   const i = notes.value.findIndex((n) => n.id === note.id);
@@ -148,7 +153,9 @@ async function confirmDelete() {
     clearDraft(note.id);
     deleteTarget.value = null;
     notes.value = notes.value.filter((item) => item.id !== note.id);
-    if (activeId.value === note.id) await router.push("/today");
+    const wasOpen = openIds.value.includes(note.id) || activeId.value === note.id;
+    forgetNote(note.id);
+    if (wasOpen) await router.push(layoutHref());
   } catch {
     deleteError.value = "Could not delete";
   } finally {
@@ -234,7 +241,7 @@ defineExpose({ load });
       <div class="note-tree">
         <NoteTree
           :nodes="tree"
-          :active-id="activeId"
+          :active-ids="openIds"
           :collapsed="collapsed"
           :menu-id="menuNote?.id ?? ''"
           @toggle="toggleCollapsed"

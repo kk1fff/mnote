@@ -3,7 +3,8 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api, ApiError, type NoteMeta } from "../api";
 import { buildPickerSections, pickerItems, type PickerItem } from "../lib/picker";
-import { noteFolderLabel, noteHref } from "../lib/paths";
+import { noteFolderLabel } from "../lib/paths";
+import { openInWorkspace } from "../workspace";
 
 const emit = defineEmits<{ created: [] }>();
 const router = useRouter();
@@ -65,7 +66,7 @@ function indexOf(item: PickerItem): number {
 
 async function select(note: NoteMeta) {
   close();
-  await router.push(noteHref(note.id));
+  await router.push(openInWorkspace(note.id, note.title));
 }
 
 async function jump(to: string) {
@@ -80,7 +81,7 @@ async function create() {
     const note = await api.createNote(createItem.value.draft.title, createItem.value.draft.folder);
     emit("created");
     close();
-    await router.push(noteHref(note.id));
+    await router.push(openInWorkspace(note.id, note.title));
   } catch (err) {
     error.value = err instanceof ApiError ? err.code : "Could not create note";
   }

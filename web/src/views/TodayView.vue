@@ -2,7 +2,8 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
-import { noteHref, todayDate } from "../lib/paths";
+import { todayDate } from "../lib/paths";
+import { openInWorkspace } from "../workspace";
 
 const router = useRouter();
 const error = ref("");
@@ -14,7 +15,7 @@ onMounted(async () => {
       error.value = "Could not open today";
       return;
     }
-    await router.replace(noteHref(note.id));
+    await router.replace(openInWorkspace(note.id, note.title));
   } catch {
     error.value = "Could not open today";
   }

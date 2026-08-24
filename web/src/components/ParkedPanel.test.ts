@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { parkedItems } from "../parked";
+import { emptyWorkspace, resetWorkspace } from "../workspace";
 import ParkedPanel from "./ParkedPanel.vue";
 
 vi.mock("../api", async () => {
@@ -20,6 +21,7 @@ vi.mock("../api", async () => {
 describe("ParkedPanel", () => {
   afterEach(() => {
     parkedItems.value = [];
+    resetWorkspace(emptyWorkspace());
   });
 
   it("makes a note from a parked thought", async () => {

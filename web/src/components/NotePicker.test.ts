@@ -2,6 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
+import { emptyWorkspace, resetWorkspace } from "../workspace";
 import NotePicker from "./NotePicker.vue";
 
 vi.mock("../api", async () => {
@@ -41,6 +42,7 @@ describe("NotePicker", () => {
     vi.mocked(api.titleSearch).mockReset();
     vi.mocked(api.createNote).mockReset();
     vi.mocked(api.listNotes).mockReset();
+    resetWorkspace(emptyWorkspace());
   });
 
   it("keeps create available when a partial match exists", async () => {

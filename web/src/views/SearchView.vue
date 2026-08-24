@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { api, type SearchHit } from "../api";
 import AppShell from "../components/AppShell.vue";
 import { currentFix, startGeoWatch } from "../lib/context";
-import { noteHref } from "../lib/paths";
+import { openInWorkspace } from "../workspace";
 
 const route = useRoute();
 const router = useRouter();
@@ -38,6 +38,10 @@ function applyWeather() {
   void router.replace({
     query: { ...route.query, weather: weather.value.trim() || undefined },
   });
+}
+
+function openHit(hit: SearchHit) {
+  void router.push(openInWorkspace(hit.id, hit.title));
 }
 
 function nearMe() {
@@ -80,7 +84,7 @@ watch(() => route.query, run, { deep: true });
       <p v-else-if="!hits.length" class="muted results">No matches</p>
       <ul class="results">
         <li v-for="hit in hits" :key="hit.id">
-          <RouterLink v-if="hit.kind !== 'parked'" :to="noteHref(hit.id)">{{ hit.title }}</RouterLink>
+          <a v-if="hit.kind !== 'parked'" href="#" @click.prevent="openHit(hit)">{{ hit.title }}</a>
           <span v-else>{{ hit.title }}</span>
           <p>{{ hit.context || hit.snippet }}</p>
         </li>

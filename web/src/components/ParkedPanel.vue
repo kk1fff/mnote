@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, type Parked } from "../api";
-import { noteHref } from "../lib/paths";
+import { openInWorkspace } from "../workspace";
 import { contextLine } from "../lib/context";
 import { ageLabel } from "../lib/excerpt";
 import { parkedItems, pendingExcerpt, refreshParked } from "../parked";
@@ -46,7 +46,7 @@ async function makeNote() {
     await refreshParked();
     close();
     emit("created");
-    await router.push(noteHref(note.id));
+    await router.push(openInWorkspace(note.id, note.title));
   } catch {
     error.value = "Could not make a note";
   }
@@ -72,7 +72,7 @@ async function openSource() {
   }
   pendingExcerpt.value = selected.value.excerpt ?? null;
   close();
-  await router.push(noteHref(selected.value.source_id));
+  await router.push(openInWorkspace(selected.value.source_id, selected.value.source_title));
 }
 
 onMounted(() => window.addEventListener("keydown", onWindowKey, true));

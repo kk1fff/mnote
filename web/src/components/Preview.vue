@@ -3,7 +3,8 @@ import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
 import { renderMarkdown } from "../lib/markdown";
-import { noteHref, parseWikiPath, sameWikiPath } from "../lib/paths";
+import { noteIdFromRoute, parseWikiPath, sameWikiPath } from "../lib/paths";
+import { openInWorkspace } from "../workspace";
 
 const props = defineProps<{ source: string }>();
 const router = useRouter();
@@ -15,11 +16,11 @@ async function openWiki(target: string) {
   const hits = await api.titleSearch(target).catch(() => []);
   const exact = hits.find((note) => sameWikiPath(note.folder ?? "", note.title, target));
   if (exact) {
-    await router.push(noteHref(exact.id));
+    await router.push(openInWorkspace(exact.id, exact.title));
     return;
   }
   const note = await api.createNote(parsed.title, parsed.folder || undefined);
-  await router.push(noteHref(note.id));
+  await router.push(openInWorkspace(note.id, note.title));
 }
 
 function onClick(event: MouseEvent) {
@@ -34,7 +35,9 @@ function onClick(event: MouseEvent) {
   const href = target.getAttribute("href");
   if (!href?.startsWith("/n/")) return;
   event.preventDefault();
-  void router.push(href);
+  const id = noteIdFromRoute(href.replace(/^\/n\//, "").split("?")[0]);
+  if (id) void router.push(openInWorkspace(id));
+  else void router.push(href);
 }
 </script>
 

@@ -6,7 +6,7 @@ import NoteTree from "./NoteTree.vue";
 
 defineProps<{
   nodes: TreeNode[];
-  activeId: string;
+  activeIds: string[];
   collapsed: Set<string>;
   menuId: string;
 }>();
@@ -32,7 +32,7 @@ function onOpen(event: MouseEvent, id: string) {
         <NoteTree
           v-if="!collapsed.has(node.path)"
           :nodes="node.children"
-          :active-id="activeId"
+          :active-ids="activeIds"
           :collapsed="collapsed"
           :menu-id="menuId"
           @toggle="emit('toggle', $event)"
@@ -43,12 +43,12 @@ function onOpen(event: MouseEvent, id: string) {
       <div
         v-else
         class="tree-row"
-        :class="{ active: activeId === node.note.id, open: menuId === node.note.id }"
+        :class="{ active: activeIds.includes(node.note.id), open: menuId === node.note.id }"
       >
         <RouterLink
           class="tree-link"
           :to="noteHref(node.note.id)"
-          :class="{ active: activeId === node.note.id }"
+          :class="{ active: activeIds.includes(node.note.id) }"
           @click="onOpen($event, node.note.id)"
         >
           {{ node.name }}

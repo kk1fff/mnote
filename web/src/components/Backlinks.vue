@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { noteHref } from "../lib/paths";
+import { useRouter } from "vue-router";
 import type { NoteMeta } from "../api";
+import { openInWorkspace } from "../workspace";
 
 defineProps<{ links: NoteMeta[] }>();
 
+const router = useRouter();
 const open = ref(true);
+
+function openLink(link: NoteMeta) {
+  void router.push(openInWorkspace(link.id, link.title));
+}
 </script>
 
 <template>
@@ -24,7 +30,7 @@ const open = ref(true);
       <p v-if="!links.length" class="muted">No backlinks</p>
       <ul v-else>
         <li v-for="link in links" :key="link.id">
-          <RouterLink :to="noteHref(link.id)">{{ link.title }}</RouterLink>
+          <a href="#" @click.prevent="openLink(link)">{{ link.title }}</a>
         </li>
       </ul>
     </div>

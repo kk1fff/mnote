@@ -5,9 +5,11 @@ import {
   closeTab,
   collapseBeside,
   emptyWorkspace,
+  forgetNote,
   layoutHref,
   loadWorkspace,
   openBeside,
+  openInWorkspace,
   rememberTitle,
   resetWorkspace,
   setPinned,
@@ -118,5 +120,15 @@ describe("workspace", () => {
     collapseBeside();
     expect(workspace.value.beside).toBeNull();
     expect(layoutHref()).toBe("/n/left");
+  });
+
+  it("opens through the workspace and forgets a visible note", () => {
+    applyOpen("a", "A");
+    openBeside("b", "B");
+    expect(openInWorkspace("c", "C")).toBe("/n/c?beside=a");
+    expect(workspace.value.beside?.active).toBe("c");
+    expect(forgetNote("c")).toBe("/n/a");
+    expect(workspace.value.beside).toBeNull();
+    expect(workspace.value.primary.active).toBe("a");
   });
 });

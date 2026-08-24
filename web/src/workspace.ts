@@ -272,6 +272,32 @@ export function layoutHref(): string {
   return noteHref(focus.active);
 }
 
+export function openInWorkspace(id: string, title?: string): string {
+  applyOpen(id, title);
+  return layoutHref();
+}
+
+export function visibleIds(state = workspace.value): string[] {
+  const ids = [state.primary.active];
+  if (state.beside?.active) ids.push(state.beside.active);
+  return ids.filter(Boolean);
+}
+
+export function forgetNote(id: string): string {
+  if (!id) return layoutHref();
+  closeTab(id, "primary");
+  if (workspace.value.beside) {
+    closeTab(id, "beside");
+    if (!workspace.value.beside.tabs.length) collapseBeside();
+  }
+  if (!workspace.value.primary.active && workspace.value.beside?.active) {
+    workspace.value.primary = workspace.value.beside;
+    collapseBeside();
+  }
+  persistWorkspace();
+  return layoutHref();
+}
+
 export function closeTab(id: string, paneId: PaneId = workspace.value.focused): string | null {
   const pane = paneOf(paneId);
   if (!pane) return null;
