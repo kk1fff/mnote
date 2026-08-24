@@ -1,9 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyOpen,
+  applyRoute,
   closeTab,
+  collapseBeside,
   emptyWorkspace,
+  layoutHref,
   loadWorkspace,
+  openBeside,
   rememberTitle,
   resetWorkspace,
   setPinned,
@@ -13,12 +17,23 @@ import {
   workspace,
 } from "./workspace";
 
+function stubDesktop(wide: boolean) {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: wide && query.includes("721"),
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+  }));
+}
+
 beforeEach(() => {
+  stubDesktop(true);
   resetWorkspace(emptyWorkspace());
 });
 
 afterEach(() => {
   resetWorkspace(emptyWorkspace());
+  vi.unstubAllGlobals();
 });
 
 describe("workspace", () => {
@@ -74,5 +89,34 @@ describe("workspace", () => {
     const unpinned = workspace.value.primary.tabs.filter((tab) => !tab.pinned);
     expect(unpinned.length).toBe(UNPINNED_CAP);
     expect(workspace.value.primary.tabs.some((tab) => tab.id === "seed")).toBe(true);
+  });
+
+  it("opens beside on desktop and falls back on mobile", () => {
+    applyOpen("a", "A");
+    openBeside("b", "B");
+    expect(workspace.value.beside?.active).toBe("b");
+    expect(workspace.value.focused).toBe("beside");
+    expect(layoutHref()).toBe("/n/b?beside=a");
+    stubDesktop(false);
+    expect(layoutHref()).toBe("/n/b");
+    applyRoute("c", "d");
+    expect(workspace.value.beside).toBeNull();
+    expect(workspace.value.primary.active).toBe("c");
+    expect(layoutHref()).toBe("/n/c");
+  });
+
+  it("restores a split from the route", () => {
+    applyRoute("left", "right");
+    expect(workspace.value.primary.active).toBe("left");
+    expect(workspace.value.beside?.active).toBe("right");
+    expect(workspace.value.focused).toBe("primary");
+    expect(layoutHref()).toBe("/n/left?beside=right");
+    workspace.value.focused = "beside";
+    applyRoute("right", "left");
+    expect(workspace.value.beside?.active).toBe("right");
+    expect(workspace.value.primary.active).toBe("left");
+    collapseBeside();
+    expect(workspace.value.beside).toBeNull();
+    expect(layoutHref()).toBe("/n/left");
   });
 });

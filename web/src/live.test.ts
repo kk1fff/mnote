@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { live } from "./live";
+import { createLive, live } from "./live";
 
 afterEach(() => {
   live.disconnect();
@@ -81,5 +81,14 @@ describe("live", () => {
     expect(hello).toBeTruthy();
     expect(hello).not.toContain("shared");
     expect(sent.some((s) => s.includes("open") && s.includes("note-1"))).toBe(true);
+  });
+
+  it("createLive returns distinct clients", () => {
+    const a = createLive();
+    const b = createLive();
+    expect(a).not.toBe(b);
+    expect(a.id).not.toBe(b.id);
+    a.disconnect();
+    b.disconnect();
   });
 });

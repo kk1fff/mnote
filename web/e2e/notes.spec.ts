@@ -303,6 +303,42 @@ test("page command inserts a folder wiki path", async ({ page }) => {
   await expect(page.locator(".cm-content")).toContainText(`[[ideas/${target}]]`);
 });
 
+async function openBeside(page: import("@playwright/test").Page, title: string) {
+  const row = page.locator(".tree-row").filter({ hasText: title });
+  await row.hover();
+  await row.getByTestId("tree-more").click();
+  await page.getByTestId("tree-open-beside").click();
+  await expect(page.getByTestId("pane-beside").getByTestId("editor")).toBeVisible();
+}
+
+test("split panes edit independently and can share a note", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  const left = uid("SplitL");
+  const right = uid("SplitR");
+  await createNote(page, left);
+  await createNote(page, right);
+  await openBeside(page, left);
+  await expect(page.getByTestId("pane-primary").getByTestId("note-title")).toHaveText(right);
+  await expect(page.getByTestId("pane-beside").getByTestId("note-title")).toHaveText(left);
+  await expect(page).toHaveURL(/beside=/);
+  const markL = uid("pl");
+  const markR = uid("pb");
+  await page.getByTestId("pane-primary").locator(".cm-content").click();
+  await page.keyboard.type(markL);
+  await page.getByTestId("pane-beside").locator(".cm-content").click();
+  await page.keyboard.type(markR);
+  await expect(page.getByTestId("pane-primary").locator(".cm-content")).toContainText(markL);
+  await expect(page.getByTestId("pane-beside").locator(".cm-content")).toContainText(markR);
+  await expect(page.getByTestId("pane-primary").locator(".cm-content")).not.toContainText(markR);
+  await openBeside(page, right);
+  await expect(page.getByTestId("pane-beside").getByTestId("note-title")).toHaveText(right);
+  const shared = uid("both");
+  await page.getByTestId("pane-primary").locator(".cm-content").click();
+  await page.keyboard.type(shared);
+  await expect(page.getByTestId("pane-beside").locator(".cm-content")).toContainText(shared, { timeout: 15_000 });
+});
+
 test("wiki create row inserts a link without creating", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);
