@@ -5,11 +5,13 @@ export function todayDate(now = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
-export function noteHref(id: string): string {
-  return `/n/${encodeURIComponent(id)}`;
+export function noteHref(id: string, opts?: { beside?: string }): string {
+  const path = `/n/${encodeURIComponent(id)}`;
+  if (!opts?.beside) return path;
+  return `${path}?beside=${encodeURIComponent(opts.beside)}`;
 }
 
-export function noteIdFromRoute(param: unknown): string {
+export function queryValue(param: unknown): string {
   const raw = Array.isArray(param) ? param[0] : param;
   if (raw == null || raw === "") return "";
   try {
@@ -17,6 +19,10 @@ export function noteIdFromRoute(param: unknown): string {
   } catch {
     return String(raw);
   }
+}
+
+export function noteIdFromRoute(param: unknown): string {
+  return queryValue(param);
 }
 
 export function wikiPath(folder: string, title: string): string {

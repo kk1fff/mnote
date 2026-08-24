@@ -8,6 +8,7 @@ import { noteTree } from "../lib/tree";
 import { live, type LiveEvent } from "../live";
 import { collapsed, refreshCollapsed, toggleCollapsed } from "../folders";
 import { parkedItems, refreshParked, showParkCapture } from "../parked";
+import { applyOpen, layoutHref, openBeside } from "../workspace";
 import { currentUser, logout } from "../session";
 import { cycleTheme, setThemeMode, themeMode, type ThemeMode } from "../theme";
 import DeleteNoteDialog from "./DeleteNoteDialog.vue";
@@ -91,6 +92,21 @@ function chooseTheme(mode: ThemeMode) {
 
 function closeMenu() {
   menuNote.value = null;
+}
+
+function openNote(id: string, event: MouseEvent) {
+  event.preventDefault();
+  if (event.metaKey || event.ctrlKey) openBeside(id);
+  else applyOpen(id);
+  void router.push(layoutHref());
+}
+
+function openBesideNote() {
+  const note = menuNote.value;
+  closeMenu();
+  if (!note) return;
+  openBeside(note.id, note.title);
+  void router.push(layoutHref());
 }
 
 function openMenu(note: NoteMeta, event: MouseEvent) {
@@ -223,6 +239,7 @@ defineExpose({ load });
           :menu-id="menuNote?.id ?? ''"
           @toggle="toggleCollapsed"
           @menu="openMenu"
+          @open="openNote"
         />
       </div>
     </div>
@@ -235,6 +252,9 @@ defineExpose({ load });
         data-testid="tree-menu"
         :style="{ top: `${menuTop}px`, left: `${menuLeft}px` }"
       >
+        <button type="button" role="menuitem" data-testid="tree-open-beside" @click="openBesideNote">
+          Open beside
+        </button>
         <button type="button" role="menuitem" data-testid="tree-delete" @click="void showDelete()">
           Delete
         </button>

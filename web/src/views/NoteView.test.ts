@@ -35,8 +35,8 @@ vi.mock("../api", async () => {
   };
 });
 
-vi.mock("../live", () => ({
-  live: {
+vi.mock("../live", () => {
+  const live = {
     id: "test",
     connected: false,
     connect: vi.fn(),
@@ -46,8 +46,9 @@ vi.mock("../live", () => ({
     cursor: vi.fn(),
     push: vi.fn(),
     on: () => () => {},
-  },
-}));
+  };
+  return { live, createLive: () => live };
+});
 
 vi.mock("../components/Editor.vue", () => ({
   default: {

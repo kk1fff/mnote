@@ -58,9 +58,11 @@ async function login(page, password = pass) {
 }
 
 async function noteAction(page, testId) {
-  const item = page.getByTestId(testId);
+  const pane = page.getByTestId("pane-primary");
+  const root = (await pane.count()) ? pane : page;
+  const item = root.getByTestId(testId);
   if (!(await item.isVisible())) {
-    await page.getByRole("button", { name: "More actions" }).click();
+    await root.getByRole("button", { name: "More actions" }).click();
   }
   await item.click();
 }
@@ -80,9 +82,14 @@ await page.addInitScript(() => localStorage.setItem("mnote-theme", "light"));
 await ready(page, "/login");
 await shot(page, "01-login-light");
 await login(page);
+function editor(page) {
+  const pane = page.getByTestId("pane-primary");
+  return page.locator("[data-testid='pane-primary'] .cm-content, [data-testid='editor'] .cm-content").first();
+}
+
 await page.waitForSelector('[data-testid="editor"]');
-if ((await page.locator(".cm-content").innerText()).trim().length < 8) {
-  await page.locator(".cm-content").click();
+if ((await editor(page).innerText()).trim().length < 8) {
+  await editor(page).click();
   await page.keyboard.type("# Launch plan\n\nDecide milestones and owners.\n");
   await page.waitForTimeout(300);
 }
@@ -93,12 +100,12 @@ await page.waitForSelector('[data-testid="tree-menu"]');
 await shot(page, "02d-sidebar-menu-light");
 await page.keyboard.press("Escape");
 await page.waitForSelector('[data-testid="tree-menu"]', { state: "hidden" });
-await page.locator(".cm-content").click();
-await page.keyboard.press("End");
-await page.keyboard.press("Enter");
-await page.keyboard.type("/");
-await page.waitForSelector('[data-testid="suggest"]');
-await shot(page, "02b-slash-light");
+  await editor(page).click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/");
+  await page.waitForSelector('[data-testid="suggest"]');
+  await shot(page, "02b-slash-light");
 await page.keyboard.press("Escape");
 await page.keyboard.type("[[");
 await page.waitForSelector('[data-testid="suggest"]');
@@ -136,6 +143,16 @@ await page.waitForSelector('[data-testid="editor"]');
 await page.waitForTimeout(200);
 await shot(page, "14-tabs-light");
 
+await page.locator(".tree-row").first().hover();
+await page.getByTestId("tree-more").first().click();
+await page.getByTestId("tree-open-beside").click();
+await page.waitForSelector('[data-testid="pane-beside"] [data-testid="editor"]');
+await page.waitForFunction(() => {
+  const title = document.querySelector('[data-testid="pane-beside"] [data-testid="note-title"]');
+  return title && title.textContent && title.textContent !== "Note";
+});
+await shot(page, "16-split-light");
+
 await noteAction(page, "history");
 await page.waitForSelector('[data-testid="history-panel"]');
 await shot(page, "04-history-sheet");
@@ -170,18 +187,19 @@ await page.evaluate(() => {
 await page.waitForTimeout(150);
 await shot(page, "08-note-desktop-dark");
 await shot(page, "15-tabs-dark");
+await shot(page, "17-split-dark");
 await page.locator(".tree-row").first().hover();
 await page.getByTestId("tree-more").first().click();
 await page.waitForSelector('[data-testid="tree-menu"]');
 await shot(page, "08c-sidebar-menu-dark");
 await page.keyboard.press("Escape");
 await page.waitForSelector('[data-testid="tree-menu"]', { state: "hidden" });
-await page.locator(".cm-content").click();
-await page.keyboard.press("End");
-await page.keyboard.press("Enter");
-await page.keyboard.type("/");
-await page.waitForSelector('[data-testid="suggest"]');
-await shot(page, "08b-slash-dark");
+  await editor(page).click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/");
+  await page.waitForSelector('[data-testid="suggest"]');
+  await shot(page, "08b-slash-dark");
 await page.keyboard.press("Escape");
 await noteAction(page, "history");
 await page.waitForSelector('[data-testid="history-panel"]');

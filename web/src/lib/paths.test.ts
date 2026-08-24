@@ -25,6 +25,7 @@ describe("paths", () => {
   it("encodes note ids", () => {
     expect(noteHref("abc")).toBe("/n/abc");
     expect(noteHref("a b")).toBe("/n/a%20b");
+    expect(noteHref("abc", { beside: "ideas/one" })).toBe("/n/abc?beside=ideas%2Fone");
     expect(noteIdFromRoute("abc")).toBe("abc");
     expect(noteIdFromRoute("a%20b")).toBe("a b");
     expect(noteIdFromRoute(undefined)).toBe("");

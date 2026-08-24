@@ -21,14 +21,20 @@ import {
   startGeoWatch,
 } from "../lib/context";
 import { excerptAround } from "../lib/excerpt";
-import { live, type LiveEvent } from "../live";
+import { live, type Live, type LiveEvent } from "../live";
 import { pendingExcerpt, setParkContext, showParkCapture } from "../parked";
 import { rememberTitle, setPinned } from "../workspace";
 
-const props = defineProps<{
-  noteId: string;
-  toggle: () => void;
-}>();
+const props = withDefaults(
+  defineProps<{
+    noteId: string;
+    toggle: () => void;
+    client?: Live;
+    focused?: boolean;
+  }>(),
+  { focused: true },
+);
+const client = computed(() => props.client ?? live);
 const emit = defineEmits<{
   index: [];
 }>();
@@ -108,8 +114,8 @@ async function load() {
     applyRemote(merged.content);
     status.value = merged.conflict ? "Conflict — keep both, then save" : "Restored local draft";
   }
-  live.connect();
-  live.open(id, content.value);
+  client.value.connect();
+  client.value.open(id, content.value);
   links.value = await api.backlinks(id).catch(() => []);
   isFavorite.value = await api
     .favorites()
@@ -148,7 +154,7 @@ function onLive(event: LiveEvent) {
     const merged = threeWay(base, content.value, event.content);
     applyRemote(merged.content);
     if (merged.content !== event.content) {
-      live.push(id, event.content, merged.content);
+      client.value.push(id, event.content, merged.content);
     } else {
       base = event.content;
       clearDraft(id);
@@ -157,7 +163,7 @@ function onLive(event: LiveEvent) {
     remotes.value = [];
     return;
   }
-  if (event.type === "change" && event.path === id && event.client_id !== live.id) {
+  if (event.type === "change" && event.path === id && event.client_id !== client.value.id) {
     rev = event.rev;
     applyRemote(event.content);
     base = event.content;
@@ -175,7 +181,7 @@ function onLive(event: LiveEvent) {
     const merged = threeWay(base, content.value, event.content);
     applyRemote(merged.content);
     if (merged.content !== event.content) {
-      live.push(id, event.content, merged.content);
+      client.value.push(id, event.content, merged.content);
     } else {
       base = event.content;
       if (!event.conflict) clearDraft(id);
@@ -186,7 +192,7 @@ function onLive(event: LiveEvent) {
     }
     return;
   }
-  if (event.type === "cursor" && event.client_id !== live.id) {
+  if (event.type === "cursor" && event.client_id !== client.value.id) {
     remotes.value = [
       ...remotes.value.filter((r) => r.id !== event.client_id),
       { id: event.client_id, from: event.from, to: event.to },
@@ -195,7 +201,7 @@ function onLive(event: LiveEvent) {
   }
   if (event.type === "peers") {
     remotes.value = event.peers
-      .filter((peer) => peer.client_id !== live.id)
+      .filter((peer) => peer.client_id !== client.value.id)
       .map((peer) => ({ id: peer.client_id, from: peer.from, to: peer.to }));
     return;
   }
@@ -229,8 +235,8 @@ function onLiveChange(change: { from: number; to: number; insert: string; conten
   const id = loadedId || props.noteId;
   if (!id) return;
   saveDraft(id, base, change.content);
-  if (live.connected) {
-    live.change(id, rev, change.content, change.from, change.to, change.insert);
+  if (client.value.connected) {
+    client.value.change(id, rev, change.content, change.from, change.to, change.insert);
     rev += 1;
   } else {
     status.value = "Offline — draft saved";
@@ -487,8 +493,8 @@ function onKey(event: KeyboardEvent) {
   }
 }
 
-live.connect();
-stopLive = live.on(onLive);
+client.value.connect();
+stopLive = client.value.on(onLive);
 
 watch(
   () => props.noteId,
@@ -501,7 +507,7 @@ watch(
 watch(content, () => {
   if (!loadedId || applyingRemote) return;
   saveDraft(loadedId, base, content.value);
-  if (live.connected) {
+  if (client.value.connected) {
     status.value = "Editing";
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
@@ -514,25 +520,33 @@ watch(content, () => {
 });
 
 onMounted(() => {
-  live.connect();
+  client.value.connect();
   startGeoWatch();
   document.addEventListener("click", onDocClick);
   window.addEventListener("visibilitychange", onFlushNow);
   window.addEventListener("online", onFlushNow);
-  setWhereHook(() => {
-    const ordinal = editor.value?.currentOrdinal() ?? 0;
-    queueContext(ordinal, "where");
-  });
-  setParkContext(() => {
-    if (!loadedId) return null;
-    return {
-      source_id: loadedId,
-      source_title: title.value,
-      source_folder: folder.value || undefined,
-      excerpt: editor.value?.excerpt() || excerptAround(content.value, 0, 0) || undefined,
-    };
-  });
 });
+
+watch(
+  () => props.focused,
+  (on) => {
+    if (!on) return;
+    setWhereHook(() => {
+      const ordinal = editor.value?.currentOrdinal() ?? 0;
+      queueContext(ordinal, "where");
+    });
+    setParkContext(() => {
+      if (!loadedId) return null;
+      return {
+        source_id: loadedId,
+        source_title: title.value,
+        source_folder: folder.value || undefined,
+        excerpt: editor.value?.excerpt() || excerptAround(content.value, 0, 0) || undefined,
+      };
+    });
+  },
+  { immediate: true },
+);
 
 function onFlushNow() {
   void flushContext();
@@ -540,8 +554,10 @@ function onFlushNow() {
 
 onBeforeUnmount(() => {
   stopLive?.();
-  setParkContext(null);
-  setWhereHook(null);
+  if (props.focused) {
+    setParkContext(null);
+    setWhereHook(null);
+  }
   window.clearTimeout(flushTimer);
   void flushContext();
   document.removeEventListener("click", onDocClick);
@@ -641,7 +657,7 @@ onBeforeUnmount(() => {
       :show-context="showContext"
       :context-ordinals="contextOrdinals"
       @live-change="onLiveChange"
-      @cursor="live.cursor($event.from, $event.to)"
+      @cursor="client.cursor($event.from, $event.to)"
       @paragraph-commit="queueContext($event.ordinal, 'auto')"
       @paragraph-leave="queueContext($event.ordinal, 'auto')"
       @select-paragraph="onSelectParagraph"

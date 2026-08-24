@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { noteHref } from "./lib/paths";
 
 export type PaneId = "primary" | "beside";
 
@@ -165,7 +166,12 @@ export function setPinned(id: string, pinned: boolean) {
   persistWorkspace();
 }
 
-export function applyOpen(id: string, title?: string, paneId: PaneId = workspace.value.focused) {
+export function applyOpen(
+  id: string,
+  title?: string,
+  paneId: PaneId = workspace.value.focused,
+  takeFocus = true,
+) {
   if (!id) return;
   const state = workspace.value;
   const targetId = paneId === "beside" && !state.beside ? "primary" : paneId;
@@ -176,7 +182,7 @@ export function applyOpen(id: string, title?: string, paneId: PaneId = workspace
   if (existing) {
     pane.active = id;
     if (title) existing.title = title;
-    state.focused = targetId;
+    if (takeFocus) state.focused = targetId;
     persistWorkspace();
     return;
   }
@@ -194,8 +200,76 @@ export function applyOpen(id: string, title?: string, paneId: PaneId = workspace
     pane.active = id;
   }
   evictUnpinned(pane);
-  state.focused = targetId;
+  if (takeFocus) state.focused = targetId;
   persistWorkspace();
+}
+
+export function isDesktop(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(min-width: 721px)").matches
+  );
+}
+
+export function focusPane(id: PaneId) {
+  if (id === "beside" && !workspace.value.beside) return;
+  workspace.value.focused = id;
+  persistWorkspace();
+}
+
+export function setRatio(ratio: number) {
+  workspace.value.ratio = Math.min(0.72, Math.max(0.28, ratio));
+  persistWorkspace();
+}
+
+export function ensureBeside(): Pane {
+  if (!workspace.value.beside) workspace.value.beside = { tabs: [], active: "" };
+  return workspace.value.beside;
+}
+
+export function collapseBeside() {
+  workspace.value.beside = null;
+  workspace.value.focused = "primary";
+  persistWorkspace();
+}
+
+export function openBeside(id: string, title?: string) {
+  if (!id) return;
+  if (!isDesktop()) {
+    applyOpen(id, title, "primary");
+    return;
+  }
+  ensureBeside();
+  applyOpen(id, title, "beside");
+}
+
+export function applyRoute(focusId: string, besideId: string) {
+  if (!focusId) return;
+  if (!besideId || !isDesktop()) {
+    applyOpen(focusId, undefined, "primary");
+    if (workspace.value.beside) collapseBeside();
+    return;
+  }
+  const state = workspace.value;
+  if (state.focused === "beside") {
+    ensureBeside();
+    applyOpen(focusId, undefined, "beside", true);
+    applyOpen(besideId, undefined, "primary", false);
+    return;
+  }
+  applyOpen(focusId, undefined, "primary", true);
+  ensureBeside();
+  applyOpen(besideId, undefined, "beside", false);
+}
+
+export function layoutHref(): string {
+  const state = workspace.value;
+  const focus = focusedPane(state);
+  const other = state.focused === "beside" ? state.primary : state.beside;
+  if (!focus.active) return "/today";
+  if (other?.active && isDesktop()) return noteHref(focus.active, { beside: other.active });
+  return noteHref(focus.active);
 }
 
 export function closeTab(id: string, paneId: PaneId = workspace.value.focused): string | null {

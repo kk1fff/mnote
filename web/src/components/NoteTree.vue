@@ -14,7 +14,12 @@ defineProps<{
 const emit = defineEmits<{
   toggle: [path: string];
   menu: [note: NoteMeta, event: MouseEvent];
+  open: [id: string, event: MouseEvent];
 }>();
+
+function onOpen(event: MouseEvent, id: string) {
+  emit("open", id, event);
+}
 </script>
 
 <template>
@@ -32,6 +37,7 @@ const emit = defineEmits<{
           :menu-id="menuId"
           @toggle="emit('toggle', $event)"
           @menu="(note, event) => emit('menu', note, event)"
+          @open="(id, event) => emit('open', id, event)"
         />
       </template>
       <div
@@ -43,6 +49,7 @@ const emit = defineEmits<{
           class="tree-link"
           :to="noteHref(node.note.id)"
           :class="{ active: activeId === node.note.id }"
+          @click="onOpen($event, node.note.id)"
         >
           {{ node.name }}
         </RouterLink>
