@@ -29,6 +29,8 @@ export function emptyWorkspace(): Workspace {
   return { primary: emptyPane(), beside: null, focused: "primary", ratio: 0.5 };
 }
 
+const memory = new Map<string, string>();
+
 export const workspace = ref<Workspace>(loadWorkspace());
 
 function fallbackTitle(id: string): string {
@@ -38,20 +40,25 @@ function fallbackTitle(id: string): string {
 
 function readStore(): string | null {
   try {
-    if (typeof localStorage === "undefined") return null;
-    return localStorage.getItem(WORKSPACE_KEY);
+    if (typeof localStorage !== "undefined") return localStorage.getItem(WORKSPACE_KEY);
   } catch {
-    return null;
+    /* use memory */
   }
+  return memory.get(WORKSPACE_KEY) ?? null;
 }
 
-function writeStore(value: string) {
+function writeStore(value: string | null) {
   try {
-    if (typeof localStorage === "undefined") return;
-    localStorage.setItem(WORKSPACE_KEY, value);
+    if (typeof localStorage !== "undefined") {
+      if (value === null) localStorage.removeItem(WORKSPACE_KEY);
+      else localStorage.setItem(WORKSPACE_KEY, value);
+      return;
+    }
   } catch {
-    /* ignore */
+    /* use memory */
   }
+  if (value === null) memory.delete(WORKSPACE_KEY);
+  else memory.set(WORKSPACE_KEY, value);
 }
 
 function asTab(raw: unknown): Tab | null {
@@ -103,7 +110,7 @@ export function persistWorkspace() {
 
 export function resetWorkspace(next = emptyWorkspace()) {
   workspace.value = next;
-  persistWorkspace();
+  writeStore(next.primary.tabs.length || next.beside ? JSON.stringify(next) : null);
 }
 
 export function paneOf(id: PaneId, state = workspace.value): Pane | null {

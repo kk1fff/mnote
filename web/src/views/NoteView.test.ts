@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { live } from "../live";
+import { emptyWorkspace, resetWorkspace } from "../workspace";
 import NoteView from "./NoteView.vue";
 
 vi.mock("../api", async () => {
@@ -61,6 +62,7 @@ describe("NoteView", () => {
   afterEach(() => {
     vi.useRealTimers();
     live.connected = false;
+    resetWorkspace(emptyWorkspace());
   });
 
   it("loads a note and saves edits", async () => {
