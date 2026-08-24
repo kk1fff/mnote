@@ -2,7 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
-import { emptyWorkspace, resetWorkspace } from "../workspace";
+import { applyOpen, emptyWorkspace, resetWorkspace, workspace } from "../workspace";
 import NotePicker from "./NotePicker.vue";
 
 vi.mock("../api", async () => {
@@ -17,7 +17,7 @@ vi.mock("../api", async () => {
   };
 });
 
-async function openPicker() {
+async function openPicker(mode: "replace" | "add" = "replace") {
   const router = createRouter({
     history: createWebHistory(),
     routes: [
@@ -31,7 +31,7 @@ async function openPicker() {
   await router.push("/");
   await router.isReady();
   const wrapper = mount(NotePicker, { global: { plugins: [router] } });
-  wrapper.vm.show();
+  wrapper.vm.show(mode);
   await flushPromises();
   return { wrapper, router };
 }
@@ -162,5 +162,21 @@ describe("NotePicker", () => {
     expect(api.titleSearch).toHaveBeenCalledWith("ideas/alp");
     expect(wrapper.text()).toContain("Alpha");
     expect(wrapper.text()).toContain("Create “ideas/alp”");
+  });
+
+  it("adds a tab when opened in add mode", async () => {
+    vi.useFakeTimers();
+    applyOpen("keep", "Keep");
+    vi.mocked(api.titleSearch).mockResolvedValue([
+      { id: "n2", title: "Next", folder: "", modified_at: "" },
+    ]);
+    const { wrapper } = await openPicker("add");
+    await wrapper.get("input").setValue("Next");
+    await vi.advanceTimersByTimeAsync(120);
+    await flushPromises();
+    await wrapper.get(".picker-results button").trigger("click");
+    await flushPromises();
+    expect(workspace.value.primary.tabs.map((tab) => tab.id)).toEqual(["keep", "n2"]);
+    expect(workspace.value.primary.active).toBe("n2");
   });
 });

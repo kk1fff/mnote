@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import { api, ApiError, type NoteMeta } from "../api";
 import { buildPickerSections, pickerItems, type PickerItem } from "../lib/picker";
 import { noteFolderLabel } from "../lib/paths";
-import { openInWorkspace } from "../workspace";
+import { openInWorkspace, type OpenMode } from "../workspace";
 
 const emit = defineEmits<{ created: [] }>();
 const router = useRouter();
@@ -13,6 +13,7 @@ const results = ref<NoteMeta[]>([]);
 const folders = ref<string[]>([]);
 const foldersReady = ref(false);
 const open = ref(false);
+const openMode = ref<OpenMode>("replace");
 const error = ref("");
 const selected = ref(0);
 const input = ref<HTMLInputElement | null>(null);
@@ -40,8 +41,9 @@ const itemOffset = computed(() => {
   return offsets;
 });
 
-function show() {
+function show(mode: OpenMode = "replace") {
   open.value = true;
+  openMode.value = mode;
   query.value = "";
   results.value = [];
   folders.value = [];
@@ -66,7 +68,7 @@ function indexOf(item: PickerItem): number {
 
 async function select(note: NoteMeta) {
   close();
-  await router.push(openInWorkspace(note.id, note.title));
+  await router.push(openInWorkspace(note.id, note.title, openMode.value));
 }
 
 async function jump(to: string) {
@@ -81,7 +83,7 @@ async function create() {
     const note = await api.createNote(createItem.value.draft.title, createItem.value.draft.folder);
     emit("created");
     close();
-    await router.push(openInWorkspace(note.id, note.title));
+    await router.push(openInWorkspace(note.id, note.title, openMode.value));
   } catch (err) {
     error.value = err instanceof ApiError ? err.code : "Could not create note";
   }

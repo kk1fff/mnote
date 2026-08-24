@@ -122,6 +122,18 @@ describe("workspace", () => {
     expect(layoutHref()).toBe("/n/left");
   });
 
+  it("adds a tab without replacing the unpinned active one", () => {
+    applyOpen("a", "A");
+    applyOpen("b", "B", "primary", true, "add");
+    expect(workspace.value.primary.tabs.map((tab) => tab.id)).toEqual(["a", "b"]);
+    expect(workspace.value.primary.active).toBe("b");
+    applyOpen("a", "A", "primary", true, "add");
+    expect(workspace.value.primary.active).toBe("a");
+    expect(workspace.value.primary.tabs).toHaveLength(2);
+    expect(openInWorkspace("c", "C", "add")).toBe("/n/c");
+    expect(workspace.value.primary.tabs.map((tab) => tab.id)).toEqual(["a", "b", "c"]);
+  });
+
   it("opens through the workspace and forgets a visible note", () => {
     applyOpen("a", "A");
     openBeside("b", "B");

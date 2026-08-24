@@ -87,7 +87,7 @@ function label(tab: Tab) {
         </span>
       </button>
     </div>
-    <button type="button" class="tab-add" data-testid="tab-add" title="Go to…" aria-label="Go to…" @click="showPicker()">
+    <button type="button" class="tab-add" data-testid="tab-add" title="Open in new tab" aria-label="Open in new tab" @click="showPicker('add')">
       +
     </button>
   </div>

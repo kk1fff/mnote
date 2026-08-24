@@ -2,14 +2,14 @@
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { refreshParked, showParkCapture } from "../parked";
-import { registerPicker } from "../workspace";
+import { registerPicker, type OpenMode } from "../workspace";
 import NotePicker from "./NotePicker.vue";
 import ParkCapture from "./ParkCapture.vue";
 import ParkedPanel from "./ParkedPanel.vue";
 import Sidebar from "./Sidebar.vue";
 
 const sidebar = ref<{ load: () => Promise<void> } | null>(null);
-const picker = ref<{ show: () => void; open: boolean } | null>(null);
+const picker = ref<{ show: (mode?: OpenMode) => void; open: boolean } | null>(null);
 const parked = ref<{ show: () => void } | null>(null);
 const open = ref(false);
 const route = useRoute();
@@ -43,7 +43,7 @@ function onKey(event: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener("keydown", onKey);
-  registerPicker(() => picker.value?.show());
+  registerPicker((mode) => picker.value?.show(mode));
   void refreshParked().catch(() => undefined);
 });
 onBeforeUnmount(() => {

@@ -2,6 +2,7 @@ import { ref } from "vue";
 import { noteHref } from "./lib/paths";
 
 export type PaneId = "primary" | "beside";
+export type OpenMode = "replace" | "add";
 
 export type Tab = {
   id: string;
@@ -171,6 +172,7 @@ export function applyOpen(
   title?: string,
   paneId: PaneId = workspace.value.focused,
   takeFocus = true,
+  mode: OpenMode = "replace",
 ) {
   if (!id) return;
   const state = workspace.value;
@@ -187,7 +189,7 @@ export function applyOpen(
     return;
   }
   const active = pane.tabs.find((tab) => tab.id === pane.active);
-  if (active && !active.pinned) {
+  if (mode === "replace" && active && !active.pinned) {
     const index = pane.tabs.indexOf(active);
     pane.tabs[index] = {
       id,
@@ -272,8 +274,8 @@ export function layoutHref(): string {
   return noteHref(focus.active);
 }
 
-export function openInWorkspace(id: string, title?: string): string {
-  applyOpen(id, title);
+export function openInWorkspace(id: string, title?: string, mode: OpenMode = "replace"): string {
+  applyOpen(id, title, workspace.value.focused, true, mode);
   return layoutHref();
 }
 
@@ -321,12 +323,12 @@ export function syncFavorites(ids: Iterable<string>) {
   persistWorkspace();
 }
 
-let showPickerFn: (() => void) | null = null;
+let showPickerFn: ((mode?: OpenMode) => void) | null = null;
 
-export function registerPicker(fn: (() => void) | null) {
+export function registerPicker(fn: ((mode?: OpenMode) => void) | null) {
   showPickerFn = fn;
 }
 
-export function showPicker() {
-  showPickerFn?.();
+export function showPicker(mode: OpenMode = "replace") {
+  showPickerFn?.(mode);
 }
