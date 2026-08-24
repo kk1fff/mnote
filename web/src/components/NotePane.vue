@@ -23,6 +23,7 @@ import {
 import { excerptAround } from "../lib/excerpt";
 import { live, type LiveEvent } from "../live";
 import { pendingExcerpt, setParkContext, showParkCapture } from "../parked";
+import { rememberTitle, setPinned } from "../workspace";
 
 const props = defineProps<{
   noteId: string;
@@ -94,6 +95,7 @@ async function load() {
     loadedId = note.id;
     title.value = note.title;
     folder.value = note.folder ?? "";
+    rememberTitle(note.id, note.title);
     base = note.content;
     status.value = "Saved";
   } catch (err) {
@@ -113,6 +115,7 @@ async function load() {
     .favorites()
     .then((notes) => notes.some((note) => note.id === id))
     .catch(() => false);
+  setPinned(id, isFavorite.value);
   const quote = pendingExcerpt.value;
   if (quote) {
     pendingExcerpt.value = null;
@@ -202,6 +205,7 @@ function onLive(event: LiveEvent) {
   if (event.type === "index" && event.note.id === id && !editingMeta.value) {
     title.value = event.note.title;
     folder.value = event.note.folder ?? "";
+    rememberTitle(event.note.id, event.note.title);
   }
   if (event.type === "deleted" && event.id === id) {
     if (deleteBusy.value) return;
@@ -274,6 +278,7 @@ async function saveMeta() {
     const note = await api.patchNote(id, { title: nextTitle, folder: nextFolder });
     title.value = note.title;
     folder.value = note.folder ?? "";
+    rememberTitle(note.id, note.title);
     editingMeta.value = false;
     status.value = "Saved";
     emit("index");
@@ -300,6 +305,7 @@ async function toggleFavorite() {
     if (isFavorite.value) await api.unfavorite(id);
     else await api.favorite(id);
     isFavorite.value = !isFavorite.value;
+    setPinned(id, isFavorite.value);
   } catch {
     status.value = "Could not update favorite";
   }
@@ -545,7 +551,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="main" @keydown="onKey">
+  <div class="note-pane" @keydown="onKey">
     <header class="bar">
       <button type="button" class="nav-toggle ghost" @click="toggle">Menu</button>
       <div class="note-heading">
@@ -670,5 +676,5 @@ onBeforeUnmount(() => {
       @cancel="closeDelete"
       @confirm="void confirmDelete()"
     />
-  </main>
+  </div>
 </template>

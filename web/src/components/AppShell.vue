@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { refreshParked, showParkCapture } from "../parked";
+import { registerPicker } from "../workspace";
 import NotePicker from "./NotePicker.vue";
 import ParkCapture from "./ParkCapture.vue";
 import ParkedPanel from "./ParkedPanel.vue";
@@ -42,9 +43,13 @@ function onKey(event: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener("keydown", onKey);
+  registerPicker(() => picker.value?.show());
   void refreshParked().catch(() => undefined);
 });
-onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKey);
+  registerPicker(null);
+});
 </script>
 
 <template>

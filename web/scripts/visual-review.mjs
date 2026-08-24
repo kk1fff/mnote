@@ -115,6 +115,27 @@ if (Math.abs(barAfter - barBefore) > 1) {
 }
 await page.getByTestId("note-title-input").press("Escape");
 
+const strip = page.getByTestId("tab-strip");
+await strip.waitFor();
+const stripH = await strip.evaluate((el) => el.getBoundingClientRect().height);
+if (Math.abs(stripH - 32) > 2) console.warn(`tab strip height ${stripH}px`);
+await page.getByRole("button", { name: "More actions" }).click();
+const fav = page.getByTestId("favorite");
+if ((await fav.getAttribute("aria-pressed")) !== "true") await fav.click();
+else await page.keyboard.press("Escape");
+const treeLinks = page.locator(".tree-link");
+if ((await treeLinks.count()) > 1) {
+  await treeLinks.nth(1).click();
+} else {
+  await page.keyboard.press("Control+Shift+KeyO");
+  await page.waitForSelector('[data-testid="picker"]');
+  await page.getByTestId("picker-input").fill("Second tab");
+  await page.getByTestId("picker-create").click();
+}
+await page.waitForSelector('[data-testid="editor"]');
+await page.waitForTimeout(200);
+await shot(page, "14-tabs-light");
+
 await noteAction(page, "history");
 await page.waitForSelector('[data-testid="history-panel"]');
 await shot(page, "04-history-sheet");
@@ -148,6 +169,7 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(150);
 await shot(page, "08-note-desktop-dark");
+await shot(page, "15-tabs-dark");
 await page.locator(".tree-row").first().hover();
 await page.getByTestId("tree-more").first().click();
 await page.waitForSelector('[data-testid="tree-menu"]');
