@@ -36,8 +36,7 @@ There is no self-signup.
 ## Dev and checks
 
 ```bash
-cargo run -- --data data serve
-cd web && npm run dev
+make dev
 
 cargo test
 cargo clippy --all-targets -- -D warnings

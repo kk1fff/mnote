@@ -62,19 +62,19 @@ Forgot password: `cargo run -- --data data user reset-password alice` — same i
 
 ## Development
 
-From the repo root, run the API and the web app in two terminals.
+From the repo root (kills anything already on :3000 / :5173, then starts both):
 
 ```bash
-# terminal 1 — API (http://127.0.0.1:3000)
-cargo run -- --data data serve
-
-# terminal 2 — Vue + Vite BFF proxy (http://127.0.0.1:5173)
-cd web
-npm install
-npm run dev
+make dev
 ```
 
-Vite proxies `/api` to the Rust server and forwards the session cookie. Use the web app at http://127.0.0.1:5173.
+First time: `cd web && npm install`. Vite proxies `/api` to the Rust server and forwards the session cookie. Use the web app at http://127.0.0.1:5173.
+
+```bash
+# or two terminals
+cargo run -- --data data serve
+cd web && npm run dev
+```
 
 ```bash
 cargo run -- --data data user list
