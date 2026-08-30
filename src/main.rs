@@ -150,6 +150,10 @@ async fn serve(data: PathBuf, bind: String) -> anyhow::Result<()> {
     let addr: SocketAddr = bind.parse()?;
     tracing::info!(data = %data.display(), "listening on http://{addr}");
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }

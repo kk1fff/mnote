@@ -158,6 +158,33 @@ pub fn create_user(
     username: &str,
     password: Option<&str>,
 ) -> Result<String, AppError> {
+    insert_user(state, username, password, true)
+}
+
+pub fn bootstrap_user(
+    state: &AppState,
+    username: &str,
+    password: &str,
+) -> Result<User, AppError> {
+    insert_user(state, username, Some(password), false)?;
+    authenticate(state, username, password)
+}
+
+pub fn user_count(state: &AppState) -> Result<i64, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    conn.query_row("SELECT COUNT(*) FROM users", [], |row| row.get(0))
+        .map_err(Into::into)
+}
+
+fn insert_user(
+    state: &AppState,
+    username: &str,
+    password: Option<&str>,
+    must_change: bool,
+) -> Result<String, AppError> {
     if !auth::valid_username(username) {
         return Err(AppError::BadRequest(
             "username must be 1-32 chars of [A-Za-z0-9_-]".into(),
@@ -178,8 +205,8 @@ pub fn create_user(
         .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
     match conn.execute(
         "INSERT INTO users (username, password_hash, must_change_password, created_at)
-         VALUES (?1, ?2, 1, ?3)",
-        params![username, hash, now],
+         VALUES (?1, ?2, ?3, ?4)",
+        params![username, hash, if must_change { 1 } else { 0 }, now],
     ) {
         Ok(_) => {}
         Err(rusqlite::Error::SqliteFailure(err, _))

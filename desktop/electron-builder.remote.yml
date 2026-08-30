@@ -1,0 +1,22 @@
+appId: app.mnote.remote
+productName: mnote Remote
+directories:
+  output: release/remote
+files:
+  - dist/**/*
+extraResources:
+  - from: ../web/dist
+    to: web-dist
+  - from: flavor-remote
+    to: flavor
+mac:
+  target:
+    - dir
+  category: public.app-category.productivity
+win:
+  target:
+    - nsis
+linux:
+  target:
+    - AppImage
+electronVersion: 35.1.2

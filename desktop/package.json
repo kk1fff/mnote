@@ -1,0 +1,21 @@
+{
+  "name": "mnote-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp src/preload.cjs dist/preload.cjs",
+    "test": "playwright test",
+    "dist:full": "electron-builder --config electron-builder.full.yml",
+    "dist:remote": "electron-builder --config electron-builder.remote.yml",
+    "dist:mac": "electron-builder --mac dir --config electron-builder.full.yml && electron-builder --mac dir --config electron-builder.remote.yml"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^22.13.4",
+    "electron": "^35.7.5",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.7.3"
+  }
+}

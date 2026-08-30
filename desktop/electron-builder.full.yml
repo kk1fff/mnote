@@ -1,0 +1,22 @@
+appId: app.mnote.desktop
+productName: mnote
+directories:
+  output: release/full
+files:
+  - dist/**/*
+extraResources:
+  - from: ../web/dist
+    to: web-dist
+  - from: ../target/release/mnote
+    to: mnote
+mac:
+  target:
+    - dir
+  category: public.app-category.productivity
+win:
+  target:
+    - nsis
+linux:
+  target:
+    - AppImage
+electronVersion: 35.1.2

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRouter } from "vue-router";
-import { api } from "../api";
+import { api, rewriteApiUrls } from "../api";
 import { renderMarkdown } from "../lib/markdown";
 import { noteIdFromRoute, parseWikiPath, sameWikiPath } from "../lib/paths";
 import { openInWorkspace } from "../workspace";
 
 const props = defineProps<{ source: string }>();
 const router = useRouter();
-const html = computed(() => renderMarkdown(props.source));
+const html = computed(() => rewriteApiUrls(renderMarkdown(props.source)));
 
 async function openWiki(target: string) {
   const parsed = parseWikiPath(target);

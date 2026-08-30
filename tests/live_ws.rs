@@ -388,3 +388,44 @@ async fn live_requires_auth() {
     let err = tokio_tungstenite::connect_async(req).await.unwrap_err();
     let _ = err;
 }
+
+#[tokio::test]
+async fn live_accepts_query_token() {
+    let dir = TempDir::new().unwrap();
+    let state = AppState::open(dir.path()).unwrap();
+    db::create_user(&state, "alice", Some("password1")).unwrap();
+    db::set_password(&state, "alice", "password1", false).unwrap();
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let serve_state = state.clone();
+    tokio::spawn(async move {
+        axum::serve(listener, api::router(serve_state)).await.unwrap();
+    });
+
+    let res = api::router(state)
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/auth/login")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "username": "alice", "password": "password1" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body: Value =
+        serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    let token = body["token"].as_str().unwrap();
+
+    let req = format!("ws://{addr}/api/live?token={token}")
+        .into_client_request()
+        .unwrap();
+    let (mut ws, _) = tokio_tungstenite::connect_async(req).await.unwrap();
+    ws.send(Message::Text(r#"{"type":"hello","client_id":"a"}"#.into()))
+        .await
+        .unwrap();
+    assert_eq!(next_json(&mut ws).await["type"], "welcome");
+}

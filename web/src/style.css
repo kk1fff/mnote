@@ -1200,6 +1200,23 @@ button.icon-btn,
   gap: 0.3rem;
 }
 
+.folder-row {
+  display: flex;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.folder-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.folder-row button {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 0.55rem 0.75rem;
+}
+
 .results {
   padding: 1rem 1.5rem;
 }

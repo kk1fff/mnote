@@ -20,6 +20,48 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
 export interface Me {
   username: string;
   must_change_password: boolean;
+  token?: string;
+}
+
+let apiBase = "";
+let sessionToken: string | null = null;
+
+export function setApiBase(base: string | null) {
+  apiBase = (base ?? "").replace(/\/$/, "");
+}
+
+export function getApiBase(): string {
+  return apiBase;
+}
+
+export function setSessionToken(token: string | null) {
+  sessionToken = token;
+}
+
+export function getSessionToken(): string | null {
+  return sessionToken;
+}
+
+export function apiUrl(path: string): string {
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  return `${apiBase}${path}`;
+}
+
+export function rewriteApiUrls(text: string): string {
+  if (!apiBase) return text;
+  return text.replaceAll("/api/", `${apiBase}/api/`);
+}
+
+export function liveUrl(): string {
+  if (apiBase) {
+    const url = new URL("/api/live", apiBase);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    if (sessionToken) url.searchParams.set("token", sessionToken);
+    return url.toString();
+  }
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const query = sessionToken ? `?token=${encodeURIComponent(sessionToken)}` : "";
+  return `${proto}://${location.host}/api/live${query}`;
 }
 
 export interface Note {
@@ -145,10 +187,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const res = await fetch(path, {
+  if (sessionToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${sessionToken}`);
+  }
+  const res = await fetch(apiUrl(path), {
     ...init,
     headers,
-    credentials: "include",
+    credentials: apiBase ? "omit" : "include",
   });
   if (res.status === 204) {
     return undefined as T;
@@ -177,6 +222,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   health: () => request<{ ok: boolean }>("/api/health"),
+  setupStatus: () => request<{ needed: boolean }>("/api/setup"),
+  setup: (username: string, password: string) =>
+    request<Me>("/api/setup", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
   login: (username: string, password: string) =>
     request<Me>("/api/auth/login", {
       method: "POST",

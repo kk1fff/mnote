@@ -8,6 +8,7 @@ vi.mock("./api", () => ({
     login: vi.fn(),
     logout: vi.fn(),
   },
+  setSessionToken: vi.fn(),
   ApiError: class ApiError extends Error {
     status: number;
     code: string;

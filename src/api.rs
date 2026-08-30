@@ -5,16 +5,19 @@ use crate::live::{self, ClientMsg, ServerMsg};
 use crate::notes;
 use crate::AppState;
 use axum::body::Body;
+use axum::extract::connect_info::ConnectInfo;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{FromRequestParts, Multipart, Path, Query, State};
-use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, COOKIE, SET_COOKIE};
+use axum::http::header::{AUTHORIZATION, CACHE_CONTROL, CONTENT_TYPE, COOKIE, SET_COOKIE};
 use axum::http::request::Parts;
-use axum::http::{HeaderMap, HeaderValue, StatusCode};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 use tokio::sync::mpsc;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
@@ -25,6 +28,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/logout", post(logout))
         .route("/auth/password", post(change_password))
         .route("/auth/me", get(me))
+        .route("/setup", get(setup_status).post(setup))
         .route("/live", get(live_ws))
         .route("/notes", get(list_notes).post(create_note))
         .route("/notes/daily/{date}", get(daily_note).put(put_daily_note))
@@ -55,7 +59,8 @@ pub fn router(state: AppState) -> Router {
         .route("/parked/{id}/note", post(parked_to_note))
         .route("/backlinks/{id}", get(backlinks))
         .route("/assets", post(upload_asset))
-        .route("/assets/{id}", get(get_asset));
+        .route("/assets/{id}", get(get_asset))
+        .layer(cors_layer());
 
     let mut app = Router::new()
         .nest("/api", api)
@@ -72,6 +77,20 @@ pub fn router(state: AppState) -> Router {
     app
 }
 
+fn cors_layer() -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::mirror_request())
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE, COOKIE])
+}
+
 #[derive(Clone)]
 struct Auth(User);
 
@@ -82,10 +101,41 @@ impl FromRequestParts<AppState> for Auth {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let token = cookie_value(&parts.headers, SESSION_COOKIE).ok_or(AppError::Unauthorized)?;
+        let token = session_token(parts).ok_or(AppError::Unauthorized)?;
         let user = db::user_from_token(state, &token)?;
         Ok(Auth(user))
     }
+}
+
+fn session_token(parts: &Parts) -> Option<String> {
+    token_from_headers(&parts.headers).or_else(|| query_token(parts.uri.query()))
+}
+
+fn token_from_headers(headers: &HeaderMap) -> Option<String> {
+    if let Some(value) = headers.get(AUTHORIZATION) {
+        if let Ok(s) = value.to_str() {
+            if let Some(token) = s.strip_prefix("Bearer ") {
+                let token = token.trim();
+                if !token.is_empty() {
+                    return Some(token.to_string());
+                }
+            }
+        }
+    }
+    cookie_value(headers, SESSION_COOKIE)
+}
+
+fn query_token(query: Option<&str>) -> Option<String> {
+    let query = query?;
+    for pair in query.split('&') {
+        let Some((key, value)) = pair.split_once('=') else {
+            continue;
+        };
+        if key == "token" && !value.is_empty() {
+            return Some(value.to_string());
+        }
+    }
+    None
 }
 
 fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
@@ -139,6 +189,16 @@ struct LoginBody {
 struct MeBody {
     username: String,
     must_change_password: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    token: Option<String>,
+}
+
+fn me_body(user: &User, token: Option<String>) -> MeBody {
+    MeBody {
+        username: user.username.clone(),
+        must_change_password: user.must_change_password,
+        token,
+    }
 }
 
 async fn login(
@@ -147,18 +207,14 @@ async fn login(
 ) -> Result<Response, AppError> {
     let user = db::authenticate(&state, &body.username, &body.password)?;
     let token = db::create_session(&state, user.id)?;
-    let mut res = Json(MeBody {
-        username: user.username,
-        must_change_password: user.must_change_password,
-    })
-    .into_response();
+    let mut res = Json(me_body(&user, Some(token.clone()))).into_response();
     res.headers_mut()
         .insert(SET_COOKIE, session_cookie(&token, false));
     Ok(res)
 }
 
 async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Result<Response, AppError> {
-    if let Some(token) = cookie_value(&headers, SESSION_COOKIE) {
+    if let Some(token) = token_from_headers(&headers) {
         db::delete_session(&state, &token)?;
     }
     let mut res = StatusCode::NO_CONTENT.into_response();
@@ -168,10 +224,62 @@ async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Result<Res
 }
 
 async fn me(Auth(user): Auth) -> Json<MeBody> {
-    Json(MeBody {
-        username: user.username,
-        must_change_password: user.must_change_password,
-    })
+    Json(me_body(&user, None))
+}
+
+#[derive(Serialize)]
+struct SetupStatus {
+    needed: bool,
+}
+
+async fn setup_status(State(state): State<AppState>) -> Result<Json<SetupStatus>, AppError> {
+    Ok(Json(SetupStatus {
+        needed: db::user_count(&state)? == 0,
+    }))
+}
+
+#[derive(Deserialize)]
+struct SetupBody {
+    username: String,
+    password: String,
+}
+
+struct Peer(Option<SocketAddr>);
+
+impl FromRequestParts<AppState> for Peer {
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(Peer(
+            parts
+                .extensions
+                .get::<ConnectInfo<SocketAddr>>()
+                .map(|info| info.0),
+        ))
+    }
+}
+
+async fn setup(
+    State(state): State<AppState>,
+    Peer(peer): Peer,
+    Json(body): Json<SetupBody>,
+) -> Result<Response, AppError> {
+    let loopback = peer.map(|addr| addr.ip().is_loopback()).unwrap_or(false);
+    if !loopback {
+        return Err(AppError::Forbidden("setup_not_allowed"));
+    }
+    if db::user_count(&state)? != 0 {
+        return Err(AppError::Conflict("already_setup".into()));
+    }
+    let user = db::bootstrap_user(&state, body.username.trim(), body.password.trim())?;
+    let token = db::create_session(&state, user.id)?;
+    let mut res = Json(me_body(&user, Some(token.clone()))).into_response();
+    res.headers_mut()
+        .insert(SET_COOKIE, session_cookie(&token, false));
+    Ok(res)
 }
 
 #[derive(Deserialize)]
@@ -185,10 +293,14 @@ async fn change_password(
     Json(body): Json<PasswordBody>,
 ) -> Result<Json<MeBody>, AppError> {
     db::replace_password(&state, &user.username, body.password.trim())?;
-    Ok(Json(MeBody {
-        username: user.username,
-        must_change_password: false,
-    }))
+    Ok(Json(me_body(
+        &User {
+            id: user.id,
+            username: user.username,
+            must_change_password: false,
+        },
+        None,
+    )))
 }
 
 async fn list_notes(

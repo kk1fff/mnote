@@ -80,6 +80,19 @@ cd web && npm run dev
 cargo run -- --data data user list
 ```
 
+## Desktop (Electron)
+
+Two apps share the Vue UI:
+
+- **mnote Remote** — enter a server `host:port`, log in as usual.
+- **mnote** — pick a local folder, set a password, notes stay on that machine.
+
+```bash
+make desktop-test          # Mac Playwright against unpackaged Electron
+make desktop-mac           # unpacked .app (arm64/x64 dir target)
+make desktop-mac-smoke     # launch those .apps once
+```
+
 ## Tests
 
 ```bash
@@ -108,6 +121,8 @@ docker compose exec mnote mnote user add alice
 ```
 
 Then open http://localhost:3000.
+
+Login also returns a `token` for Electron. Send `Authorization: Bearer <token>` (or `/api/live?token=`). Cookies still work in the browser.
 
 ## API (cookie session)
 

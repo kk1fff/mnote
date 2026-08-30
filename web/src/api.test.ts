@@ -1,8 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, setUnauthorizedHandler } from "./api";
+import {
+  api,
+  ApiError,
+  liveUrl,
+  rewriteApiUrls,
+  setApiBase,
+  setSessionToken,
+  setUnauthorizedHandler,
+} from "./api";
 
 afterEach(() => {
   setUnauthorizedHandler(null);
+  setApiBase(null);
+  setSessionToken(null);
   vi.unstubAllGlobals();
 });
 
@@ -100,5 +110,28 @@ describe("api", () => {
     await api.deleteParked(1);
     await api.uploadAsset(new File(["x"], "a.png", { type: "image/png" }));
     expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("prefixes the API base and sends a bearer token", async () => {
+    setApiBase("http://192.168.1.10:3000");
+    setSessionToken("tok");
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    await api.health();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://192.168.1.10:3000/api/health",
+      expect.objectContaining({
+        headers: expect.any(Headers),
+      }),
+    );
+    const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get("Authorization")).toBe("Bearer tok");
+  });
+
+  it("rewrites asset urls and live socket urls", () => {
+    setApiBase("http://10.0.0.2:3000");
+    setSessionToken("abc");
+    expect(rewriteApiUrls("![](/api/assets/1.png)")).toBe("![](http://10.0.0.2:3000/api/assets/1.png)");
+    expect(liveUrl()).toBe("ws://10.0.0.2:3000/api/live?token=abc");
   });
 });

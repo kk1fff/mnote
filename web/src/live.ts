@@ -1,4 +1,4 @@
-import type { NoteMeta } from "./api";
+import { liveUrl, type NoteMeta } from "./api";
 
 export type LivePeer = { client_id: string; from: number; to: number };
 
@@ -77,8 +77,7 @@ export class Live {
 
   private openSocket() {
     if (this.closed || typeof WebSocket === "undefined") return;
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${location.host}/api/live`);
+    const ws = new WebSocket(liveUrl());
     this.ws = ws;
     ws.onopen = () => {
       if (this.ws !== ws) return;

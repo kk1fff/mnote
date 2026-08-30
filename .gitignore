@@ -8,6 +8,12 @@
 
 /web/node_modules/
 /web/dist/
+/desktop/node_modules/
+/desktop/dist/
+/desktop/release/
+/desktop/test-results/
+/desktop/playwright-report/
+/desktop/e2e/.auth/
 /web/coverage/
 /web/.vite/
 /web/e2e/.auth/

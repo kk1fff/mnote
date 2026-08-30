@@ -1,8 +1,10 @@
 use axum::body::Body;
+use axum::extract::connect_info::ConnectInfo;
 use axum::http::{header, Method, Request, StatusCode};
 use http_body_util::BodyExt;
 use mnote::{api, db, AppState};
 use serde_json::{json, Value};
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use tempfile::TempDir;
 use tower::ServiceExt;
@@ -57,6 +59,15 @@ impl Harness {
         session_cookie(&headers)
     }
 
+    fn empty() -> Self {
+        let dir = TempDir::new().unwrap();
+        let state = AppState::open(dir.path()).unwrap();
+        Self {
+            app: api::router(state),
+            _dir: dir,
+        }
+    }
+
     fn authed(
         &self,
         method: Method,
@@ -75,6 +86,12 @@ impl Harness {
             .body(Body::from(body.map(|v| v.to_string()).unwrap_or_default()))
             .unwrap()
     }
+}
+
+fn with_peer(mut req: Request<Body>, addr: &str) -> Request<Body> {
+    req.extensions_mut()
+        .insert(ConnectInfo(addr.parse::<SocketAddr>().unwrap()));
+    req
 }
 
 fn session_cookie(headers: &header::HeaderMap) -> String {
@@ -1089,4 +1106,181 @@ async fn parked_stamp_stays_out_of_markdown() {
     assert!(md.contains("ask jim"));
     assert!(!md.contains("37.77"));
     assert!(!md.contains("lat"));
+}
+
+#[tokio::test]
+async fn login_returns_token_and_bearer_works() {
+    let h = Harness::new();
+    let (status, headers, body) = h
+        .call(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/auth/login")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "username": "alice", "password": "password1" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let token = body["token"].as_str().expect("token").to_string();
+    assert!(!token.is_empty());
+    assert!(!session_cookie(&headers).is_empty());
+
+    let (status, _, body) = h
+        .call(
+            Request::builder()
+                .uri("/api/auth/me")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["username"], "alice");
+    assert!(body.get("token").is_none());
+
+    let (status, _, _) = h
+        .call(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/auth/logout")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _, _) = h
+        .call(
+            Request::builder()
+                .uri("/api/auth/me")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn cors_preflight_mirrors_origin() {
+    let h = Harness::new();
+    let (status, headers, _) = h
+        .call(
+            Request::builder()
+                .method(Method::OPTIONS)
+                .uri("/api/health")
+                .header(header::ORIGIN, "mnote://app")
+                .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                .header(header::ACCESS_CONTROL_REQUEST_HEADERS, "authorization")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        headers
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "mnote://app"
+    );
+}
+
+#[tokio::test]
+async fn setup_only_on_loopback_when_empty() {
+    let h = Harness::empty();
+    let (status, _, body) = h
+        .call(
+            Request::builder()
+                .uri("/api/setup")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["needed"], true);
+
+    let (status, _, body) = h
+        .call(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/setup")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "username": "pat", "password": "password1" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    assert_eq!(body["error"], "setup_not_allowed");
+
+    let (status, _, body) = h
+        .call(
+            with_peer(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/setup")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({ "username": "pat", "password": "password1" }).to_string(),
+                    ))
+                    .unwrap(),
+                "10.0.0.8:9",
+            ),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+
+    let (status, _, body) = h
+        .call(
+            with_peer(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/setup")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({ "username": "pat", "password": "password1" }).to_string(),
+                    ))
+                    .unwrap(),
+                "127.0.0.1:9",
+            ),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["username"], "pat");
+    assert_eq!(body["must_change_password"], false);
+    let token = body["token"].as_str().unwrap();
+    let (status, _, body) = h
+        .call(
+            Request::builder()
+                .uri("/api/notes")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, _, body) = h
+        .call(
+            with_peer(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/setup")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({ "username": "other", "password": "password1" }).to_string(),
+                    ))
+                    .unwrap(),
+                "127.0.0.1:9",
+            ),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(body["error"], "already_setup");
 }
