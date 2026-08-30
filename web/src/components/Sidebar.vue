@@ -114,6 +114,10 @@ function openBesideNote() {
   void router.push(layoutHref());
 }
 
+function openImages() {
+  void router.push("/images");
+}
+
 function openMenu(note: NoteMeta, event: MouseEvent) {
   footerMenu.value = null;
   if (menuNote.value?.id === note.id) {
@@ -245,6 +249,7 @@ defineExpose({ load });
         {{ parkedItems.length }}
       </button>
     </div>
+    <button type="button" class="new-note-button ghost" @click="openImages">Images</button>
     <div class="note-library">
       <p class="section-label">Notes</p>
       <div class="note-tree">

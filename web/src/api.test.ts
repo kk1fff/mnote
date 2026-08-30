@@ -71,6 +71,21 @@ describe("api", () => {
     expect(err).toMatchObject({ status: 502, code: "request_failed" });
   });
 
+  it("leaves multipart content type to fetch", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        id: "asset",
+        url: "/api/assets/asset",
+        markdown: "![](mnote-asset:asset)",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await api.uploadAsset(new File(["image"], "image.png", { type: "image/png" }), "Trips/2026");
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.body).toBeInstanceOf(FormData);
+    expect(new Headers(init.headers).has("Content-Type")).toBe(false);
+  });
+
   it("covers remaining endpoints", async () => {
     const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       if (String(url).startsWith("/api/search")) return jsonResponse(200, []);

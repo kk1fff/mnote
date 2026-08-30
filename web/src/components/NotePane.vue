@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRouter } from "vue-router";
 import { api, ApiError, type ContextEvent, type Note, type NoteContext, type NoteMeta } from "../api";
 import Backlinks from "./Backlinks.vue";
+import AssetPicker from "./AssetPicker.vue";
 import DeleteNoteDialog from "./DeleteNoteDialog.vue";
 import Editor, { type RemoteCaret } from "./Editor.vue";
 import HistoryPanel from "./HistoryPanel.vue";
@@ -56,7 +57,8 @@ const editor = ref<{
   revealExcerpt: (quote: string) => boolean;
   revealRange: (from: number, to: number) => boolean;
   currentOrdinal: () => number;
-  lineCoords: (ordinal: number) => { top: number; bottom: number; left: number } | null;
+   lineCoords: (ordinal: number) => { top: number; bottom: number; left: number } | null;
+   insertMarkdown: (markdown: string) => void;
 } | null>(null);
 const showContext = ref(false);
 try {
@@ -74,6 +76,7 @@ const actionsOpen = ref(false);
 const actionsEl = ref<HTMLElement | null>(null);
 const deleteOpen = ref(false);
 const deleteBusy = ref(false);
+const assetPickerOpen = ref(false);
 const deleteError = ref("");
 let replacing = false;
 const parkShortcut = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘↵" : "Ctrl+↵";
@@ -493,6 +496,22 @@ function onKey(event: KeyboardEvent) {
   }
 }
 
+function insertAsset(markdown: string) {
+  editor.value?.insertMarkdown(markdown);
+  assetPickerOpen.value = false;
+  actionsOpen.value = false;
+}
+
+function openAssetPicker() {
+  actionsOpen.value = false;
+  assetPickerOpen.value = true;
+}
+
+function openImageManager() {
+  actionsOpen.value = false;
+  void router.push("/images");
+}
+
 client.value.connect();
 stopLive = client.value.on(onLive);
 
@@ -620,9 +639,13 @@ onBeforeUnmount(() => {
           </svg>
         </button>
         <div class="actions-menu">
-          <button type="button" class="ghost" data-testid="park" @click="runAction(() => showParkCapture())">
-            Park {{ parkShortcut }}
-          </button>
+           <button type="button" class="ghost" data-testid="park" @click="runAction(() => showParkCapture())">
+             Park {{ parkShortcut }}
+           </button>
+           <button type="button" class="ghost" data-testid="insert-image" @click="openAssetPicker">
+             Insert image
+           </button>
+           <button type="button" class="ghost" @click="openImageManager">Manage images</button>
           <button
             type="button"
             class="ghost"
@@ -698,5 +721,6 @@ onBeforeUnmount(() => {
       @cancel="closeDelete"
       @confirm="void confirmDelete()"
     />
+    <AssetPicker v-if="assetPickerOpen" @close="assetPickerOpen = false" @insert="insertAsset" />
   </div>
 </template>

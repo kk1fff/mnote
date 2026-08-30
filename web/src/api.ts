@@ -126,6 +126,14 @@ export interface Asset {
   id: string;
   url: string;
   markdown: string;
+  filename: string;
+  original_name: string;
+  mime: string;
+  bytes: number;
+  width: number;
+  height: number;
+  group: string;
+  created_at: string;
 }
 
 export interface HistoryEntry {
@@ -184,7 +192,12 @@ function isNote(data: unknown): data is Note {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
+  // FormData can come from a different browser realm in desktop/webview clients.
+  // Do not force JSON there: fetch must supply its multipart boundary.
+  const isFormData =
+    typeof FormData !== "undefined" &&
+    (init.body instanceof FormData || Object.prototype.toString.call(init.body) === "[object FormData]");
+  if (init.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   if (sessionToken && !headers.has("Authorization")) {
@@ -344,9 +357,13 @@ export const api = {
   deleteParked: (id: number) =>
     request<void>(`/api/parked/${id}`, { method: "DELETE" }),
   parkedToNote: (id: number) => request<Note>(`/api/parked/${id}/note`, { method: "POST" }),
-  uploadAsset: async (file: File) => {
+  listAssets: () => request<Asset[]>("/api/assets"),
+  assetMeta: (id: string) => request<Asset>(`/api/assets/${encodeURIComponent(id)}/meta`),
+  assetBacklinks: (id: string) => request<NoteMeta[]>(`/api/assets/${encodeURIComponent(id)}/backlinks`),
+  uploadAsset: async (file: File, group = "") => {
     const body = new FormData();
     body.append("file", file);
+    body.append("group", group);
     return request<Asset>("/api/assets", { method: "POST", body });
   },
 };

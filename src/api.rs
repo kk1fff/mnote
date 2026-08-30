@@ -7,7 +7,7 @@ use crate::AppState;
 use axum::body::Body;
 use axum::extract::connect_info::ConnectInfo;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{FromRequestParts, Multipart, Path, Query, State};
+use axum::extract::{DefaultBodyLimit, FromRequestParts, Multipart, Path, Query, State};
 use axum::http::header::{AUTHORIZATION, CACHE_CONTROL, CONTENT_TYPE, COOKIE, SET_COOKIE};
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
@@ -58,8 +58,15 @@ pub fn router(state: AppState) -> Router {
         .route("/parked/{id}", axum::routing::delete(delete_parked))
         .route("/parked/{id}/note", post(parked_to_note))
         .route("/backlinks/{id}", get(backlinks))
-        .route("/assets", post(upload_asset))
+        .route(
+            "/assets",
+            get(list_assets).post(upload_asset).layer(DefaultBodyLimit::max(
+                notes::MAX_ASSET_BYTES + 1024 * 1024,
+            )),
+        )
         .route("/assets/{id}", get(get_asset))
+        .route("/assets/{id}/meta", get(get_asset_meta))
+        .route("/assets/{id}/backlinks", get(asset_backlinks))
         .layer(cors_layer());
 
     let mut app = Router::new()
@@ -785,23 +792,56 @@ async fn upload_asset(
     mut multipart: Multipart,
 ) -> Result<Json<notes::Asset>, AppError> {
     require_ready(&user)?;
+    let mut group = String::new();
+    let mut upload = None;
     while let Some(field) = multipart.next_field().await? {
         let name = field.name().unwrap_or_default().to_string();
-        if name != "file" {
+        if name == "group" {
+            group = field.text().await.map_err(|e| AppError::BadRequest(e.to_string()))?;
             continue;
         }
+        if name != "file" || upload.is_some() { continue; }
         let content_type = field
             .content_type()
             .unwrap_or("application/octet-stream")
             .to_string();
+        let filename = field.file_name().unwrap_or("image").to_string();
         let bytes = field
             .bytes()
             .await
             .map_err(|e| AppError::BadRequest(e.to_string()))?;
-        let asset = notes::save_asset(&state.vault_dir(&user.username), &content_type, &bytes)?;
-        return Ok(Json(asset));
+        upload = Some((content_type, filename, bytes));
     }
-    Err(AppError::BadRequest("missing file field".into()))
+    let Some((content_type, filename, bytes)) = upload else { return Err(AppError::BadRequest("missing file field".into())); };
+    Ok(Json(notes::save_asset_in_group(
+        &state.vault_dir(&user.username), &content_type, &bytes, &filename, &group,
+    )?))
+}
+
+async fn list_assets(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+) -> Result<Json<Vec<notes::Asset>>, AppError> {
+    require_ready(&user)?;
+    Ok(Json(notes::list_assets(&state.vault_dir(&user.username))?))
+}
+
+async fn get_asset_meta(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(id): Path<String>,
+) -> Result<Json<notes::Asset>, AppError> {
+    require_ready(&user)?;
+    Ok(Json(notes::get_asset_meta(&state.vault_dir(&user.username), &id)?))
+}
+
+async fn asset_backlinks(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<notes::NoteMeta>>, AppError> {
+    require_ready(&user)?;
+    Ok(Json(notes::asset_backlinks(&state.vault_dir(&user.username), &id)?))
 }
 
 async fn live_ws(

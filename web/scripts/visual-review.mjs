@@ -146,6 +146,12 @@ await page.waitForSelector('[data-testid="suggest"]');
 await shot(page, "02c-wiki-light");
 await page.keyboard.press("Escape");
 
+await page.getByRole("button", { name: "More actions" }).click();
+await page.getByTestId("insert-image").click();
+await page.waitForSelector('[data-testid="asset-picker"]');
+await shot(page, "02e-image-picker-light");
+await closeSheet(page);
+
 const barBefore = await page.locator(".bar").evaluate((el) => el.getBoundingClientRect().height);
 await page.getByTestId("note-title").click();
 await page.waitForSelector('[data-testid="note-title-input"]');
@@ -228,6 +234,12 @@ await page.waitForSelector('[data-testid="parked-detail"]');
 await shot(page, "07-parked-detail");
 await closeSheet(page);
 
+await page.goto(`${url}/images`);
+await page.waitForSelector("h1");
+await shot(page, "21-images-light");
+await page.goBack();
+await page.waitForSelector('[data-testid="editor"]');
+
 await page.evaluate(() => {
   localStorage.setItem("mnote-theme", "dark");
   document.documentElement.dataset.theme = "dark";
@@ -261,6 +273,14 @@ await page.keyboard.press("Escape");
 await noteAction(page, "history");
 await page.waitForSelector('[data-testid="history-panel"]');
 await shot(page, "09-history-dark");
+await closeSheet(page);
+await noteAction(page, "insert-image");
+await page.waitForSelector('[data-testid="asset-picker"]');
+await shot(page, "09b-image-picker-dark");
+await closeSheet(page);
+await page.goto(`${url}/images`);
+await page.waitForSelector("h1");
+await shot(page, "21b-images-dark");
 await desktop.close();
 
 const mobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -278,6 +298,10 @@ const wrapped = await m.evaluate(() => {
 if (wrapped) console.warn("mobile header children are not on one row");
 await m.getByRole("button", { name: "More actions" }).click();
 await shot(m, "11-note-mobile-menu");
+await m.getByTestId("insert-image").click();
+await m.waitForSelector('[data-testid="asset-picker"]');
+await shot(m, "11b-image-picker-mobile");
+await closeSheet(m);
 await m.getByRole("button", { name: "Menu" }).click();
 await shot(m, "12-note-mobile-nav");
 await m.getByTestId("tree-more").first().click();
@@ -291,6 +315,9 @@ await m.waitForSelector('[data-testid="tree-menu"]');
   await m.waitForSelector('[data-testid="picker-back"]');
   await shot(m, "20b-picker-recent-mobile");
   await closePicker(m);
+  await m.goto(`${url}/images`);
+  await m.waitForSelector("h1");
+  await shot(m, "21c-images-mobile");
   await mobile.close();
 
 const loginDark = await browser.newContext({ viewport: { width: 1440, height: 900 } });

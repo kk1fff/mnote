@@ -12,6 +12,7 @@ const router = createRouter({
     { path: "/login", component: () => import("./views/LoginView.vue") },
     { path: "/password", component: () => import("./views/PasswordView.vue") },
     { path: "/search", component: () => import("./views/SearchView.vue") },
+    { path: "/images", component: () => import("./views/ImagesView.vue") },
     {
       path: "/recent",
       component: () => import("./views/CollectionView.vue"),

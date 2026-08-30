@@ -632,7 +632,11 @@ async fn collapsed_folders_are_per_user() {
 async fn assets() {
     let h = Harness::new();
     let cookie = h.login("alice", "password1").await;
-    let png = [137, 80, 78, 71, 13, 10, 26, 10];
+    let png = [
+        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6,
+        0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 218, 99, 252, 207, 192, 80, 15,
+        0, 4, 133, 1, 128, 132, 169, 140, 33, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+    ];
     let body = build_multipart("file", "pic.png", "image/png", &png);
 
     let (status, _, body_json) = h
@@ -648,7 +652,7 @@ async fn assets() {
         .await;
     assert_eq!(status, StatusCode::OK, "{body_json}");
     let id = body_json["id"].as_str().unwrap().to_string();
-    assert!(id.ends_with(".png"));
+    assert!(!id.contains('.'));
 
     let res = h
         .app
@@ -667,6 +671,22 @@ async fn assets() {
         res.headers().get(header::CONTENT_TYPE).unwrap(),
         "image/png"
     );
+
+    let big = vec![0u8; 3 * 1024 * 1024];
+    let body = build_multipart("file", "big.png", "image/png", &big);
+    let (status, _, body_json) = h
+        .call(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/assets")
+                .header(header::COOKIE, format!("mnote_session={cookie}"))
+                .header(header::CONTENT_TYPE, "multipart/form-data; boundary=bound")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body_json}");
+    assert_eq!(body_json["error"], "invalid image data");
 }
 
 fn build_multipart(field: &str, filename: &str, ct: &str, data: &[u8]) -> Vec<u8> {

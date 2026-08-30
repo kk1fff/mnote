@@ -20,6 +20,7 @@ describe("images", () => {
 
   it("allows common image types", () => {
     expect(isAllowedImage(new File([], "a.png", { type: "image/png" }))).toBe(true);
+    expect(isAllowedImage(new File([], "a.jpg", { type: "" }))).toBe(true);
     expect(isAllowedImage(new File([], "a.txt", { type: "text/plain" }))).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use chrono::NaiveDate;
 use regex::Regex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
@@ -46,6 +46,29 @@ pub struct Asset {
     pub id: String,
     pub url: String,
     pub markdown: String,
+    pub filename: String,
+    pub original_name: String,
+    pub mime: String,
+    pub bytes: u64,
+    pub width: u32,
+    pub height: u32,
+    pub group: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AssetManifest {
+    pub version: u8,
+    pub id: String,
+    pub filename: String,
+    pub original_name: String,
+    pub mime: String,
+    pub bytes: u64,
+    pub width: u32,
+    pub height: u32,
+    pub created_at: String,
+    #[serde(default)]
+    pub group: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -68,15 +91,50 @@ pub struct HistoryRev {
 const ALLOWED_IMAGE_TYPES: &[(&str, &str)] = &[
     ("image/png", "png"),
     ("image/jpeg", "jpg"),
+    ("image/jpg", "jpg"),
     ("image/gif", "gif"),
     ("image/webp", "webp"),
 ];
 
 pub const MAX_ASSET_BYTES: usize = 10 * 1024 * 1024;
+pub const MAX_ASSET_PIXELS: u64 = 40_000_000;
 
 pub fn ensure_vault(vault: &Path) -> Result<(), AppError> {
     std::fs::create_dir_all(vault.join("notes"))?;
     std::fs::create_dir_all(vault.join("assets"))?;
+    migrate_legacy_assets(vault)?;
+    Ok(())
+}
+
+fn migrate_legacy_assets(vault: &Path) -> Result<(), AppError> {
+    let root = vault.join("assets");
+    for entry in std::fs::read_dir(&root)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_file() { continue; }
+        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else { continue; };
+        let mime = mime_guess::from_path(&path).first_or_octet_stream().to_string();
+        if ext_for_content_type(&mime).is_err() { continue; }
+        let bytes = std::fs::read(&path)?;
+        let (width, height) = image_dimensions(&bytes).unwrap_or((0, 0));
+        let dir = root.join("legacy").join(filename);
+        std::fs::create_dir_all(&dir)?;
+        std::fs::rename(&path, dir.join(filename))?;
+        let manifest = AssetManifest {
+            version: 1,
+            id: filename.to_string(),
+            filename: filename.to_string(),
+            original_name: filename.to_string(),
+            mime,
+            bytes: bytes.len() as u64,
+            width,
+            height,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            group: "legacy".into(),
+        };
+        let json = serde_json::to_vec_pretty(&manifest).map_err(|e| AppError::Internal(e.into()))?;
+        std::fs::write(dir.join("asset.json"), json)?;
+    }
     Ok(())
 }
 
@@ -1110,23 +1168,120 @@ pub fn ext_for_content_type(content_type: &str) -> Result<&'static str, AppError
         .ok_or_else(|| AppError::BadRequest("unsupported image type".into()))
 }
 
+pub fn normalize_asset_group(raw: &str) -> Result<String, AppError> {
+    let group = raw.trim().trim_matches('/');
+    if group.is_empty() {
+        return Ok(String::new());
+    }
+    if group.len() > 200 || group.contains('\\') || group.contains('\0') {
+        return Err(AppError::BadRequest("invalid asset group".into()));
+    }
+    let mut parts = Vec::new();
+    for part in group.split('/') {
+        let part = part.trim();
+        if part.is_empty() || part == "." || part == ".." || part.starts_with('.') {
+            return Err(AppError::BadRequest("invalid asset group".into()));
+        }
+        parts.push(part);
+    }
+    Ok(parts.join("/"))
+}
+
+fn sniff_image_mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.len() >= 8 && bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if bytes.len() >= 3 && bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some("image/jpeg")
+    } else if bytes.len() >= 6 && (bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a")) {
+        Some("image/gif")
+    } else if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else {
+        None
+    }
+}
+
+fn image_dimensions(bytes: &[u8]) -> Result<(u32, u32), AppError> {
+    let size = imagesize::blob_size(bytes)
+        .map_err(|_| AppError::BadRequest("invalid image data".into()))?;
+    Ok((size.width as u32, size.height as u32))
+}
+
+fn safe_filename(name: &str, ext: &str) -> String {
+    let name = Path::new(name).file_name().and_then(|s| s.to_str()).unwrap_or("");
+    let stem = name.rsplit_once('.').map(|(stem, _)| stem).unwrap_or(name);
+    let stem: String = stem.chars().filter(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | ' ')).take(100).collect();
+    let stem = stem.trim();
+    format!("{}.{}", if stem.is_empty() { "image" } else { stem }, ext)
+}
+
+fn manifest_path(vault: &Path, id: &str) -> Option<PathBuf> {
+    let root = vault.join("assets");
+    WalkDir::new(&root).into_iter().filter_map(Result::ok).find_map(|entry| {
+        (entry.file_name() == "asset.json" && entry.path().parent()?.file_name()?.to_string_lossy() == id)
+            .then(|| entry.path().to_path_buf())
+    })
+}
+
+fn read_manifest(path: &Path) -> Result<AssetManifest, AppError> {
+    let text = std::fs::read_to_string(path)?;
+    serde_json::from_str(&text).map_err(|_| AppError::BadRequest("invalid asset manifest".into()))
+}
+
+fn asset_from_manifest(manifest: AssetManifest) -> Asset {
+    let id = manifest.id.clone();
+    Asset {
+        markdown: format!("![]({})", asset_embed(&id)),
+        url: format!("/api/assets/{id}"),
+        id,
+        filename: manifest.filename,
+        original_name: manifest.original_name,
+        mime: manifest.mime,
+        bytes: manifest.bytes,
+        width: manifest.width,
+        height: manifest.height,
+        group: manifest.group,
+        created_at: manifest.created_at,
+    }
+}
+
+pub fn asset_embed(id: &str) -> String { format!("mnote-asset:{id}") }
+
 pub fn save_asset(vault: &Path, content_type: &str, bytes: &[u8]) -> Result<Asset, AppError> {
+    save_asset_in_group(vault, content_type, bytes, "image", "")
+}
+
+pub fn save_asset_in_group(vault: &Path, content_type: &str, bytes: &[u8], original_name: &str, group: &str) -> Result<Asset, AppError> {
     if bytes.is_empty() {
         return Err(AppError::BadRequest("empty file".into()));
     }
     if bytes.len() > MAX_ASSET_BYTES {
         return Err(AppError::BadRequest("file too large".into()));
     }
-    let ext = ext_for_content_type(content_type)?;
+    let mime = sniff_image_mime(bytes).ok_or_else(|| AppError::BadRequest("invalid image data".into()))?;
+    if ext_for_content_type(content_type).is_err() && ext_for_content_type(mime).is_err() {
+        return Err(AppError::BadRequest("unsupported image type".into()));
+    }
+    let ext = ext_for_content_type(mime)?;
+    let (width, height) = image_dimensions(bytes)?;
+    if width == 0 || height == 0 || u64::from(width) * u64::from(height) > MAX_ASSET_PIXELS {
+        return Err(AppError::BadRequest("image dimensions are too large".into()));
+    }
+    let group = normalize_asset_group(group)?;
     ensure_vault(vault)?;
-    let id = format!("{}.{}", uuid::Uuid::new_v4(), ext);
-    std::fs::write(vault.join("assets").join(&id), bytes)?;
-    let url = format!("/api/assets/{id}");
-    Ok(Asset {
-        markdown: format!("![]({url})"),
-        url,
-        id,
-    })
+    let id = uuid::Uuid::new_v4().to_string();
+    let dir = vault.join("assets").join(&group).join(&id);
+    std::fs::create_dir_all(&dir)?;
+    let filename = safe_filename(original_name, ext);
+    let manifest = AssetManifest {
+        version: 1, id: id.clone(), filename: filename.clone(), original_name: original_name.to_string(),
+        mime: mime.to_string(), bytes: bytes.len() as u64,
+        width, height, created_at: chrono::Utc::now().to_rfc3339(), group,
+    };
+    std::fs::write(dir.join(&filename), bytes)?;
+    let json = serde_json::to_vec_pretty(&manifest).map_err(|e| AppError::Internal(e.into()))?;
+    std::fs::write(dir.join("asset.json"), json)?;
+    Ok(asset_from_manifest(manifest))
 }
 
 pub fn read_asset(vault: &Path, id: &str) -> Result<(Vec<u8>, String), AppError> {
@@ -1138,6 +1293,13 @@ pub fn read_asset(vault: &Path, id: &str) -> Result<(Vec<u8>, String), AppError>
     {
         return Err(AppError::BadRequest("invalid asset id".into()));
     }
+    if let Some(manifest_path) = manifest_path(vault, id) {
+        let manifest = read_manifest(&manifest_path)?;
+        let path = manifest_path.parent().unwrap().join(&manifest.filename);
+        if !path.is_file() { return Err(AppError::NotFound); }
+        return Ok((std::fs::read(path)?, manifest.mime));
+    }
+    // Legacy flat assets remain readable for existing notes and history.
     let path = vault.join("assets").join(id);
     if !path.is_file() {
         return Err(AppError::NotFound);
@@ -1147,6 +1309,32 @@ pub fn read_asset(vault: &Path, id: &str) -> Result<(Vec<u8>, String), AppError>
         .first_or_octet_stream()
         .to_string();
     Ok((bytes, mime))
+}
+
+pub fn list_assets(vault: &Path) -> Result<Vec<Asset>, AppError> {
+    ensure_vault(vault)?;
+    let mut assets = WalkDir::new(vault.join("assets")).into_iter().filter_map(Result::ok).filter_map(|entry| {
+        (entry.file_name() == "asset.json").then(|| read_manifest(entry.path()).ok()).flatten().map(asset_from_manifest)
+    }).collect::<Vec<_>>();
+    assets.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(assets)
+}
+
+pub fn get_asset_meta(vault: &Path, id: &str) -> Result<Asset, AppError> {
+    if id.is_empty() || id.contains('/') || id.contains('\\') || id.contains("..") { return Err(AppError::BadRequest("invalid asset id".into())); }
+    let path = manifest_path(vault, id).ok_or(AppError::NotFound)?;
+    Ok(asset_from_manifest(read_manifest(&path)?))
+}
+
+pub fn asset_backlinks(vault: &Path, id: &str) -> Result<Vec<NoteMeta>, AppError> {
+    let needle = asset_embed(id);
+    let mut links = Vec::new();
+    for meta in list_notes(vault)? {
+        if get_note(vault, &meta.id)?.content.contains(&needle) {
+            links.push(meta);
+        }
+    }
+    Ok(links)
 }
 
 pub fn conflict_id(err: &AppError) -> Option<&str> {
@@ -1389,10 +1577,18 @@ mod tests {
         let vault = dir.path();
         assert!(ext_for_content_type("image/png").is_ok());
         assert!(ext_for_content_type("text/plain").is_err());
-        let asset = save_asset(vault, "image/png", &[1, 2, 3, 4]).unwrap();
-        assert!(asset.id.ends_with(".png"));
+        let png = [
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8,
+            6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 218, 99, 252, 207, 192,
+            80, 15, 0, 4, 133, 1, 128, 132, 169, 140, 33, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96,
+            130,
+        ];
+        let asset = save_asset(vault, "image/png", &png).unwrap();
+        assert!(!asset.id.contains('.'));
+        assert!(vault.join("assets").join(&asset.id).join("asset.json").is_file());
+        assert_eq!(asset.markdown, format!("![]({})", asset_embed(&asset.id)));
         let (bytes, mime) = read_asset(vault, &asset.id).unwrap();
-        assert_eq!(bytes, vec![1, 2, 3, 4]);
+        assert_eq!(bytes, png);
         assert!(mime.contains("png"));
         assert!(read_asset(vault, "../x").is_err());
         assert!(save_asset(vault, "image/png", &[]).is_err());

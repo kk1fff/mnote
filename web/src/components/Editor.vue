@@ -309,12 +309,16 @@ function setDoc(text: string, remote = false) {
   });
 }
 
+function insertMarkdown(markdown: string) {
+  if (!view) return;
+  setDoc(insertAt(view.state.doc.toString(), view.state.selection.main.head, markdown));
+  view.focus();
+}
+
 async function handleImage(file: File | null) {
   if (!file || !isAllowedImage(file) || !view) return;
   const asset = await api.uploadAsset(file);
-  const pos = view.state.selection.main.head;
-  const next = insertAt(view.state.doc.toString(), pos, asset.markdown);
-  setDoc(next);
+  insertMarkdown(asset.markdown);
 }
 
 onMounted(() => {
@@ -508,7 +512,7 @@ function revealExcerpt(quote: string): boolean {
   return true;
 }
 
-defineExpose({ excerpt, revealExcerpt, revealRange, currentOrdinal, lineCoords });
+defineExpose({ excerpt, revealExcerpt, revealRange, currentOrdinal, lineCoords, insertMarkdown });
 
 onBeforeUnmount(() => {
   document.removeEventListener("mousedown", onDocClick);

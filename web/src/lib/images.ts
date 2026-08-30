@@ -18,5 +18,6 @@ export function insertAt(content: string, index: number, inserted: string): stri
 }
 
 export function isAllowedImage(file: File): boolean {
-  return ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type);
+  return ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"].includes(file.type)
+    || /\.(png|jpe?g|gif|webp)$/i.test(file.name);
 }

@@ -11,4 +11,10 @@ describe("markdown", () => {
   it("does not render raw html", () => {
     expect(renderMarkdown("<script>alert(1)</script>")).not.toContain("<script>");
   });
+
+  it("resolves stable asset embeds at render time", () => {
+    const html = renderMarkdown("![Harbor](mnote-asset:018f0a20-7d2b-7d75-a5d2-cb7b4fb6e57c)");
+    expect(html).toContain('src="/api/assets/018f0a20-7d2b-7d75-a5d2-cb7b4fb6e57c"');
+    expect(html).toContain('data-asset-id="018f0a20-7d2b-7d75-a5d2-cb7b4fb6e57c"');
+  });
 });

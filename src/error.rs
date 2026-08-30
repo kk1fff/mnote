@@ -75,7 +75,11 @@ impl From<std::io::Error> for AppError {
 
 impl From<axum::extract::multipart::MultipartError> for AppError {
     fn from(err: axum::extract::multipart::MultipartError) -> Self {
-        AppError::BadRequest(err.to_string())
+        if err.status() == StatusCode::PAYLOAD_TOO_LARGE {
+            AppError::BadRequest("file too large".into())
+        } else {
+            AppError::BadRequest(err.to_string())
+        }
     }
 }
 

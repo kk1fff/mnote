@@ -268,7 +268,27 @@ test("pasting a png inserts an asset", async ({ page }) => {
       new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: dt }),
     );
   }, [...png]);
-  await expect(page.locator(".cm-content")).toContainText("/api/assets/");
+  await expect(page.locator(".cm-content")).toContainText("mnote-asset:");
+});
+
+test("image picker uploads and inserts an asset", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await createNote(page, uid("Picker image"));
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByTestId("insert-image").click();
+  await page.getByTestId("asset-picker").getByRole("button", { name: "Upload" }).click();
+  await page.getByTestId("asset-picker").locator('input[type="file"]').setInputFiles({
+    name: "dot.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  });
+  await expect(page.getByTestId("asset-picker")).toContainText("dot.png");
+  await page.getByTestId("asset-picker").getByRole("button", { name: "Insert image" }).click();
+  await expect(page.locator(".cm-content")).toContainText("mnote-asset:");
 });
 
 test("slash where inserts a stamp without coordinates", async ({ page }) => {
