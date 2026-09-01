@@ -2,6 +2,28 @@ import { expect, test } from "@playwright/test";
 import { BOB_STATE } from "./env";
 import { createNote, uid } from "./helpers";
 
+test("sidebar links open images and picker collections", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await page.getByTestId("sidebar-images").click();
+  await expect(page.getByRole("heading", { name: "Images" })).toBeVisible();
+  await page.goBack();
+  await page.waitForURL(/\/n\//);
+  await page.getByTestId("sidebar-favorites").click();
+  await expect(page.getByTestId("picker-back")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByTestId("sidebar-recent").click();
+  await expect(page.getByTestId("picker-back")).toBeVisible();
+});
+
+test("calendar day creates a journal", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await page.getByTestId("cal-next").click();
+  await page.locator(".sidebar-cal-day").first().click();
+  await expect(page.getByTestId("note-title")).toHaveText(/\d{4}-\d{2}-\d{2}/);
+});
+
 test("mobile menu opens and closes", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 800 });
   await page.goto("/");

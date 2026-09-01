@@ -52,7 +52,7 @@ const itemOffset = computed(() => {
   return offsets;
 });
 
-function show(mode: OpenMode = "replace") {
+function show(mode: OpenMode = "replace", collectionKind?: PickerCollection) {
   open.value = true;
   openMode.value = mode;
   query.value = "";
@@ -62,6 +62,10 @@ function show(mode: OpenMode = "replace") {
   collection.value = null;
   error.value = "";
   selected.value = 0;
+  if (collectionKind) {
+    void enterCollection(collectionKind);
+    return;
+  }
   void nextTick(() => input.value?.focus());
 }
 

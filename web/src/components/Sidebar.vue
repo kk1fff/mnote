@@ -3,16 +3,20 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, type NoteMeta } from "../api";
 import { clearDraft } from "../lib/drafts";
+import { isDailyNote } from "../lib/calendar";
 import { noteIdFromRoute } from "../lib/paths";
 import { noteTree } from "../lib/tree";
 import { live, type LiveEvent } from "../live";
 import { collapsed, refreshCollapsed, toggleCollapsed } from "../folders";
 import { parkedItems, refreshParked, showParkCapture } from "../parked";
+import type { PickerCollection } from "../lib/picker";
+import { sidebarPrefs, toggleSidebarSection } from "../sidebar";
 import { applyOpen, forgetNote, layoutHref, openBeside, visibleIds } from "../workspace";
 import { currentUser, logout } from "../session";
 import { cycleTheme, setThemeMode, themeMode, type ThemeMode } from "../theme";
 import DeleteNoteDialog from "./DeleteNoteDialog.vue";
 import NoteTree from "./NoteTree.vue";
+import SidebarCalendar from "./SidebarCalendar.vue";
 
 const themeLabel = computed(() => {
   if (themeMode.value === "light") return "Light";
@@ -42,9 +46,20 @@ const themes: { id: ThemeMode; label: string }[] = [
 ];
 
 const tree = computed(() => noteTree(notes.value));
+const journalDates = computed(() => {
+  const dates = new Set<string>();
+  for (const note of notes.value) {
+    if (isDailyNote(note)) dates.add(note.title);
+  }
+  return dates;
+});
 const activeId = computed(() =>
   route.name === "note" || route.path.startsWith("/n/") ? noteIdFromRoute(route.params.id) : "",
 );
+const activeDaily = computed(() => {
+  const note = notes.value.find((item) => item.id === activeId.value);
+  return note && isDailyNote(note) ? note.title : "";
+});
 const openIds = computed(() => {
   const ids = visibleIds();
   if (activeId.value && !ids.includes(activeId.value)) ids.push(activeId.value);
@@ -116,6 +131,23 @@ function openBesideNote() {
 
 function openImages() {
   void router.push("/images");
+}
+
+async function openDaily(date: string) {
+  try {
+    const note = await api.daily(date);
+    if (!note.id) return;
+    upsert({
+      id: note.id,
+      title: note.title,
+      folder: note.folder ?? "",
+      modified_at: note.modified_at,
+    });
+    applyOpen(note.id, note.title);
+    await router.push(layoutHref());
+  } catch {
+    /* leave the current note */
+  }
 }
 
 function openMenu(note: NoteMeta, event: MouseEvent) {
@@ -217,7 +249,11 @@ onBeforeUnmount(() => {
   footerMq?.removeEventListener("change", syncNarrow);
 });
 
-const emit = defineEmits<{ "open-picker": []; "open-parked": []; close: [] }>();
+const emit = defineEmits<{
+  "open-picker": [collection?: PickerCollection];
+  "open-parked": [];
+  close: [];
+}>();
 
 defineExpose({ load });
 </script>
@@ -249,7 +285,32 @@ defineExpose({ load });
         {{ parkedItems.length }}
       </button>
     </div>
-    <button type="button" class="new-note-button ghost" @click="openImages">Images</button>
+    <div class="sidebar-section">
+      <button
+        type="button"
+        class="section-toggle"
+        data-testid="sidebar-links-toggle"
+        :aria-expanded="sidebarPrefs.linksOpen"
+        @click="toggleSidebarSection('linksOpen')"
+      >
+        <span>Links</span>
+        <span aria-hidden="true">{{ sidebarPrefs.linksOpen ? "▾" : "▸" }}</span>
+      </button>
+      <div v-if="sidebarPrefs.linksOpen" class="sidebar-links">
+        <button type="button" class="sidebar-link" data-testid="sidebar-images" @click="openImages">Images</button>
+        <button
+          type="button"
+          class="sidebar-link"
+          data-testid="sidebar-favorites"
+          @click="emit('open-picker', 'favorites')"
+        >
+          Favorites
+        </button>
+        <button type="button" class="sidebar-link" data-testid="sidebar-recent" @click="emit('open-picker', 'recent')">
+          Recent
+        </button>
+      </div>
+    </div>
     <div class="note-library">
       <p class="section-label">Notes</p>
       <div class="note-tree">
@@ -263,6 +324,24 @@ defineExpose({ load });
           @open="openNote"
         />
       </div>
+    </div>
+    <div class="sidebar-section sidebar-cal-section">
+      <button
+        type="button"
+        class="section-toggle"
+        data-testid="sidebar-cal-toggle"
+        :aria-expanded="sidebarPrefs.calendarOpen"
+        @click="toggleSidebarSection('calendarOpen')"
+      >
+        <span>Calendar</span>
+        <span aria-hidden="true">{{ sidebarPrefs.calendarOpen ? "▾" : "▸" }}</span>
+      </button>
+      <SidebarCalendar
+        v-if="sidebarPrefs.calendarOpen"
+        :journal-dates="journalDates"
+        :active-date="activeDaily"
+        @select="void openDaily($event)"
+      />
     </div>
     <Teleport to="body">
       <div

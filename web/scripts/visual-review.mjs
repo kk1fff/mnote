@@ -128,6 +128,13 @@ if ((await editor(page).innerText()).trim().length < 8) {
   await page.waitForTimeout(300);
 }
 await shot(page, "02-note-desktop-light");
+await page.getByTestId("sidebar-cal-toggle").click();
+await shot(page, "02f-sidebar-calendar-folded-light");
+await page.getByTestId("sidebar-cal-toggle").click();
+await page.getByTestId("sidebar-favorites").click();
+await page.waitForSelector('[data-testid="picker-back"]');
+await shot(page, "18d-picker-favorites-sidebar-light");
+await closePicker(page);
 await page.locator(".tree-row").first().hover();
 await page.getByTestId("tree-more").first().click();
 await page.waitForSelector('[data-testid="tree-menu"]');
@@ -247,6 +254,9 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(150);
 await shot(page, "08-note-desktop-dark");
+await page.getByTestId("sidebar-cal-toggle").click();
+await shot(page, "08d-sidebar-calendar-folded-dark");
+await page.getByTestId("sidebar-cal-toggle").click();
   await shot(page, "15-tabs-dark");
   await shot(page, "17-split-dark");
   await openPicker(page);

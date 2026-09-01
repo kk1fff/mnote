@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { live, type LiveEvent } from "../live";
 import { resetCollapsed } from "../folders";
+import { todayDate } from "../lib/paths";
 import { logout } from "../session";
+import { resetSidebarPrefs } from "../sidebar";
+import { emptyWorkspace, resetWorkspace } from "../workspace";
 import Sidebar from "./Sidebar.vue";
 
 vi.mock("../api", async () => {
@@ -19,6 +22,7 @@ vi.mock("../api", async () => {
       expandFolder: vi.fn().mockResolvedValue(undefined),
       backlinks: vi.fn().mockResolvedValue([]),
       deleteNote: vi.fn().mockResolvedValue(undefined),
+      daily: vi.fn(),
     },
   };
 });
@@ -54,6 +58,8 @@ describe("Sidebar", () => {
     showParkCapture.mockClear();
     vi.mocked(api.collapsedFolders).mockResolvedValue([]);
     resetCollapsed();
+    resetSidebarPrefs();
+    resetWorkspace(emptyWorkspace());
   });
 
   it("hides notes in collapsed folders", async () => {
@@ -229,6 +235,71 @@ describe("Sidebar", () => {
     expect(api.deleteNote).toHaveBeenCalledWith("o1");
     expect(wrapper.text()).not.toContain("One");
     wrapper.unmount();
+  });
+
+  it("opens images and picker collections from Links", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([]);
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/", component: { template: "<div />" } },
+        { path: "/images", component: { template: "<div />" } },
+        { path: "/n/:id", component: { template: "<div />" } },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/");
+    await router.isReady();
+    const wrapper = mount(Sidebar, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(wrapper.text()).toContain("Links");
+    expect(wrapper.text()).toContain("Images");
+    expect(wrapper.text()).toContain("Favorites");
+    expect(wrapper.text()).toContain("Recent");
+    await wrapper.get('[data-testid="sidebar-images"]').trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/images");
+    await wrapper.get('[data-testid="sidebar-favorites"]').trigger("click");
+    expect(wrapper.emitted("open-picker")?.at(-1)).toEqual(["favorites"]);
+    await wrapper.get('[data-testid="sidebar-recent"]').trigger("click");
+    expect(wrapper.emitted("open-picker")?.at(-1)).toEqual(["recent"]);
+    await wrapper.get('[data-testid="sidebar-links-toggle"]').trigger("click");
+    expect(wrapper.find('[data-testid="sidebar-images"]').exists()).toBe(false);
+    wrapper.unmount();
+    const again = mount(Sidebar, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(again.find('[data-testid="sidebar-images"]').exists()).toBe(false);
+    again.unmount();
+  });
+
+  it("creates a journal from the calendar", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([
+      { id: "d1", title: todayDate(), folder: "", modified_at: "" },
+    ]);
+    vi.mocked(api.daily).mockResolvedValue({
+      id: "future",
+      title: "2099-01-15",
+      content: "# 2099-01-15\n\n",
+      modified_at: "",
+    });
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/", component: { template: "<div />" } },
+        { path: "/n/:id", component: { template: "<div />" } },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/");
+    await router.isReady();
+    const wrapper = mount(Sidebar, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(wrapper.get(`[data-testid="cal-day-${todayDate()}"]`).classes()).toContain("journal");
+    await wrapper.get('[data-testid="cal-next"]').trigger("click");
+    await wrapper.get(".sidebar-cal-day").trigger("click");
+    await flushPromises();
+    expect(api.daily).toHaveBeenCalled();
+    expect(router.currentRoute.value.path).toBe("/n/future");
   });
 
   it("leaves the open note after a sidebar delete", async () => {

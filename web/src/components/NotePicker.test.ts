@@ -134,6 +134,18 @@ describe("NotePicker", () => {
     expect(wrapper.text()).toContain("Go to");
   });
 
+  it("opens a collection from show()", async () => {
+    vi.mocked(api.favorites).mockResolvedValue([
+      { id: "f1", title: "Starred", folder: "", modified_at: "" },
+    ]);
+    const { wrapper, router } = await openPicker();
+    wrapper.vm.show("replace", "favorites");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Starred");
+    expect(wrapper.find('[data-testid="picker-back"]').exists()).toBe(true);
+    expect(router.currentRoute.value.path).toBe("/");
+  });
+
   it("returns from favorites with Escape", async () => {
     vi.mocked(api.favorites).mockResolvedValue([
       { id: "f1", title: "Starred", folder: "", modified_at: "" },
