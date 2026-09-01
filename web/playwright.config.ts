@@ -23,7 +23,7 @@ export default defineConfig({
     },
     {
       name: "app",
-      testMatch: /notes\.spec\.ts|live\.spec\.ts|shell\.spec\.ts|meta\.spec\.ts|parked\.spec\.ts|history\.spec\.ts/,
+      testMatch: /notes\.spec\.ts|live\.spec\.ts|shell\.spec\.ts|meta\.spec\.ts|parked\.spec\.ts|history\.spec\.ts|tags\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], storageState: ALICE_STATE },
     },
   ],

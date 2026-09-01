@@ -54,6 +54,7 @@ pub fn router(state: AppState) -> Router {
             put(collapse_folder).delete(expand_folder),
         )
         .route("/search", get(search_notes))
+        .route("/tags/suggest", post(suggest_tags))
         .route("/parked", get(list_parked).post(create_parked))
         .route("/parked/{id}", axum::routing::delete(delete_parked))
         .route("/parked/{id}/note", post(parked_to_note))
@@ -554,6 +555,7 @@ async fn put_note(
 struct PatchNote {
     title: Option<String>,
     folder: Option<String>,
+    tags: Option<Vec<String>>,
 }
 
 async fn patch_note(
@@ -568,6 +570,7 @@ async fn patch_note(
         &id,
         body.title.as_deref(),
         body.folder.as_deref(),
+        body.tags.as_deref(),
     )?;
     state.live.index(user.id, notes::to_meta(&note));
     for other in rewritten {
@@ -784,6 +787,85 @@ async fn search_titles(
         &state.vault_dir(&user.username),
         &query.q,
     )?))
+}
+
+#[derive(Deserialize)]
+struct SuggestTags {
+    note_id: Option<String>,
+    q: Option<String>,
+    title: Option<String>,
+    folder: Option<String>,
+    content: Option<String>,
+    cursor: Option<usize>,
+    current_tags: Option<Vec<String>>,
+}
+
+async fn suggest_tags(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Json(body): Json<SuggestTags>,
+) -> Result<Json<Vec<crate::tags::TagSuggest>>, AppError> {
+    require_ready(&user)?;
+    let vault = state.vault_dir(&user.username);
+    let notes = notes::list_notes_internal(&vault)?;
+    let parked = db::list_parked(&state, user.id)?;
+    let mut title = body.title.unwrap_or_default();
+    let mut folder = body.folder.unwrap_or_default();
+    let mut content = body.content.unwrap_or_default();
+    let mut current = body.current_tags.unwrap_or_default();
+    if let Some(id) = body.note_id.as_deref() {
+        if let Ok(note) = notes::get_note(&vault, id) {
+            if title.is_empty() {
+                title = note.title.clone();
+            }
+            if folder.is_empty() {
+                folder = note.folder.clone();
+            }
+            if content.is_empty() {
+                content = note.content.clone();
+            }
+            if current.is_empty() {
+                current = note.tags.clone();
+            }
+        }
+    }
+    let cursor = body.cursor.unwrap_or(content.len());
+    let paragraph = crate::tags::paragraph_at(&content, cursor).to_string();
+    let parked_titles: Vec<String> = parked
+        .iter()
+        .map(|item| item.body.lines().next().unwrap_or("").to_string())
+        .collect();
+    let note_docs: Vec<_> = notes
+        .iter()
+        .map(|note| crate::tags::TagDoc {
+            tags: &note.tags,
+            title: &note.title,
+            folder: &note.folder,
+            content: &note.content,
+            modified_at: &note.modified_at,
+        })
+        .collect();
+    let parked_docs: Vec<_> = parked
+        .iter()
+        .zip(parked_titles.iter())
+        .map(|(item, title)| crate::tags::TagDoc {
+            tags: &item.tags,
+            title,
+            folder: item.source_folder.as_deref().unwrap_or(""),
+            content: &item.body,
+            modified_at: &item.created_at,
+        })
+        .collect();
+    let mut corpus = note_docs;
+    corpus.extend(parked_docs);
+    Ok(Json(crate::tags::suggest(
+        &corpus,
+        body.q.as_deref().unwrap_or(""),
+        &current,
+        &title,
+        &folder,
+        &paragraph,
+    )))
 }
 
 async fn upload_asset(

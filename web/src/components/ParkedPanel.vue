@@ -15,11 +15,13 @@ const error = ref("");
 
 const items = computed(() => parkedItems.value);
 
-function show() {
+function show(id?: number) {
   error.value = "";
   selected.value = null;
   open.value = true;
-  void refreshParked();
+  void refreshParked().then(() => {
+    if (id != null) selected.value = parkedItems.value.find((item) => item.id === id) ?? null;
+  });
 }
 
 function close() {
@@ -104,6 +106,7 @@ defineExpose({ show, open });
                 {{ ageLabel(item.created_at) }}
                 <template v-if="item.source_title"> · while in {{ item.source_title }}</template>
                 <template v-else> · opened to dump</template>
+                <template v-if="item.tags?.length"> · {{ item.tags.map((tag) => `#${tag}`).join(" ") }}</template>
               </small>
             </button>
           </li>

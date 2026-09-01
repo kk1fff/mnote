@@ -1103,6 +1103,45 @@ button.icon-btn,
   font-size: 0.78rem;
 }
 
+.note-tags {
+  display: flex;
+  align-items: center;
+  min-height: 1.4rem;
+  padding: 0.15rem 1rem 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.note-tags-form,
+.note-tags-line,
+.tags-input {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-tags-line {
+  cursor: pointer;
+}
+
+.tags-input {
+  font: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0 0.4rem;
+  outline: 0;
+}
+
+.tags-input:focus {
+  border-color: var(--accent);
+}
+
 .actions {
   position: relative;
   display: flex;

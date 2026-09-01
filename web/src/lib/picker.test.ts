@@ -17,6 +17,7 @@ describe("buildPickerSections", () => {
           { type: "jump", key: "today", to: "/today", label: "Today" },
           { type: "collection", key: "recent", label: "Recent" },
           { type: "collection", key: "favorites", label: "Favorites" },
+          { type: "collection", key: "tags", label: "Tags" },
         ],
       },
       {
@@ -155,5 +156,41 @@ describe("buildPickerSections", () => {
   it("omits empty sections", () => {
     expect(buildPickerSections({ query: "!", notes: [], folders: [] })).toEqual([]);
     expect(buildPickerSections({ query: "ideas/", notes: [], folders: [] })).toEqual([]);
+  });
+
+    it("lists tags in the tags collection", () => {
+    const notes = [note("o1", "One", "ideas")];
+    notes[0].tags = ["work"];
+    const listed = buildPickerSections({
+      query: "",
+      notes,
+      folders: [],
+      collection: "tags",
+      tags: [{ name: "work", count: 1 }],
+    });
+    expect(pickerItems(listed)).toEqual([
+      { type: "back", key: "back" },
+      { type: "tag", key: "tag:work", name: "work", count: 1 },
+    ]);
+  });
+
+  it("lists tags in hash mode and notes for an exact tag", () => {
+    const notes = [note("o1", "One", "ideas")];
+    notes[0].tags = ["work"];
+    const listed = buildPickerSections({
+      query: "#",
+      notes,
+      folders: [],
+      tags: [{ name: "work", count: 1 }],
+    });
+    expect(pickerItems(listed)).toEqual([{ type: "tag", key: "tag:work", name: "work", count: 1 }]);
+
+    const exact = buildPickerSections({
+      query: "#work",
+      notes,
+      folders: [],
+      tags: [{ name: "work", count: 1 }],
+    });
+    expect(pickerItems(exact)).toMatchObject([{ type: "note", note: { id: "o1" } }]);
   });
 });

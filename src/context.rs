@@ -1,3 +1,4 @@
+use crate::db;
 use crate::error::AppError;
 use crate::notes::{self, SearchHit};
 use crate::AppState;
@@ -917,6 +918,11 @@ pub fn search(
         notes::search(vault, q)?
     };
     if !params.has_filters() {
+        if let Some(tag) = crate::tags::parse_tag_query(q) {
+            let mut hits = text_hits;
+            hits.extend(parked_tag_hits(state, user_id, &tag)?);
+            return Ok(hits);
+        }
         return Ok(text_hits);
     }
     let sits = situation_rows(state, user_id, params)?;
@@ -980,12 +986,16 @@ pub fn search(
         }
     }
     let needle = q.to_lowercase();
+    let tag_q = crate::tags::parse_tag_query(q);
     for row in &sits {
         let Some(pid) = row.parked_id else {
             continue;
         };
         let body = row.parked_body.as_deref().unwrap_or("");
-        if !body.to_lowercase().contains(&needle) {
+        let tag_hit = tag_q.as_ref().is_some_and(|tag| {
+            crate::tags::extract_hashtags(body).iter().any(|t| t == tag)
+        });
+        if !tag_hit && !body.to_lowercase().contains(&needle) {
             continue;
         }
         let title = body.lines().next().unwrap_or("Parked").to_string();
@@ -999,6 +1009,37 @@ pub fn search(
         });
     }
     Ok(out)
+}
+
+fn parked_tag_hits(state: &AppState, user_id: i64, tag: &str) -> Result<Vec<SearchHit>, AppError> {
+    let mut hits = Vec::new();
+    for item in db::list_parked(state, user_id)? {
+        let tagged = item.tags.iter().any(|t| t == tag);
+        let idx = crate::tags::first_hashtag_index(&item.body, tag);
+        if !tagged && idx.is_none() {
+            continue;
+        }
+        let title = item
+            .body
+            .lines()
+            .next()
+            .unwrap_or("Parked")
+            .to_string();
+        let snippet = if let Some(at) = idx {
+            notes::snippet(&item.body, at, tag.len() + 1)
+        } else {
+            notes::snippet(&item.body, 0, 0)
+        };
+        hits.push(SearchHit {
+            id: format!("parked-{}", item.id),
+            title,
+            snippet,
+            kind: Some("parked".into()),
+            parked_id: Some(item.id),
+            context: None,
+        });
+    }
+    Ok(hits)
 }
 
 pub fn fill_pending_weather(state: &AppState, event_ids: Vec<i64>) {

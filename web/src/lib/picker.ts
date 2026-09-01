@@ -1,9 +1,10 @@
 import type { NoteMeta } from "../api";
 import { parseCreateQuery } from "./paths";
+import { noteHasTag, tagsFromNotes } from "./tags";
 
-export type PickerCollection = "recent" | "favorites";
+export type PickerCollection = "recent" | "favorites" | "tags";
 
-export type PickerSectionId = "goto" | "note" | "folder" | "create" | PickerCollection;
+export type PickerSectionId = "goto" | "note" | "folder" | "tag" | "create" | PickerCollection;
 
 export type PickerItem =
   | { type: "jump"; key: string; to: string; label: string }
@@ -11,6 +12,7 @@ export type PickerItem =
   | { type: "back"; key: "back" }
   | { type: "note"; key: string; note: NoteMeta }
   | { type: "folder"; key: string; path: string }
+  | { type: "tag"; key: string; name: string; count: number }
   | { type: "search-folder"; key: "search-folder" }
   | { type: "create"; key: "create"; draft: { title: string; folder: string }; label: string };
 
@@ -21,6 +23,7 @@ const JUMPS: Extract<PickerItem, { type: "jump" }>[] = [
 const COLLECTIONS: Extract<PickerItem, { type: "collection" }>[] = [
   { type: "collection", key: "recent", label: "Recent" },
   { type: "collection", key: "favorites", label: "Favorites" },
+  { type: "collection", key: "tags", label: "Tags" },
 ];
 
 const GOTO_ITEMS: PickerItem[] = [...JUMPS, ...COLLECTIONS];
@@ -38,6 +41,8 @@ export const PICKER_SECTION_LABELS: Record<PickerSectionId, string> = {
   create: "Create",
   recent: "Recent",
   favorites: "Favorites",
+  tags: "Tags",
+  tag: "Tag",
 };
 
 export function pickerItems(sections: PickerSection[]): PickerItem[] {
@@ -48,15 +53,39 @@ export function buildPickerSections(input: {
   query: string;
   notes: NoteMeta[];
   folders: string[];
+  tags?: { name: string; count: number }[];
   collection?: PickerCollection | null;
 }): PickerSection[] {
   const trimmed = input.query.trim();
   const bang = trimmed.startsWith("!");
+  const hash = trimmed.startsWith("#");
+  if (input.collection === "tags" && !trimmed) {
+    const tags = input.tags ?? tagsFromNotes(input.notes);
+    return section("tags", [
+      { type: "back", key: "back" },
+      ...tags.map(tagItem),
+    ]);
+  }
   if (input.collection && !trimmed) {
     return section(input.collection, [
       { type: "back", key: "back" },
       ...input.notes.map((note) => ({ type: "note" as const, key: note.id, note })),
     ]);
+  }
+  if (hash) {
+    const needle = trimmed.slice(1).trim().toLowerCase();
+    const tags = input.tags ?? tagsFromNotes(input.notes);
+    const exact = needle && tags.some((tag) => tag.name === needle);
+    if (exact) {
+      return section(
+        "note",
+        input.notes
+          .filter((note) => noteHasTag(note, needle))
+          .map((note) => ({ type: "note" as const, key: note.id, note })),
+      );
+    }
+    const hits = tags.filter((tag) => !needle || tag.name.includes(needle));
+    return section("tag", hits.map(tagItem));
   }
   if (bang) {
     const needle = trimmed.slice(1).trimStart().toLowerCase();
@@ -105,6 +134,10 @@ function section(id: PickerSectionId, items: PickerItem[]): PickerSection[] {
 
 function folderItem(path: string): PickerItem {
   return { type: "folder", key: path, path };
+}
+
+function tagItem(tag: { name: string; count: number }): PickerItem {
+  return { type: "tag", key: `tag:${tag.name}`, name: tag.name, count: tag.count };
 }
 
 function createItem(draft: { title: string; folder: string }): PickerItem {

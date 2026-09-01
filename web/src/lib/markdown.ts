@@ -1,5 +1,6 @@
 import MarkdownIt from "markdown-it";
-import { linkifyWiki } from "./wiki";
+import { escapeHtml, linkifyWiki } from "./wiki";
+import { normalizeTag } from "./tags";
 
 const md = new MarkdownIt({
   html: false,
@@ -20,5 +21,15 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
 };
 
 export function renderMarkdown(source: string): string {
-  return linkifyWiki(md.render(source));
+  return linkifyTags(linkifyWiki(md.render(source)));
+}
+
+const TAG_LINK_RE = /(^|[^A-Za-z0-9-])#([A-Za-z][A-Za-z0-9-]{0,31})\b/g;
+
+export function linkifyTags(html: string): string {
+  return html.replace(TAG_LINK_RE, (full, pre: string, name: string) => {
+    const tag = normalizeTag(name);
+    if (!tag) return full;
+    return `${pre}<a href="/search?q=${encodeURIComponent(`#${tag}`)}" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}</a>`;
+  });
 }

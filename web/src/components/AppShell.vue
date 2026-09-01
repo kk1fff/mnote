@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import { refreshParked, showParkCapture } from "../parked";
+import { refreshParked, registerParkedList, showParkCapture } from "../parked";
 import type { PickerCollection } from "../lib/picker";
+import { registerTagOpen } from "../lib/tags";
 import { registerPicker, type OpenMode } from "../workspace";
 import NotePicker from "./NotePicker.vue";
 import ParkCapture from "./ParkCapture.vue";
@@ -12,9 +13,10 @@ import Sidebar from "./Sidebar.vue";
 const sidebar = ref<{ load: () => Promise<void> } | null>(null);
 const picker = ref<{
   show: (mode?: OpenMode, collection?: PickerCollection) => void;
+  showTag: (tag: string) => void;
   open: boolean;
 } | null>(null);
-const parked = ref<{ show: () => void } | null>(null);
+const parked = ref<{ show: (id?: number) => void } | null>(null);
 const open = ref(false);
 const route = useRoute();
 
@@ -48,11 +50,15 @@ function onKey(event: KeyboardEvent) {
 onMounted(() => {
   window.addEventListener("keydown", onKey);
   registerPicker((mode) => picker.value?.show(mode));
+  registerTagOpen((tag) => picker.value?.showTag(tag));
+  registerParkedList((id) => parked.value?.show(id));
   void refreshParked().catch(() => undefined);
 });
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKey);
   registerPicker(null);
+  registerTagOpen(null);
+  registerParkedList(null);
 });
 </script>
 

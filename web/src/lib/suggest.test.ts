@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPageItems, completeWiki, detectTrigger } from "./suggest";
+import { buildPageItems, completeTag, completeWiki, detectTrigger } from "./suggest";
 
 describe("suggest", () => {
   it("opens commands after a line-start or spaced slash", () => {
@@ -17,6 +17,13 @@ describe("suggest", () => {
     expect(detectTrigger("[[a\nb", 5)).toBeNull();
   });
 
+  it("opens tag mode on a hashtag, not headings", () => {
+    expect(detectTrigger("#wo", 3)).toMatchObject({ mode: "tag", from: 0, query: "wo" });
+    expect(detectTrigger("see #wo", 7)).toMatchObject({ mode: "tag", query: "wo" });
+    expect(detectTrigger("# Title", 3)).toBeNull();
+    expect(detectTrigger("foo#bar", 7)).toBeNull();
+  });
+
   it("builds page rows and a new-page create item", () => {
     const notes = [{ id: "1", title: "One", folder: "ideas", modified_at: "" }];
     expect(buildPageItems("On", notes)).toMatchObject([
@@ -29,5 +36,6 @@ describe("suggest", () => {
 
   it("closes a wiki path", () => {
     expect(completeWiki("ideas/One")).toBe("[[ideas/One]]");
+    expect(completeTag("work")).toBe("#work");
   });
 });

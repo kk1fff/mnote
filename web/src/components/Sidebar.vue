@@ -70,7 +70,8 @@ function upsert(note: NoteMeta) {
   const i = notes.value.findIndex((n) => n.id === note.id);
   if (i >= 0) {
     const cur = notes.value[i];
-    if (cur.title === note.title && (cur.folder ?? "") === (note.folder ?? "")) return;
+    const sameTags = JSON.stringify(cur.tags ?? []) === JSON.stringify(note.tags ?? []);
+    if (cur.title === note.title && (cur.folder ?? "") === (note.folder ?? "") && sameTags) return;
     const next = notes.value.slice();
     next[i] = note;
     notes.value = next;
@@ -308,6 +309,9 @@ defineExpose({ load });
         </button>
         <button type="button" class="sidebar-link" data-testid="sidebar-recent" @click="emit('open-picker', 'recent')">
           Recent
+        </button>
+        <button type="button" class="sidebar-link" data-testid="sidebar-tags" @click="emit('open-picker', 'tags')">
+          Tags
         </button>
       </div>
     </div>

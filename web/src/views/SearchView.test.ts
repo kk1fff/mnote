@@ -2,7 +2,13 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 import { describe, expect, it, vi } from "vitest";
 import { api } from "../api";
+import { showParkedList } from "../parked";
 import SearchView from "./SearchView.vue";
+
+vi.mock("../parked", async () => {
+  const actual = await vi.importActual<typeof import("../parked")>("../parked");
+  return { ...actual, showParkedList: vi.fn() };
+});
 
 vi.mock("../api", async () => {
   const actual = await vi.importActual<typeof import("../api")>("../api");
@@ -63,5 +69,21 @@ describe("SearchView", () => {
     const wrapper = mount(SearchView, { global: { plugins: [router] } });
     await flushPromises();
     expect(wrapper.text()).toContain("boom");
+  });
+
+  it("opens parked hits in the parked sheet", async () => {
+    vi.mocked(api.search).mockResolvedValue([
+      { id: "parked-7", title: "call jim", snippet: "#work", kind: "parked", parked_id: 7 },
+    ]);
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [{ path: "/search", component: SearchView }],
+    });
+    await router.push("/search?q=%23work");
+    await router.isReady();
+    const wrapper = mount(SearchView, { global: { plugins: [router] } });
+    await flushPromises();
+    await wrapper.get('[data-testid="search-hit"]').trigger("click");
+    expect(showParkedList).toHaveBeenCalledWith(7);
   });
 });

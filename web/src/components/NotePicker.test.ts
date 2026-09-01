@@ -226,4 +226,18 @@ describe("NotePicker", () => {
     expect(workspace.value.primary.tabs.map((tab) => tab.id)).toEqual(["keep", "n2"]);
     expect(workspace.value.primary.active).toBe("n2");
   });
+
+  it("opens tags from Links and lists notes for an exact tag", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([
+      { id: "o1", title: "One", folder: "ideas", modified_at: "", tags: ["work"] },
+    ]);
+    const { wrapper } = await openPicker();
+    await wrapper.get('[data-testid="picker-tags"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("#work");
+    await wrapper.get('[data-testid="picker-tag-work"]').trigger("click");
+    await flushPromises();
+    expect((wrapper.get("input").element as HTMLInputElement).value).toBe("#work");
+    expect(wrapper.text()).toContain("One");
+  });
 });

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { api } from "../api";
+import { api, type TagSuggest } from "../api";
 import { stamp } from "../lib/context";
+import { completeTag, detectTrigger } from "../lib/suggest";
 import { parkContext, refreshParked, registerCapture, type ParkContext } from "../parked";
 
 const open = ref(false);
@@ -9,6 +10,11 @@ const body = ref("");
 const ctx = ref<ParkContext>({});
 const error = ref("");
 const input = ref<HTMLTextAreaElement | null>(null);
+const menu = ref<{ from: number; items: TagSuggest[] } | null>(null);
+const selected = ref(0);
+const menuPos = ref({ top: 0, left: 0 });
+let searchTimer: number | undefined;
+let searchId = 0;
 
 function show(next?: ParkContext) {
   ctx.value = next ?? parkContext();
@@ -20,6 +26,59 @@ function show(next?: ParkContext) {
 
 function close() {
   open.value = false;
+  menu.value = null;
+}
+
+function cursor(): number {
+  return input.value?.selectionStart ?? body.value.length;
+}
+
+function placeMenu() {
+  const el = input.value;
+  if (!el) return;
+  const box = el.getBoundingClientRect();
+  menuPos.value = { top: box.bottom + 6, left: box.left };
+}
+
+async function syncMenu() {
+  const trigger = detectTrigger(body.value, cursor());
+  if (!trigger || trigger.mode !== "tag") {
+    menu.value = null;
+    return;
+  }
+  const id = ++searchId;
+  window.clearTimeout(searchTimer);
+  searchTimer = window.setTimeout(async () => {
+    const hits = await api
+      .suggestTags({
+        q: trigger.query,
+        title: ctx.value.source_title,
+        folder: ctx.value.source_folder,
+        content: `${ctx.value.excerpt ?? ""}\n${body.value}`,
+        cursor: (ctx.value.excerpt ?? "").length + 1 + trigger.from,
+      })
+      .catch(() => []);
+    if (id !== searchId) return;
+    const still = detectTrigger(body.value, cursor());
+    if (!still || still.mode !== "tag") return;
+    menu.value = { from: still.from, items: hits };
+    selected.value = 0;
+    placeMenu();
+  }, 120);
+}
+
+function acceptTag(index = selected.value) {
+  const item = menu.value?.items[index];
+  const from = menu.value?.from;
+  if (!item || from == null) return;
+  const to = cursor();
+  body.value = body.value.slice(0, from) + completeTag(item.name) + body.value.slice(to);
+  menu.value = null;
+  void nextTick(() => {
+    const pos = from + item.name.length + 1;
+    input.value?.setSelectionRange(pos, pos);
+    input.value?.focus();
+  });
 }
 
 async function park() {
@@ -55,6 +114,28 @@ async function park() {
 const parkShortcut = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘↵" : "Ctrl+↵";
 
 function onKey(event: KeyboardEvent) {
+  if (menu.value?.items.length) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      selected.value = (selected.value + 1) % menu.value.items.length;
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      selected.value = (selected.value - 1 + menu.value.items.length) % menu.value.items.length;
+      return;
+    }
+    if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      acceptTag();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      menu.value = null;
+      return;
+    }
+  }
   if (event.key === "Escape") {
     event.preventDefault();
     event.stopPropagation();
@@ -96,7 +177,28 @@ defineExpose({ show, open });
         data-testid="park-body"
         placeholder="Dump the thought"
         @keydown="onKey"
+        @input="syncMenu"
       />
+      <Teleport to="body">
+        <div
+          v-if="menu?.items.length"
+          class="suggest-menu"
+          data-testid="park-suggest"
+          role="listbox"
+          :style="{ top: `${menuPos.top}px`, left: `${menuPos.left}px` }"
+        >
+          <button
+            v-for="(item, index) in menu.items"
+            :key="item.name"
+            type="button"
+            :class="{ active: selected === index }"
+            @mousedown.prevent="acceptTag(index)"
+          >
+            <span>#{{ item.name }}</span>
+            <small :class="{ 'suggest-new': item.create }">{{ item.create ? "New" : item.count }}</small>
+          </button>
+        </div>
+      </Teleport>
       <div v-if="ctx.source_title" class="park-context">
         <p class="muted park-from">From {{ ctx.source_title }}</p>
         <blockquote v-if="ctx.excerpt">{{ ctx.excerpt }}</blockquote>

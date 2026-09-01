@@ -6,6 +6,7 @@ pub mod error;
 pub mod live;
 pub mod merge;
 pub mod notes;
+pub mod tags;
 
 use crate::context::WeatherNow;
 use crate::error::AppError;

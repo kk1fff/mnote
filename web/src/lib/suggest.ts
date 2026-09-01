@@ -2,7 +2,7 @@ import type { NoteMeta } from "../api";
 import { parseCreateQuery, wikiPath } from "./paths";
 
 export type SuggestTrigger = {
-  mode: "command" | "page";
+  mode: "command" | "page" | "tag";
   from: number;
   queryFrom: number;
   query: string;
@@ -23,6 +23,9 @@ export function detectTrigger(doc: string, cursor: number): SuggestTrigger | nul
       return { mode: "page", from: wiki, queryFrom: wiki + 2, query: after };
     }
   }
+
+  const tag = detectHashtag(doc, at);
+  if (tag) return tag;
 
   const lineStart = before.lastIndexOf("\n") + 1;
   const line = before.slice(lineStart);
@@ -61,4 +64,24 @@ export function buildPageItems(query: string, notes: NoteMeta[]): PageSuggestIte
 
 export function completeWiki(path: string): string {
   return `[[${path}]]`;
+}
+
+export function completeTag(name: string): string {
+  return `#${name}`;
+}
+
+function detectHashtag(doc: string, cursor: number): SuggestTrigger | null {
+  const before = doc.slice(0, cursor);
+  const lineStart = before.lastIndexOf("\n") + 1;
+  const line = before.slice(lineStart);
+  const heading = line.match(/^(#{1,6})[ \t]/);
+  const hash = line.lastIndexOf("#");
+  if (hash < 0) return null;
+  if (heading && hash < heading[1].length) return null;
+  if (hash > 0 && !/[\s([{`'"]/.test(line[hash - 1] ?? "")) return null;
+  const query = line.slice(hash + 1);
+  if (!/^[A-Za-z0-9-]*$/.test(query)) return null;
+  const ticks = line.slice(0, hash).split("`").length - 1;
+  if (ticks % 2 === 1) return null;
+  return { mode: "tag", from: lineStart + hash, queryFrom: lineStart + hash + 1, query };
 }

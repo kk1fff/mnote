@@ -128,6 +128,25 @@ if ((await editor(page).innerText()).trim().length < 8) {
   await page.waitForTimeout(300);
 }
 await shot(page, "02-note-desktop-light");
+
+await editor(page).click();
+await page.keyboard.press("End");
+await page.keyboard.press("Enter");
+await page.keyboard.type(" see #work");
+try {
+  await page.waitForSelector('[data-testid="suggest"]', { timeout: 4000 });
+  await shot(page, "22-tag-suggest-light");
+  await page.keyboard.press("Enter");
+} catch {
+  console.warn("tag suggest did not open");
+}
+await noteAction(page, "save");
+try {
+  await page.waitForSelector('[data-testid="note-tags"]', { timeout: 8000 });
+  await shot(page, "23-note-tags-row-light");
+} catch {
+  console.warn("note tags row did not appear");
+}
 await page.getByTestId("sidebar-cal-toggle").click();
 await shot(page, "02f-sidebar-calendar-folded-light");
 await page.getByTestId("sidebar-cal-toggle").click();
@@ -203,6 +222,12 @@ await page.waitForSelector('[data-testid="editor"]');
   await page.waitForSelector('[data-testid="picker-back"]');
   sameChrome(homeChrome, await pickerChrome(page), "favorites light");
   await shot(page, "18c-picker-favorites-light");
+  await page.getByTestId("picker-back").click();
+  await page.waitForSelector('[data-testid="picker-tags"]');
+  await page.getByTestId("picker-tags").click();
+  await page.waitForSelector('[data-testid="picker-back"]');
+  sameChrome(homeChrome, await pickerChrome(page), "tags light");
+  await shot(page, "18e-picker-tags-light");
   await closePicker(page);
 
   await page.locator(".tree-row").first().hover();
@@ -228,8 +253,12 @@ await page.waitForSelector('[data-testid="delete-note"]', { state: "hidden" });
 
 await noteAction(page, "park");
 await page.waitForSelector('[data-testid="park-capture"]');
-await page.getByTestId("park-body").fill("Ask Jim about onboarding");
+await page.getByTestId("park-body").fill("Ask Jim about onboarding #work");
+await page.waitForTimeout(200);
 await shot(page, "05-park-capture");
+if (await page.locator('[data-testid="park-suggest"]').count()) {
+  await shot(page, "24-park-tag-suggest");
+}
 await page.getByTestId("park-save").click();
 await page.waitForSelector('[data-testid="parked-count"]');
 
@@ -266,7 +295,13 @@ await page.getByTestId("sidebar-cal-toggle").click();
   await page.waitForSelector('[data-testid="picker-back"]');
   sameChrome(darkChrome, await pickerChrome(page), "recent dark");
   await shot(page, "19b-picker-recent-dark");
+  await page.getByTestId("picker-back").click();
+  await page.waitForSelector('[data-testid="picker-tags"]');
+  await page.getByTestId("picker-tags").click();
+  await page.waitForSelector('[data-testid="picker-back"]');
+  await shot(page, "19c-picker-tags-dark");
   await closePicker(page);
+  await shot(page, "23b-note-tags-row-dark");
 await page.locator(".tree-row").first().hover();
 await page.getByTestId("tree-more").first().click();
 await page.waitForSelector('[data-testid="tree-menu"]');
@@ -324,6 +359,11 @@ await m.waitForSelector('[data-testid="tree-menu"]');
   await m.getByTestId("picker-recent").click();
   await m.waitForSelector('[data-testid="picker-back"]');
   await shot(m, "20b-picker-recent-mobile");
+  await m.getByTestId("picker-back").click();
+  await m.waitForSelector('[data-testid="picker-tags"]');
+  await m.getByTestId("picker-tags").click();
+  await m.waitForSelector('[data-testid="picker-back"]');
+  await shot(m, "20c-picker-tags-mobile");
   await closePicker(m);
   await m.goto(`${url}/images`);
   await m.waitForSelector("h1");

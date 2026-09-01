@@ -112,8 +112,9 @@ pub fn init(conn: &rusqlite::Connection) -> Result<(), AppError> {
         );
         ",
     )?;
-    migrate_parked_context(conn)?;
-    Ok(())
+        migrate_parked_context(conn)?;
+        add_column(conn, "parked", "tags", "TEXT")?;
+        Ok(())
 }
 
 fn table_has_column(conn: &rusqlite::Connection, table: &str, column: &str) -> Result<bool, AppError> {
@@ -577,11 +578,26 @@ pub struct Parked {
     pub weather_label: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temp_c: Option<f64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 const PARKED_COLS: &str = "id, body, created_at, source_id, source_title, source_folder, excerpt,
          surface, device, local_time, timezone, lat, lon, accuracy_m,
-         weather_code, weather_label, temp_c";
+         weather_code, weather_label, temp_c, tags";
+
+fn parked_tags(stored: Option<String>, body: String) -> Vec<String> {
+    let from_col = stored
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(crate::tags::parse_tags_field)
+        .unwrap_or_default();
+    if from_col.is_empty() {
+        crate::tags::extract_hashtags(&body)
+    } else {
+        from_col
+    }
+}
 
 fn parked_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Parked> {
     Ok(Parked {
@@ -602,6 +618,7 @@ fn parked_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Parked> {
         weather_code: row.get("weather_code")?,
         weather_label: row.get("weather_label")?,
         temp_c: row.get("temp_c")?,
+        tags: parked_tags(row.get("tags")?, row.get("body")?),
     })
 }
 
@@ -647,12 +664,13 @@ pub fn create_parked(
         .db
         .lock()
         .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    let tags = crate::tags::format_tags(&crate::tags::extract_hashtags(body));
     conn.execute(
         "INSERT INTO parked (
             user_id, body, created_at, source_id, source_title, source_folder, excerpt,
             surface, device, local_time, timezone, lat, lon, accuracy_m,
-            weather_code, weather_label, temp_c
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+            weather_code, weather_label, temp_c, tags
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
         params![
             user_id,
             body,
@@ -671,6 +689,7 @@ pub fn create_parked(
             weather.as_ref().map(|w| w.weather_code),
             weather.as_ref().map(|w| w.weather_label.as_str()),
             weather.as_ref().map(|w| w.temp_c),
+            tags,
         ],
     )?;
     let id = conn.last_insert_rowid();

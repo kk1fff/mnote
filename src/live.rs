@@ -646,6 +646,7 @@ mod tests {
                 id: "n1".into(),
                 title: "One".into(),
                 folder: "ideas".into(),
+                tags: Vec::new(),
                 modified_at: "t".into(),
             },
         );

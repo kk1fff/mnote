@@ -9,6 +9,7 @@ import {
   type PickerItem,
 } from "../lib/picker";
 import { noteFolderLabel } from "../lib/paths";
+import { tagsFromNotes } from "../lib/tags";
 import { openInWorkspace, type OpenMode } from "../workspace";
 
 const emit = defineEmits<{ created: [] }>();
@@ -17,6 +18,7 @@ const query = ref("");
 const results = ref<NoteMeta[]>([]);
 const folders = ref<string[]>([]);
 const foldersReady = ref(false);
+const tagIndex = ref<{ name: string; count: number }[]>([]);
 const collection = ref<PickerCollection | null>(null);
 const open = ref(false);
 const openMode = ref<OpenMode>("replace");
@@ -30,12 +32,14 @@ let searchId = 0;
 
 const trimmed = computed(() => query.value.trim());
 const bang = computed(() => trimmed.value.startsWith("!"));
+const hash = computed(() => trimmed.value.startsWith("#"));
 const folderQuery = computed(() => (trimmed.value.endsWith("/") ? trimmed.value.slice(0, -1) : ""));
 const sections = computed(() =>
   buildPickerSections({
     query: query.value,
     notes: results.value,
     folders: folders.value,
+    tags: tagIndex.value,
     collection: collection.value,
   }),
 );
@@ -52,13 +56,14 @@ const itemOffset = computed(() => {
   return offsets;
 });
 
-function show(mode: OpenMode = "replace", collectionKind?: PickerCollection) {
+function show(mode: OpenMode = "replace", collectionKind?: PickerCollection, initialQuery?: string) {
   open.value = true;
   openMode.value = mode;
-  query.value = "";
+  query.value = initialQuery ?? "";
   results.value = [];
   folders.value = [];
   foldersReady.value = false;
+  tagIndex.value = [];
   collection.value = null;
   error.value = "";
   selected.value = 0;
@@ -66,7 +71,12 @@ function show(mode: OpenMode = "replace", collectionKind?: PickerCollection) {
     void enterCollection(collectionKind);
     return;
   }
+  if (initialQuery?.startsWith("#")) void ensureTags();
   void nextTick(() => input.value?.focus());
+}
+
+function showTag(tag: string) {
+  show("replace", undefined, `#${tag}`);
 }
 
 function close() {
@@ -127,6 +137,17 @@ async function ensureFolders() {
   foldersReady.value = true;
 }
 
+async function ensureTags() {
+  try {
+    const notes = await api.listNotes();
+    tagIndex.value = tagsFromNotes(notes);
+    results.value = notes;
+  } catch {
+    tagIndex.value = [];
+    results.value = [];
+  }
+}
+
 function leaveCollection() {
   collection.value = null;
   query.value = "";
@@ -143,7 +164,8 @@ async function enterCollection(kind: PickerCollection) {
   error.value = "";
   selected.value = 0;
   try {
-    results.value = kind === "recent" ? await api.recentNotes() : await api.favorites();
+    if (kind === "tags") await ensureTags();
+    else results.value = kind === "recent" ? await api.recentNotes() : await api.favorites();
   } catch {
     error.value = "Could not load notes";
   }
@@ -165,9 +187,18 @@ function pickFolder(folder: string) {
   void nextTick(() => input.value?.focus());
 }
 
+function pickTag(name: string) {
+  collection.value = null;
+  query.value = `#${name}`;
+  selected.value = 0;
+  void ensureTags();
+  void nextTick(() => input.value?.focus());
+}
+
 function activate(item: PickerItem) {
   if (item.type === "note") void select(item.note);
   else if (item.type === "folder") pickFolder(item.path);
+  else if (item.type === "tag") pickTag(item.name);
   else if (item.type === "search-folder") enterFolderMode();
   else if (item.type === "collection") void enterCollection(item.key);
   else if (item.type === "back") leaveCollection();
@@ -187,7 +218,7 @@ function onKey(event: KeyboardEvent) {
       leaveCollection();
       return;
     }
-    if (bang.value) {
+    if (bang.value || hash.value) {
       query.value = "";
       selected.value = 0;
       return;
@@ -224,6 +255,13 @@ watch(query, () => {
     clampSelected();
     return;
   }
+  if (hash.value) {
+    collection.value = null;
+    selected.value = 0;
+    void ensureTags();
+    clampSelected();
+    return;
+  }
   const q = trimmed.value;
   if (collection.value && q) {
     collection.value = null;
@@ -255,7 +293,7 @@ watch(items, () => {
   if (selected.value > maxIndex.value || selected.value < 0) clampSelected();
 });
 
-defineExpose({ show, open });
+defineExpose({ show, showTag, open });
 </script>
 
 <template>
@@ -270,7 +308,7 @@ defineExpose({ show, open });
           ref="input"
           v-model="query"
           type="search"
-          :placeholder="bang ? 'Search folders' : 'Search or create a note'"
+          :placeholder="hash ? 'Search tags' : bang ? 'Search folders' : 'Search or create a note'"
           data-testid="picker-input"
           aria-label="Search or create a note"
           @keydown="onKey"
@@ -298,6 +336,16 @@ defineExpose({ show, open });
                 @click="pickFolder(item.path)"
               >
                 <span>{{ item.path }}</span>
+              </button>
+              <button
+                v-else-if="item.type === 'tag'"
+                type="button"
+                :data-testid="`picker-tag-${item.name}`"
+                :class="{ active: selected === indexOf(item) }"
+                @click="pickTag(item.name)"
+              >
+                <span>#{{ item.name }}</span>
+                <small>{{ item.count }}</small>
               </button>
               <button
                 v-else-if="item.type === 'search-folder'"
@@ -349,7 +397,9 @@ defineExpose({ show, open });
           </ul>
         </section>
         <p v-if="bang && !sections.length" class="muted picker-message">No folders yet</p>
-        <p v-else-if="collection && !results.length" class="muted picker-message">No notes yet</p>
+        <p v-else-if="hash && !sections.length" class="muted picker-message">No tags yet</p>
+        <p v-else-if="collection && !results.length && collection !== 'tags'" class="muted picker-message">No notes yet</p>
+        <p v-else-if="collection === 'tags' && tagIndex.length === 0" class="muted picker-message">No tags yet</p>
         <p
           v-else-if="!bang && folderQuery && trimmed && !sections.some((section) => section.id === 'note')"
           class="muted picker-message"

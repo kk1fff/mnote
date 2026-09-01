@@ -13,6 +13,8 @@ pub struct Note {
     pub title: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub folder: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
     pub content: String,
     pub modified_at: String,
     #[serde(skip)]
@@ -25,6 +27,8 @@ pub struct NoteMeta {
     pub title: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub folder: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
     pub modified_at: String,
 }
 
@@ -85,6 +89,8 @@ pub struct HistoryRev {
     pub bytes: u64,
     pub title: String,
     pub folder: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
     pub content: String,
 }
 
@@ -373,6 +379,9 @@ fn render_file(note: &Note) -> String {
     if !note.folder.is_empty() {
         out.push_str(&format!("folder: {}\n", note.folder));
     }
+    if !note.tags.is_empty() {
+        out.push_str(&format!("tags: {}\n", crate::tags::format_tags(&note.tags)));
+    }
     out.push_str("---\n\n");
     out.push_str(&note.content);
     out
@@ -486,6 +495,10 @@ fn parse_snapshot(file: &Path) -> Result<HistoryRev, AppError> {
         bytes: meta.len(),
         title: fields.get("title").cloned().unwrap_or_default(),
         folder: fields.get("folder").cloned().unwrap_or_default(),
+        tags: fields
+            .get("tags")
+            .map(|raw| crate::tags::parse_tags_field(raw))
+            .unwrap_or_default(),
         content: body,
     })
 }
@@ -526,6 +539,7 @@ fn maybe_snapshot(vault: &Path, id: &str, force: bool) -> Result<(), AppError> {
         if latest.content == disk.content
             && latest.title == disk.title
             && latest.folder == disk.folder
+            && latest.tags == disk.tags
         {
             return Ok(());
         }
@@ -607,10 +621,15 @@ fn load_note_file(vault: &Path, file: &Path) -> Result<Note, AppError> {
         .map(|s| s.trim().trim_matches('/').to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or(parent);
+    let tags = fields
+        .get("tags")
+        .map(|raw| crate::tags::parse_tags_field(raw))
+        .unwrap_or_default();
     Ok(Note {
         id,
         title,
         folder,
+        tags,
         content: body,
         modified_at: file_modified(file)?,
         file_path,
@@ -627,7 +646,7 @@ fn note_from_file(vault: &Path, file: &Path) -> Result<Note, AppError> {
     Ok(note)
 }
 
-fn list_notes_internal(vault: &Path) -> Result<Vec<Note>, AppError> {
+pub(crate) fn list_notes_internal(vault: &Path) -> Result<Vec<Note>, AppError> {
     ensure_vault(vault)?;
     let root = vault.join("notes");
     let mut notes = Vec::new();
@@ -652,6 +671,7 @@ pub fn to_meta(note: &Note) -> NoteMeta {
         id: note.id.clone(),
         title: note.title.clone(),
         folder: note.folder.clone(),
+        tags: note.tags.clone(),
         modified_at: note.modified_at.clone(),
     }
 }
@@ -710,12 +730,15 @@ pub fn create_note(
         return Err(AppError::Conflict(format!("title_exists:{}", existing.id)));
     }
     let file_path = allocate_file_path(vault, &folder, &title, None);
+    let content = content.unwrap_or("").to_string();
+    let tags = crate::tags::extract_hashtags(&content);
     let note = Note {
         id: uuid::Uuid::new_v4().to_string(),
-        content: content.unwrap_or("").to_string(),
+        content,
         modified_at: String::new(),
         file_path,
         folder,
+        tags,
         title,
     };
     write_note(vault, &note)?;
@@ -725,6 +748,7 @@ pub fn create_note(
 pub fn put_note(vault: &Path, id: &str, content: &str) -> Result<Note, AppError> {
     let mut note = get_note(vault, id)?;
     note.content = content.to_string();
+    note.tags = crate::tags::union_tags(&note.tags, &crate::tags::extract_hashtags(content));
     write_note(vault, &note)?;
     get_note(vault, id)
 }
@@ -825,7 +849,7 @@ pub fn update_meta(
     title: Option<&str>,
     folder: Option<&str>,
 ) -> Result<Note, AppError> {
-    Ok(update_meta_and_rewrites(vault, id, title, folder)?.0)
+    Ok(update_meta_and_rewrites(vault, id, title, folder, None)?.0)
 }
 
 pub fn update_meta_and_rewrites(
@@ -833,6 +857,7 @@ pub fn update_meta_and_rewrites(
     id: &str,
     title: Option<&str>,
     folder: Option<&str>,
+    tags: Option<&[String]>,
 ) -> Result<(Note, Vec<Note>), AppError> {
     let mut note = get_note(vault, id)?;
     let old_title = note.title.clone();
@@ -845,7 +870,11 @@ pub fn update_meta_and_rewrites(
         Some(raw) => normalize_folder(raw)?,
         None => note.folder.clone(),
     };
-    if new_title == note.title && new_folder == note.folder {
+    let new_tags = match tags {
+        Some(raw) => crate::tags::normalize_tag_list(raw).map_err(AppError::BadRequest)?,
+        None => note.tags.clone(),
+    };
+    if new_title == note.title && new_folder == note.folder && new_tags == note.tags {
         return Ok((note, Vec::new()));
     }
     if path_key(&new_folder, &new_title) != path_key(&old_folder, &old_title) {
@@ -856,9 +885,13 @@ pub fn update_meta_and_rewrites(
         }
     }
     let old_file = note.file_path.clone();
+    let path_changed = path_key(&new_folder, &new_title) != path_key(&old_folder, &old_title);
     note.title = new_title;
     note.folder = new_folder;
-    note.file_path = allocate_file_path(vault, &note.folder, &note.title, Some(&note.id));
+    note.tags = new_tags;
+    if path_changed {
+        note.file_path = allocate_file_path(vault, &note.folder, &note.title, Some(&note.id));
+    }
     write_note(vault, &note)?;
     if old_file != note.file_path {
         let old = note_file(vault, &old_file);
@@ -866,11 +899,15 @@ pub fn update_meta_and_rewrites(
             std::fs::remove_file(old)?;
         }
     }
-    let rewritten = rewrite_wiki_targets(
-        vault,
-        &path_key(&old_folder, &old_title),
-        &wiki_path(&note.folder, &note.title),
-    )?;
+    let rewritten = if path_changed {
+        rewrite_wiki_targets(
+            vault,
+            &path_key(&old_folder, &old_title),
+            &wiki_path(&note.folder, &note.title),
+        )?
+    } else {
+        Vec::new()
+    };
     Ok((get_note(vault, id)?, rewritten))
 }
 
@@ -1028,11 +1065,16 @@ pub fn search(vault: &Path, query: &str) -> Result<Vec<SearchHit>, AppError> {
         return Err(AppError::BadRequest("query is too long".into()));
     }
     let needle = q.to_lowercase();
+    if let Some(tag) = crate::tags::parse_tag_query(q) {
+        return search_tag(vault, &tag);
+    }
     let mut hits = Vec::new();
     for note in list_notes_internal(vault)? {
-        let hay = format!("{}\n{}\n{}", note.title, note.folder, note.content).to_lowercase();
+        let tags = crate::tags::format_tags(&note.tags);
+        let hay = format!("{}\n{}\n{}\n{}", note.title, note.folder, tags, note.content).to_lowercase();
         if let Some(idx) = hay.find(&needle) {
-            let offset = idx.saturating_sub(note.title.len() + note.folder.len() + 2);
+            let prefix = note.title.len() + note.folder.len() + tags.len() + 3;
+            let offset = idx.saturating_sub(prefix);
             hits.push(SearchHit {
                 id: note.id,
                 title: note.title,
@@ -1042,6 +1084,31 @@ pub fn search(vault: &Path, query: &str) -> Result<Vec<SearchHit>, AppError> {
                 context: None,
             });
         }
+    }
+    Ok(hits)
+}
+
+fn search_tag(vault: &Path, tag: &str) -> Result<Vec<SearchHit>, AppError> {
+    let mut hits = Vec::new();
+    for note in list_notes_internal(vault)? {
+        let tagged = note.tags.iter().any(|t| t == tag);
+        let idx = crate::tags::first_hashtag_index(&note.content, tag);
+        if !tagged && idx.is_none() {
+            continue;
+        }
+        let snippet = if let Some(at) = idx {
+            snippet(&note.content, at, tag.len() + 1)
+        } else {
+            snippet(&note.content, 0, 0)
+        };
+        hits.push(SearchHit {
+            id: note.id,
+            title: note.title,
+            snippet,
+            kind: None,
+            parked_id: None,
+            context: None,
+        });
     }
     Ok(hits)
 }
@@ -1670,5 +1737,36 @@ mod tests {
             get_history(vault, &note.id, &hist[0].rev).unwrap().content,
             "session"
         );
+    }
+
+    #[test]
+    fn tags_frontmatter_hashtags_search_and_patch() {
+        let dir = tempdir().unwrap();
+        let vault = dir.path();
+        let note = create_note(vault, "One", "ideas", Some("see #work and rust\n")).unwrap();
+        assert_eq!(note.tags, vec!["work"]);
+        let loaded = get_note(vault, &note.id).unwrap();
+        assert_eq!(loaded.tags, vec!["work"]);
+
+        let patched = update_meta_and_rewrites(
+            vault,
+            &note.id,
+            None,
+            None,
+            Some(&[String::from("work"), String::from("Meeting")]),
+        )
+        .unwrap()
+        .0;
+        assert_eq!(patched.tags, vec!["work", "meeting"]);
+        assert_eq!(patched.folder, "ideas");
+
+        let saved = put_note(vault, &note.id, "see #work and #rust\n").unwrap();
+        assert_eq!(saved.tags, vec!["work", "meeting", "rust"]);
+
+        let hits = search(vault, "#work").unwrap();
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].snippet.contains("#work"));
+        let by_name = search(vault, "meeting").unwrap();
+        assert_eq!(by_name.len(), 1);
     }
 }

@@ -5,6 +5,7 @@ import { api, rewriteApiUrls } from "../api";
 import { renderMarkdown } from "../lib/markdown";
 import { noteIdFromRoute, parseWikiPath, sameWikiPath } from "../lib/paths";
 import { openInWorkspace } from "../workspace";
+import { openTag } from "../lib/tags";
 
 const props = defineProps<{ source: string }>();
 const router = useRouter();
@@ -35,6 +36,12 @@ function onClick(event: MouseEvent) {
   if (wiki) {
     event.preventDefault();
     void openWiki(wiki);
+    return;
+  }
+  const tag = target.getAttribute("data-tag");
+  if (tag) {
+    event.preventDefault();
+    openTag(tag);
     return;
   }
   const href = target.getAttribute("href");

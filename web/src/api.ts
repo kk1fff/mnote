@@ -68,6 +68,7 @@ export interface Note {
   id: string;
   title: string;
   folder?: string;
+  tags?: string[];
   content: string;
   modified_at: string;
 }
@@ -76,7 +77,14 @@ export interface NoteMeta {
   id: string;
   title: string;
   folder?: string;
+  tags?: string[];
   modified_at: string;
+}
+
+export interface TagSuggest {
+  name: string;
+  count: number;
+  create?: boolean;
 }
 
 export interface SearchHit {
@@ -169,6 +177,7 @@ export interface Parked {
   weather_code?: number;
   weather_label?: string;
   temp_c?: number;
+  tags?: string[];
 }
 
 function folderPath(folder: string): string {
@@ -270,10 +279,23 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ content }),
     }),
-  patchNote: (id: string, meta: { title?: string; folder?: string }) =>
+  patchNote: (id: string, meta: { title?: string; folder?: string; tags?: string[] }) =>
     request<Note>(`/api/notes/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(meta),
+    }),
+  suggestTags: (body: {
+    note_id?: string;
+    q?: string;
+    title?: string;
+    folder?: string;
+    content?: string;
+    cursor?: number;
+    current_tags?: string[];
+  }) =>
+    request<TagSuggest[]>("/api/tags/suggest", {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
   deleteNote: (id: string) =>
     request<void>(`/api/notes/${encodeURIComponent(id)}`, { method: "DELETE" }),

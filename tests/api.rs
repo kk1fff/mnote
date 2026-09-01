@@ -1304,3 +1304,81 @@ async fn setup_only_on_loopback_when_empty() {
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert_eq!(body["error"], "already_setup");
 }
+
+#[tokio::test]
+async fn tags_patch_search_parked_and_suggest() {
+    let h = Harness::new();
+    let cookie = h.login("alice", "password1").await;
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &cookie,
+            Some(json!({ "title": "Alpha", "content": "hello #work\n" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let id = body["id"].as_str().unwrap().to_string();
+    assert_eq!(body["tags"], json!(["work"]));
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::PATCH,
+            &format!("/api/notes/{id}"),
+            &cookie,
+            Some(json!({ "tags": ["work", "Meeting"] })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["tags"], json!(["work", "meeting"]));
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/search?q=%23work", &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body.as_array().unwrap().len(), 1);
+    assert!(body[0]["snippet"].as_str().unwrap().contains("#work"));
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/parked",
+            &cookie,
+            Some(json!({ "body": "call jim #work" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    assert_eq!(body["tags"], json!(["work"]));
+    let parked_id = body["id"].as_i64().unwrap();
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/search?q=%23work", &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let hits = body.as_array().unwrap();
+    assert_eq!(hits.len(), 2);
+    assert!(hits.iter().any(|h| h["kind"] == "parked" && h["parked_id"] == parked_id));
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/tags/suggest",
+            &cookie,
+            Some(json!({ "q": "me", "content": "weekly standup", "cursor": 6 })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body.as_array().unwrap().iter().any(|h| h["name"] == "meeting"));
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            &format!("/api/parked/{parked_id}/note"),
+            &cookie,
+            None,
+        ))
+        .await;
+    assert!(status.is_success(), "{body}");
+    let tags = body["tags"].as_array().unwrap();
+    assert!(tags.iter().any(|t| t == "work"));
+}

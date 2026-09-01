@@ -14,6 +14,7 @@ vi.mock("../api", async () => {
       }),
       titleSearch: vi.fn().mockResolvedValue([]),
       recentNotes: vi.fn().mockResolvedValue([]),
+      suggestTags: vi.fn().mockResolvedValue([{ name: "work", count: 1 }]),
     },
   };
 });

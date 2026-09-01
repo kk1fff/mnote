@@ -5,6 +5,7 @@ import { api, type SearchHit } from "../api";
 import AppShell from "../components/AppShell.vue";
 import { currentFix, startGeoWatch } from "../lib/context";
 import { openInWorkspace } from "../workspace";
+import { showParkedList } from "../parked";
 
 const route = useRoute();
 const router = useRouter();
@@ -41,6 +42,10 @@ function applyWeather() {
 }
 
 function openHit(hit: SearchHit) {
+  if (hit.kind === "parked" && hit.parked_id != null) {
+    showParkedList(hit.parked_id);
+    return;
+  }
   void router.push(openInWorkspace(hit.id, hit.title));
 }
 
@@ -84,8 +89,7 @@ watch(() => route.query, run, { deep: true });
       <p v-else-if="!hits.length" class="muted results">No matches</p>
       <ul class="results">
         <li v-for="hit in hits" :key="hit.id">
-          <a v-if="hit.kind !== 'parked'" href="#" @click.prevent="openHit(hit)">{{ hit.title }}</a>
-          <span v-else>{{ hit.title }}</span>
+          <a href="#" data-testid="search-hit" @click.prevent="openHit(hit)">{{ hit.title }}</a>
           <p>{{ hit.context || hit.snippet }}</p>
         </li>
       </ul>

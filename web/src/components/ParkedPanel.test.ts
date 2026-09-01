@@ -28,10 +28,11 @@ describe("ParkedPanel", () => {
     vi.mocked(api.listParked).mockResolvedValue([
       {
         id: 7,
-        body: "ask jim",
+        body: "ask jim #work",
         created_at: "2026-08-22T15:00:00Z",
         source_id: "n1",
         source_title: "Weekly",
+        tags: ["work"],
       },
     ]);
     vi.mocked(api.parkedToNote).mockResolvedValue({
@@ -43,10 +44,11 @@ describe("ParkedPanel", () => {
     vi.mocked(api.listParked).mockResolvedValueOnce([
       {
         id: 7,
-        body: "ask jim",
+        body: "ask jim #work",
         created_at: "2026-08-22T15:00:00Z",
         source_id: "n1",
         source_title: "Weekly",
+        tags: ["work"],
       },
     ]);
     vi.mocked(api.listParked).mockResolvedValueOnce([]);
@@ -62,6 +64,7 @@ describe("ParkedPanel", () => {
     const wrapper = mount(ParkedPanel, { global: { plugins: [router] } });
     wrapper.vm.show();
     await flushPromises();
+    expect(wrapper.get('[data-testid="parked-row"]').text()).toContain("#work");
     await wrapper.get('[data-testid="parked-row"]').trigger("click");
     await wrapper.get('[data-testid="parked-make-note"]').trigger("click");
     await flushPromises();

@@ -15,6 +15,7 @@ vi.mock("../api", async () => {
         created_at: "2026-08-22T15:00:00Z",
       }),
       listParked: vi.fn().mockResolvedValue([]),
+      suggestTags: vi.fn().mockResolvedValue([{ name: "work", count: 1 }]),
     },
   };
 });
@@ -48,5 +49,24 @@ describe("ParkCapture", () => {
     expect(wrapper.find('[data-testid="park-capture"]').exists()).toBe(false);
     registerCapture(null);
     setParkContext(null);
+  });
+
+  it("suggests tags while typing a hashtag", async () => {
+    vi.useFakeTimers();
+    const wrapper = mount(ParkCapture, { attachTo: document.body });
+    wrapper.vm.show();
+    await flushPromises();
+    const field = wrapper.get('[data-testid="park-body"]');
+    await field.setValue("#wo");
+    const el = field.element as HTMLTextAreaElement;
+    el.selectionStart = el.selectionEnd = el.value.length;
+    await field.trigger("input");
+    await vi.advanceTimersByTimeAsync(120);
+    await flushPromises();
+    expect(api.suggestTags).toHaveBeenCalled();
+    expect(document.querySelector('[data-testid="park-suggest"]')?.textContent).toContain("#work");
+    wrapper.unmount();
+    vi.useRealTimers();
+    registerCapture(null);
   });
 });

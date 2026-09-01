@@ -43,9 +43,12 @@ const emit = defineEmits<{
 const router = useRouter();
 const title = ref("");
 const folder = ref("");
+const tags = ref<string[]>([]);
 const draftTitle = ref("");
 const draftFolder = ref("");
+const draftTags = ref("");
 const editingMeta = ref(false);
+const editingTags = ref(false);
 const content = ref("");
 const preview = ref(false);
 const status = ref("");
@@ -97,13 +100,16 @@ async function load() {
   remotes.value = [];
   title.value = "";
   folder.value = "";
+  tags.value = [];
   editingMeta.value = false;
+  editingTags.value = false;
   try {
     const note = await api.getNote(id);
     applyRemote(note.content);
     loadedId = note.id;
     title.value = note.title;
     folder.value = note.folder ?? "";
+    tags.value = note.tags ?? [];
     rememberTitle(note.id, note.title);
     base = note.content;
     status.value = "Saved";
@@ -251,7 +257,8 @@ async function save() {
   if (!id) return;
   status.value = "Saving…";
   try {
-    await api.putNote(id, content.value);
+    const saved = await api.putNote(id, content.value);
+    tags.value = saved.tags ?? tags.value;
     base = content.value;
     clearDraft(id);
     status.value = "Saved";
@@ -272,6 +279,45 @@ function beginMeta() {
 
 function cancelMeta() {
   editingMeta.value = false;
+}
+
+function beginTags() {
+  if (!loadedId) return;
+  draftTags.value = tags.value.join(", ");
+  editingTags.value = true;
+  actionsOpen.value = false;
+}
+
+function cancelTags() {
+  editingTags.value = false;
+}
+
+async function saveTags() {
+  const id = loadedId || props.noteId;
+  if (!id || !editingTags.value) return;
+  const next = draftTags.value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  try {
+    const note = await api.patchNote(id, { tags: next });
+    tags.value = note.tags ?? [];
+    editingTags.value = false;
+    status.value = "Saved";
+    emit("index");
+  } catch (err) {
+    status.value = err instanceof ApiError ? err.code : "Could not tag";
+  }
+}
+
+async function onTag(name: string) {
+  const id = loadedId || props.noteId;
+  if (!id || tags.value.includes(name)) return;
+  try {
+    const note = await api.patchNote(id, { tags: [...tags.value, name] });
+    tags.value = note.tags ?? [];
+    emit("index");
+  } catch {}
 }
 
 async function saveMeta() {
@@ -646,6 +692,9 @@ onBeforeUnmount(() => {
              Insert image
            </button>
            <button type="button" class="ghost" @click="openImageManager">Manage images</button>
+          <button type="button" class="ghost" data-testid="note-tags-open" @click="runAction(beginTags)">
+            Tags
+          </button>
           <button
             type="button"
             class="ghost"
@@ -677,14 +726,34 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </header>
+    <div v-if="editingTags || tags.length" class="note-tags" data-testid="note-tags">
+      <form v-if="editingTags" class="note-tags-form" @submit.prevent="saveTags">
+        <input
+          v-model="draftTags"
+          class="tags-input"
+          data-testid="note-tags-input"
+          aria-label="Note tags"
+          placeholder="work, meeting"
+          @keydown.escape.prevent="cancelTags"
+        />
+      </form>
+      <p v-else class="muted note-tags-line" title="Edit tags" @click="beginTags">
+        {{ tags.map((tag) => `#${tag}`).join(" ") }}
+      </p>
+    </div>
     <Preview v-if="preview" :source="content" />
     <Editor
       v-else
       ref="editor"
       v-model="content"
+      :note-id="noteId"
+      :title="title"
+      :folder="folder"
+      :tags="tags"
       :remotes="remotes"
       :show-context="showContext"
       :context-ordinals="contextOrdinals"
+      @tag="onTag"
       @live-change="onLiveChange"
       @cursor="client.cursor($event.from, $event.to)"
       @paragraph-commit="queueContext($event.ordinal, 'auto')"

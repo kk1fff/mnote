@@ -17,7 +17,8 @@ import { excerptAround, findExcerpt } from "../lib/excerpt";
 import { imageFileFromList, insertAt, isAllowedImage } from "../lib/images";
 import { api, type NoteMeta } from "../api";
 import { matchSlashCommands, type SlashCommand } from "../lib/commands";
-import { buildPageItems, completeWiki, detectTrigger } from "../lib/suggest";
+import { buildPageItems, completeTag, completeWiki, detectTrigger } from "../lib/suggest";
+import type { TagSuggest } from "../api";
 
 export type RemoteCaret = { id: string; from: number; to: number };
 
@@ -27,6 +28,10 @@ const props = defineProps<{
   remotes?: RemoteCaret[];
   showContext?: boolean;
   contextOrdinals?: number[];
+  noteId?: string;
+  title?: string;
+  folder?: string;
+  tags?: string[];
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: string];
@@ -35,17 +40,22 @@ const emit = defineEmits<{
   "paragraph-commit": [payload: { ordinal: number; text: string }];
   "paragraph-leave": [payload: { ordinal: number; text: string }];
   "select-paragraph": [ordinal: number];
+  tag: [name: string];
 }>();
 
 type MenuItem =
   | { kind: "command"; command: SlashCommand }
   | { kind: "note"; note: NoteMeta; path: string }
-  | { kind: "create"; path: string; draft: { title: string; folder: string } };
+  | { kind: "create"; path: string; draft: { title: string; folder: string } }
+  | { kind: "tag"; tag: TagSuggest };
 
 const host = ref<HTMLDivElement | null>(null);
-const menu = ref<{ mode: "command" | "page"; from: number; query: string; items: MenuItem[] } | null>(
-  null,
-);
+const menu = ref<{
+  mode: "command" | "page" | "tag";
+  from: number;
+  query: string;
+  items: MenuItem[];
+} | null>(null);
 const selected = ref(0);
 const menuEl = ref<HTMLDivElement | null>(null);
 const menuPos = ref({ top: 0, left: 0 });
@@ -199,6 +209,17 @@ function setCommandMenu(from: number, query: string) {
   placeMenu(from);
 }
 
+function setTagMenu(from: number, query: string, hits: TagSuggest[]) {
+  const items: MenuItem[] = hits.map((tag) => ({ kind: "tag" as const, tag }));
+  if (!items.length) {
+    closeMenu();
+    return;
+  }
+  menu.value = { mode: "tag", from, query, items };
+  selected.value = 0;
+  placeMenu(from);
+}
+
 function setPageMenu(from: number, query: string, notes: NoteMeta[]) {
   const items: MenuItem[] = buildPageItems(query, notes).map((item) =>
     item.type === "note"
@@ -242,6 +263,12 @@ function accept(index = selected.value) {
     if (item.command.id !== "page") closeMenu();
     return;
   }
+  if (item.kind === "tag") {
+    replaceRange(current.from, completeTag(item.tag.name));
+    emit("tag", item.tag.name);
+    closeMenu();
+    return;
+  }
   replaceRange(current.from, completeWiki(item.path));
   closeMenu();
 }
@@ -260,6 +287,27 @@ async function syncMenu() {
   }
   const id = ++searchId;
   window.clearTimeout(searchTimer);
+  if (trigger.mode === "tag") {
+    searchTimer = window.setTimeout(async () => {
+      const doc = view?.state.doc.toString() ?? "";
+      const hits = await api
+        .suggestTags({
+          note_id: props.noteId,
+          q: trigger.query,
+          title: props.title,
+          folder: props.folder,
+          content: doc,
+          cursor: view?.state.selection.main.head,
+          current_tags: props.tags,
+        })
+        .catch(() => []);
+      if (id !== searchId || !view) return;
+      const still = detectTrigger(view.state.doc.toString(), view.state.selection.main.head);
+      if (!still || still.mode !== "tag") return;
+      setTagMenu(still.from, still.query, hits);
+    }, 120);
+    return;
+  }
   if (trigger.query.trim()) setPageMenu(trigger.from, trigger.query, []);
   searchTimer = window.setTimeout(async () => {
     const notes = trigger.query.trim()
@@ -535,7 +583,7 @@ onBeforeUnmount(() => {
     >
       <button
         v-for="(item, index) in menu.items"
-        :key="item.kind === 'command' ? item.command.id : item.kind === 'note' ? item.note.id : 'create'"
+        :key="item.kind === 'command' ? item.command.id : item.kind === 'note' ? item.note.id : item.kind === 'tag' ? item.tag.name : 'create'"
         type="button"
         :class="{ active: selected === index }"
         role="option"
@@ -549,6 +597,10 @@ onBeforeUnmount(() => {
         <template v-else-if="item.kind === 'note'">
           <span>{{ item.note.title }}</span>
           <small>{{ item.note.folder }}</small>
+        </template>
+        <template v-else-if="item.kind === 'tag'">
+          <span>#{{ item.tag.name }}</span>
+          <small :class="{ 'suggest-new': item.tag.create }">{{ item.tag.create ? "New" : item.tag.count }}</small>
         </template>
         <template v-else>
           <span>Create “{{ item.path }}”</span>

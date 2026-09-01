@@ -256,6 +256,7 @@ describe("Sidebar", () => {
     expect(wrapper.text()).toContain("Images");
     expect(wrapper.text()).toContain("Favorites");
     expect(wrapper.text()).toContain("Recent");
+    expect(wrapper.text()).toContain("Tags");
     await wrapper.get('[data-testid="sidebar-images"]').trigger("click");
     await flushPromises();
     expect(router.currentRoute.value.path).toBe("/images");
@@ -263,6 +264,8 @@ describe("Sidebar", () => {
     expect(wrapper.emitted("open-picker")?.at(-1)).toEqual(["favorites"]);
     await wrapper.get('[data-testid="sidebar-recent"]').trigger("click");
     expect(wrapper.emitted("open-picker")?.at(-1)).toEqual(["recent"]);
+    await wrapper.get('[data-testid="sidebar-tags"]').trigger("click");
+    expect(wrapper.emitted("open-picker")?.at(-1)).toEqual(["tags"]);
     await wrapper.get('[data-testid="sidebar-links-toggle"]').trigger("click");
     expect(wrapper.find('[data-testid="sidebar-images"]').exists()).toBe(false);
     wrapper.unmount();

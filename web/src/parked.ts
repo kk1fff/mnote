@@ -31,6 +31,16 @@ export function showParkCapture(ctx?: ParkContext) {
   showCaptureFn?.(ctx);
 }
 
+let showListFn: ((id?: number) => void) | null = null;
+
+export function registerParkedList(fn: ((id?: number) => void) | null) {
+  showListFn = fn;
+}
+
+export function showParkedList(id?: number) {
+  showListFn?.(id);
+}
+
 export async function refreshParked() {
   parkedItems.value = await api.listParked();
 }

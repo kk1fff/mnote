@@ -1,7 +1,13 @@
 import { mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { openTag } from "../lib/tags";
 import Preview from "./Preview.vue";
+
+vi.mock("../lib/tags", async () => {
+  const actual = await vi.importActual<typeof import("../lib/tags")>("../lib/tags");
+  return { ...actual, openTag: vi.fn() };
+});
 
 describe("Preview", () => {
   it("renders markdown and navigates wiki links", async () => {
@@ -20,5 +26,11 @@ describe("Preview", () => {
     });
     expect(wrapper.html()).toContain('href="/n/ideas%2Fone"');
     expect(wrapper.get("a").attributes("data-wiki")).toBe("ideas/one");
+  });
+
+  it("opens the picker from a hashtag", async () => {
+    const wrapper = mount(Preview, { props: { source: "see #work" } });
+    await wrapper.get("a[data-tag]").trigger("click");
+    expect(openTag).toHaveBeenCalledWith("work");
   });
 });
