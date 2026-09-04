@@ -158,7 +158,7 @@ describe("buildPickerSections", () => {
     expect(buildPickerSections({ query: "ideas/", notes: [], folders: [] })).toEqual([]);
   });
 
-    it("lists tags in the tags collection", () => {
+  it("lists tags in the tags collection", () => {
     const notes = [note("o1", "One", "ideas")];
     notes[0].tags = ["work"];
     const listed = buildPickerSections({
@@ -190,7 +190,10 @@ describe("buildPickerSections", () => {
       notes,
       folders: [],
       tags: [{ name: "work", count: 1 }],
+      tagHits: [{ id: "o1", title: "One", snippet: "see #work", line: 2, from: 4, to: 9 }],
     });
-    expect(pickerItems(exact)).toMatchObject([{ type: "note", note: { id: "o1" } }]);
+    expect(pickerItems(exact)).toMatchObject([
+      { type: "tag-hit", id: "o1", title: "One", snippet: "see #work", line: 2 },
+    ]);
   });
 });

@@ -94,6 +94,9 @@ export interface SearchHit {
   kind?: string;
   parked_id?: number;
   context?: string;
+  from?: number;
+  to?: number;
+  line?: number;
 }
 
 export interface ContextBlock {

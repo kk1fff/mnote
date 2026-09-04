@@ -24,6 +24,7 @@ import {
 import { excerptAround } from "../lib/excerpt";
 import { live, type Live, type LiveEvent } from "../live";
 import { pendingExcerpt, setParkContext, showParkCapture } from "../parked";
+import { extractHashtags, pendingTagReveal } from "../lib/tags";
 import { rememberTitle, setPinned } from "../workspace";
 
 const props = withDefaults(
@@ -43,13 +44,11 @@ const emit = defineEmits<{
 const router = useRouter();
 const title = ref("");
 const folder = ref("");
-const tags = ref<string[]>([]);
 const draftTitle = ref("");
 const draftFolder = ref("");
-const draftTags = ref("");
 const editingMeta = ref(false);
-const editingTags = ref(false);
 const content = ref("");
+const tags = computed(() => extractHashtags(content.value));
 const preview = ref(false);
 const status = ref("");
 const links = ref<NoteMeta[]>([]);
@@ -59,6 +58,7 @@ const editor = ref<{
   excerpt: () => string;
   revealExcerpt: (quote: string) => boolean;
   revealRange: (from: number, to: number) => boolean;
+  revealTag: (from: number, to: number) => boolean;
   currentOrdinal: () => number;
    lineCoords: (ordinal: number) => { top: number; bottom: number; left: number } | null;
    insertMarkdown: (markdown: string) => void;
@@ -100,16 +100,13 @@ async function load() {
   remotes.value = [];
   title.value = "";
   folder.value = "";
-  tags.value = [];
   editingMeta.value = false;
-  editingTags.value = false;
   try {
     const note = await api.getNote(id);
     applyRemote(note.content);
     loadedId = note.id;
     title.value = note.title;
     folder.value = note.folder ?? "";
-    tags.value = note.tags ?? [];
     rememberTitle(note.id, note.title);
     base = note.content;
     status.value = "Saved";
@@ -136,6 +133,7 @@ async function load() {
     pendingExcerpt.value = null;
     queueMicrotask(() => editor.value?.revealExcerpt(quote));
   }
+  applyTagReveal();
   selectedOrdinal.value = null;
   noteContext.value = await api.noteContext(id).catch(() => ({ blocks: [], events: [] }));
   void flushContext();
@@ -257,8 +255,7 @@ async function save() {
   if (!id) return;
   status.value = "Saving…";
   try {
-    const saved = await api.putNote(id, content.value);
-    tags.value = saved.tags ?? tags.value;
+    await api.putNote(id, content.value);
     base = content.value;
     clearDraft(id);
     status.value = "Saved";
@@ -279,45 +276,6 @@ function beginMeta() {
 
 function cancelMeta() {
   editingMeta.value = false;
-}
-
-function beginTags() {
-  if (!loadedId) return;
-  draftTags.value = tags.value.join(", ");
-  editingTags.value = true;
-  actionsOpen.value = false;
-}
-
-function cancelTags() {
-  editingTags.value = false;
-}
-
-async function saveTags() {
-  const id = loadedId || props.noteId;
-  if (!id || !editingTags.value) return;
-  const next = draftTags.value
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  try {
-    const note = await api.patchNote(id, { tags: next });
-    tags.value = note.tags ?? [];
-    editingTags.value = false;
-    status.value = "Saved";
-    emit("index");
-  } catch (err) {
-    status.value = err instanceof ApiError ? err.code : "Could not tag";
-  }
-}
-
-async function onTag(name: string) {
-  const id = loadedId || props.noteId;
-  if (!id || tags.value.includes(name)) return;
-  try {
-    const note = await api.patchNote(id, { tags: [...tags.value, name] });
-    tags.value = note.tags ?? [];
-    emit("index");
-  } catch {}
 }
 
 async function saveMeta() {
@@ -561,6 +519,14 @@ function openImageManager() {
 client.value.connect();
 stopLive = client.value.on(onLive);
 
+function applyTagReveal() {
+  const span = pendingTagReveal.value;
+  const id = loadedId || props.noteId;
+  if (!span || span.id !== id) return;
+  pendingTagReveal.value = null;
+  queueMicrotask(() => editor.value?.revealTag(span.from, span.to));
+}
+
 watch(
   () => props.noteId,
   () => {
@@ -568,6 +534,8 @@ watch(
   },
   { immediate: true },
 );
+
+watch(pendingTagReveal, () => applyTagReveal());
 
 watch(content, () => {
   if (!loadedId || applyingRemote) return;
@@ -692,10 +660,7 @@ onBeforeUnmount(() => {
              Insert image
            </button>
            <button type="button" class="ghost" @click="openImageManager">Manage images</button>
-          <button type="button" class="ghost" data-testid="note-tags-open" @click="runAction(beginTags)">
-            Tags
-          </button>
-          <button
+           <button
             type="button"
             class="ghost"
             data-testid="favorite"
@@ -726,18 +691,8 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </header>
-    <div v-if="editingTags || tags.length" class="note-tags" data-testid="note-tags">
-      <form v-if="editingTags" class="note-tags-form" @submit.prevent="saveTags">
-        <input
-          v-model="draftTags"
-          class="tags-input"
-          data-testid="note-tags-input"
-          aria-label="Note tags"
-          placeholder="work, meeting"
-          @keydown.escape.prevent="cancelTags"
-        />
-      </form>
-      <p v-else class="muted note-tags-line" title="Edit tags" @click="beginTags">
+    <div v-if="tags.length" class="note-tags" data-testid="note-tags">
+      <p class="muted note-tags-line">
         {{ tags.map((tag) => `#${tag}`).join(" ") }}
       </p>
     </div>
@@ -749,11 +704,9 @@ onBeforeUnmount(() => {
       :note-id="noteId"
       :title="title"
       :folder="folder"
-      :tags="tags"
       :remotes="remotes"
       :show-context="showContext"
       :context-ordinals="contextOrdinals"
-      @tag="onTag"
       @live-change="onLiveChange"
       @cursor="client.cursor($event.from, $event.to)"
       @paragraph-commit="queueContext($event.ordinal, 'auto')"

@@ -1323,20 +1323,22 @@ async fn tags_patch_search_parked_and_suggest() {
 
     let (status, _, body) = h
         .call(h.authed(
-            Method::PATCH,
+            Method::PUT,
             &format!("/api/notes/{id}"),
             &cookie,
-            Some(json!({ "tags": ["work", "Meeting"] })),
+            Some(json!({ "content": "hello #work\nlater #work\n" })),
         ))
         .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["tags"], json!(["work", "meeting"]));
+    assert_eq!(body["tags"], json!(["work"]));
 
     let (status, _, body) = h
         .call(h.authed(Method::GET, "/api/search?q=%23work", &cookie, None))
         .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body.as_array().unwrap().len(), 1);
+    assert_eq!(body.as_array().unwrap().len(), 2);
+    assert_eq!(body[0]["line"], 1);
+    assert_eq!(body[1]["line"], 2);
     assert!(body[0]["snippet"].as_str().unwrap().contains("#work"));
 
     let (status, _, body) = h
@@ -1356,8 +1358,27 @@ async fn tags_patch_search_parked_and_suggest() {
         .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let hits = body.as_array().unwrap();
-    assert_eq!(hits.len(), 2);
+    assert_eq!(hits.len(), 3);
     assert!(hits.iter().any(|h| h["kind"] == "parked" && h["parked_id"] == parked_id));
+    assert_eq!(hits.iter().filter(|h| h["kind"] != "parked").count(), 2);
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::PUT,
+            &format!("/api/notes/{id}"),
+            &cookie,
+            Some(json!({ "content": "hello #meeting\n" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["tags"], json!(["meeting"]));
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/search?q=%23work", &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let hits = body.as_array().unwrap();
+    assert!(hits.iter().all(|h| h["kind"] == "parked"));
 
     let (status, _, body) = h
         .call(h.authed(

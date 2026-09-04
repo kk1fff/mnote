@@ -271,19 +271,12 @@ describe("NoteView", () => {
     expect(router.currentRoute.value.path).toBe("/today");
   });
 
-  it("edits tags from the row under the bar", async () => {
+  it("shows hashtags from the note body", async () => {
     vi.mocked(api.getNote).mockResolvedValue({
       id: "n1",
       title: "One",
-      content: "hi",
+      content: "see #work",
       tags: ["work"],
-      modified_at: "",
-    });
-    vi.mocked(api.patchNote).mockResolvedValue({
-      id: "n1",
-      title: "One",
-      content: "hi",
-      tags: ["work", "meeting"],
       modified_at: "",
     });
     const router = createRouter({
@@ -298,12 +291,7 @@ describe("NoteView", () => {
     const wrapper = mount(NoteView, { global: { plugins: [router] } });
     await flushPromises();
     expect(wrapper.get('[data-testid="note-tags"]').text()).toContain("#work");
-    await wrapper.get('[data-testid="note-tags-open"]').trigger("click");
-    await wrapper.get('[data-testid="note-tags-input"]').setValue("work, meeting");
-    await wrapper.get(".note-tags-form").trigger("submit");
-    await flushPromises();
-    expect(api.patchNote).toHaveBeenCalledWith("n1", { tags: ["work", "meeting"] });
-    expect(wrapper.get('[data-testid="note-tags"]').text()).toContain("#meeting");
+    expect(wrapper.find('[data-testid="note-tags-open"]').exists()).toBe(false);
   });
 });
 

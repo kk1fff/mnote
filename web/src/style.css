@@ -1424,6 +1424,20 @@ button.icon-btn,
   background: rgb(202 138 4 / 28%);
 }
 
+.cm-tag-flash {
+  animation: cm-tag-flash 5.6s ease forwards;
+}
+
+@keyframes cm-tag-flash {
+  0%,
+  89% {
+    background: rgb(202 138 4 / 28%);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
 .backlinks {
   flex: 0 0 auto;
   border-top: 1px solid var(--border);

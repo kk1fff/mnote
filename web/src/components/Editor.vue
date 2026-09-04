@@ -16,6 +16,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { excerptAround, findExcerpt } from "../lib/excerpt";
 import { imageFileFromList, insertAt, isAllowedImage } from "../lib/images";
 import { api, type NoteMeta } from "../api";
+import { extractHashtags } from "../lib/tags";
 import { matchSlashCommands, type SlashCommand } from "../lib/commands";
 import { buildPageItems, completeTag, completeWiki, detectTrigger } from "../lib/suggest";
 import type { TagSuggest } from "../api";
@@ -31,7 +32,6 @@ const props = defineProps<{
   noteId?: string;
   title?: string;
   folder?: string;
-  tags?: string[];
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: string];
@@ -63,6 +63,7 @@ let view: EditorView | null = null;
 let searchTimer: number | undefined;
 let searchId = 0;
 let dirtyLine = -1;
+let lineFlashTimer: number | undefined;
 
 const remoteAnn = Annotation.define<boolean>();
 const setRemotes = StateEffect.define<RemoteCaret[]>();
@@ -127,6 +128,22 @@ const flashField = StateField.define<DecorationSet>({
         return Decoration.set([
           Decoration.mark({ class: "cm-park-excerpt" }).range(effect.value.from, effect.value.to),
         ]);
+      }
+    }
+    return value.map(tr.changes);
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+const setLineFlash = StateEffect.define<number | null>();
+const lineFlashField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setLineFlash)) {
+        if (effect.value == null) return Decoration.none;
+        const line = tr.state.doc.lineAt(effect.value);
+        return Decoration.set([Decoration.line({ class: "cm-tag-flash" }).range(line.from)]);
       }
     }
     return value.map(tr.changes);
@@ -298,7 +315,7 @@ async function syncMenu() {
           folder: props.folder,
           content: doc,
           cursor: view?.state.selection.main.head,
-          current_tags: props.tags,
+          current_tags: extractHashtags(doc).filter((tag) => tag !== trigger.query.toLowerCase()),
         })
         .catch(() => []);
       if (id !== searchId || !view) return;
@@ -395,6 +412,7 @@ onMounted(() => {
         contextField,
         contextPlugin,
         flashField,
+        lineFlashField,
         EditorView.updateListener.of((update) => {
           const remote = update.transactions.some((tr) => tr.annotation(remoteAnn));
           if (update.docChanged) {
@@ -543,6 +561,22 @@ function revealRange(from: number, to: number): boolean {
   return true;
 }
 
+function revealTag(from: number, to: number): boolean {
+  if (!view) return false;
+  const len = view.state.doc.length;
+  const start = Math.max(0, Math.min(from, len));
+  const end = Math.max(start, Math.min(to, len));
+  view.dispatch({
+    selection: { anchor: start, head: end },
+    effects: [setLineFlash.of(start), EditorView.scrollIntoView(start, { y: "center" })],
+  });
+  window.clearTimeout(lineFlashTimer);
+  lineFlashTimer = window.setTimeout(() => {
+    view?.dispatch({ effects: [setLineFlash.of(null)] });
+  }, 5600);
+  return true;
+}
+
 function revealExcerpt(quote: string): boolean {
   if (!view) return false;
   const found = findExcerpt(view.state.doc.toString(), quote);
@@ -560,11 +594,12 @@ function revealExcerpt(quote: string): boolean {
   return true;
 }
 
-defineExpose({ excerpt, revealExcerpt, revealRange, currentOrdinal, lineCoords, insertMarkdown });
+defineExpose({ excerpt, revealExcerpt, revealRange, revealTag, currentOrdinal, lineCoords, insertMarkdown });
 
 onBeforeUnmount(() => {
   document.removeEventListener("mousedown", onDocClick);
   closeMenu();
+  window.clearTimeout(lineFlashTimer);
   view?.destroy();
   view = null;
 });

@@ -15,6 +15,7 @@ vi.mock("../api", async () => {
       listNotes: vi.fn(),
       recentNotes: vi.fn(),
       favorites: vi.fn(),
+      search: vi.fn(),
     },
   };
 });
@@ -46,6 +47,7 @@ describe("NotePicker", () => {
     vi.mocked(api.listNotes).mockReset();
     vi.mocked(api.recentNotes).mockReset();
     vi.mocked(api.favorites).mockReset();
+    vi.mocked(api.search).mockReset();
     resetWorkspace(emptyWorkspace());
   });
 
@@ -227,9 +229,12 @@ describe("NotePicker", () => {
     expect(workspace.value.primary.active).toBe("n2");
   });
 
-  it("opens tags from Links and lists notes for an exact tag", async () => {
+  it("opens tags from Links and lists lines for an exact tag", async () => {
     vi.mocked(api.listNotes).mockResolvedValue([
       { id: "o1", title: "One", folder: "ideas", modified_at: "", tags: ["work"] },
+    ]);
+    vi.mocked(api.search).mockResolvedValue([
+      { id: "o1", title: "One", snippet: "see #work", line: 2, from: 4, to: 9 },
     ]);
     const { wrapper } = await openPicker();
     await wrapper.get('[data-testid="picker-tags"]').trigger("click");
@@ -238,6 +243,8 @@ describe("NotePicker", () => {
     await wrapper.get('[data-testid="picker-tag-work"]').trigger("click");
     await flushPromises();
     expect((wrapper.get("input").element as HTMLInputElement).value).toBe("#work");
-    expect(wrapper.text()).toContain("One");
+    expect(wrapper.get('[data-testid="picker-tag-hit"]').text()).toContain("One");
+    expect(wrapper.get('[data-testid="picker-tag-hit"]').text()).toContain("L2");
+    expect(wrapper.get('[data-testid="picker-tag-hit"]').text()).toContain("see #work");
   });
 });

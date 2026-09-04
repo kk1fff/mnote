@@ -201,6 +201,20 @@ fn parse_tag_at(rest: &str) -> Option<String> {
     normalize_tag(&rest[..len])
 }
 
+pub fn char_index(content: &str, byte: usize) -> usize {
+    content
+        .get(..byte.min(content.len()))
+        .map(|prefix| prefix.chars().count())
+        .unwrap_or(0)
+}
+
+pub fn line_at(content: &str, byte: usize) -> usize {
+    content
+        .get(..byte.min(content.len()))
+        .map(|prefix| prefix.bytes().filter(|&b| b == b'\n').count() + 1)
+        .unwrap_or(1)
+}
+
 pub fn first_hashtag_index(content: &str, tag: &str) -> Option<usize> {
     extract_hashtag_spans(content)
         .into_iter()
@@ -375,6 +389,8 @@ mod tests {
     fn extract_skips_headings_and_code() {
         let content = "# Title\n\nsee #work and #Meeting\n\n```\n#code\n```\n\n`#skip` and (#rust)\n";
         assert_eq!(extract_hashtags(content), vec!["work", "meeting", "rust"]);
+        assert_eq!(char_index(content, 0), 0);
+        assert_eq!(line_at("a #work\nb\n", 8), 2);
         assert!(first_hashtag_index(content, "work").is_some());
         assert!(extract_hashtags("# 2026-08-31\n\n").is_empty());
     }

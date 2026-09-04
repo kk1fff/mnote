@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatTagLabel, normalizeTag, parseTagsField, tagsFromNotes, uniqueTags } from "./tags";
+import {
+  extractHashtags,
+  formatTagLabel,
+  normalizeTag,
+  parseTagsField,
+  tagsFromNotes,
+  uniqueTags,
+} from "./tags";
 
 describe("tags", () => {
   it("normalizes and rejects invalid names", () => {
@@ -14,6 +21,14 @@ describe("tags", () => {
     expect(parseTagsField("work, Meeting, work")).toEqual(["work", "meeting"]);
     expect(uniqueTags(["a", "a", "b"])).toEqual(["a", "b"]);
     expect(formatTagLabel("work")).toBe("#work");
+  });
+
+  it("extracts hashtags and skips headings and code", () => {
+    expect(extractHashtags("see #Work today\nlater #work again")).toEqual(["work"]);
+    expect(
+      extractHashtags("# Title\n\nsee #work and #Meeting\n\n```\n#code\n```\n\n`#skip` and (#rust)\n"),
+    ).toEqual(["work", "meeting", "rust"]);
+    expect(extractHashtags("# 2026-08-31\n\n")).toEqual([]);
   });
 
   it("counts tags across notes", () => {

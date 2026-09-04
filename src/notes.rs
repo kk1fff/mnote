@@ -43,6 +43,12 @@ pub struct SearchHit {
     pub parked_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -621,10 +627,7 @@ fn load_note_file(vault: &Path, file: &Path) -> Result<Note, AppError> {
         .map(|s| s.trim().trim_matches('/').to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or(parent);
-    let tags = fields
-        .get("tags")
-        .map(|raw| crate::tags::parse_tags_field(raw))
-        .unwrap_or_default();
+    let tags = crate::tags::extract_hashtags(&body);
     Ok(Note {
         id,
         title,
@@ -748,7 +751,7 @@ pub fn create_note(
 pub fn put_note(vault: &Path, id: &str, content: &str) -> Result<Note, AppError> {
     let mut note = get_note(vault, id)?;
     note.content = content.to_string();
-    note.tags = crate::tags::union_tags(&note.tags, &crate::tags::extract_hashtags(content));
+    note.tags = crate::tags::extract_hashtags(content);
     write_note(vault, &note)?;
     get_note(vault, id)
 }
@@ -1082,6 +1085,9 @@ pub fn search(vault: &Path, query: &str) -> Result<Vec<SearchHit>, AppError> {
                 kind: None,
                 parked_id: None,
                 context: None,
+                from: None,
+                to: None,
+                line: None,
             });
         }
     }
@@ -1091,24 +1097,24 @@ pub fn search(vault: &Path, query: &str) -> Result<Vec<SearchHit>, AppError> {
 fn search_tag(vault: &Path, tag: &str) -> Result<Vec<SearchHit>, AppError> {
     let mut hits = Vec::new();
     for note in list_notes_internal(vault)? {
-        let tagged = note.tags.iter().any(|t| t == tag);
-        let idx = crate::tags::first_hashtag_index(&note.content, tag);
-        if !tagged && idx.is_none() {
-            continue;
+        for span in crate::tags::extract_hashtag_spans(&note.content) {
+            if span.tag != tag {
+                continue;
+            }
+            let from = crate::tags::char_index(&note.content, span.start);
+            let to = crate::tags::char_index(&note.content, span.end);
+            hits.push(SearchHit {
+                id: note.id.clone(),
+                title: note.title.clone(),
+                snippet: snippet(&note.content, from, tag.len() + 1),
+                kind: None,
+                parked_id: None,
+                context: None,
+                from: Some(from),
+                to: Some(to),
+                line: Some(crate::tags::line_at(&note.content, span.start)),
+            });
         }
-        let snippet = if let Some(at) = idx {
-            snippet(&note.content, at, tag.len() + 1)
-        } else {
-            snippet(&note.content, 0, 0)
-        };
-        hits.push(SearchHit {
-            id: note.id,
-            title: note.title,
-            snippet,
-            kind: None,
-            parked_id: None,
-            context: None,
-        });
     }
     Ok(hits)
 }
@@ -1740,33 +1746,37 @@ mod tests {
     }
 
     #[test]
-    fn tags_frontmatter_hashtags_search_and_patch() {
+    fn tags_follow_hashtags_and_search_lines() {
         let dir = tempdir().unwrap();
         let vault = dir.path();
-        let note = create_note(vault, "One", "ideas", Some("see #work and rust\n")).unwrap();
-        assert_eq!(note.tags, vec!["work"]);
-        let loaded = get_note(vault, &note.id).unwrap();
-        assert_eq!(loaded.tags, vec!["work"]);
-
-        let patched = update_meta_and_rewrites(
+        let note = create_note(
             vault,
-            &note.id,
-            None,
-            None,
-            Some(&[String::from("work"), String::from("Meeting")]),
+            "One",
+            "ideas",
+            Some("see #work today\n\nlater #work again\n"),
         )
-        .unwrap()
-        .0;
-        assert_eq!(patched.tags, vec!["work", "meeting"]);
-        assert_eq!(patched.folder, "ideas");
+        .unwrap();
+        assert_eq!(note.tags, vec!["work"]);
 
         let saved = put_note(vault, &note.id, "see #work and #rust\n").unwrap();
-        assert_eq!(saved.tags, vec!["work", "meeting", "rust"]);
+        assert_eq!(saved.tags, vec!["work", "rust"]);
 
         let hits = search(vault, "#work").unwrap();
         assert_eq!(hits.len(), 1);
         assert!(hits[0].snippet.contains("#work"));
-        let by_name = search(vault, "meeting").unwrap();
-        assert_eq!(by_name.len(), 1);
+        assert_eq!(hits[0].line, Some(1));
+        assert_eq!(hits[0].from, Some(4));
+        assert_eq!(hits[0].to, Some(9));
+
+        let cleared = put_note(vault, &note.id, "no tags here\n").unwrap();
+        assert!(cleared.tags.is_empty());
+        assert!(search(vault, "#work").unwrap().is_empty());
+
+        let two = put_note(vault, &note.id, "a #work\nb #work\n").unwrap();
+        assert_eq!(two.tags, vec!["work"]);
+        let again = search(vault, "#work").unwrap();
+        assert_eq!(again.len(), 2);
+        assert_eq!(again[0].line, Some(1));
+        assert_eq!(again[1].line, Some(2));
     }
 }

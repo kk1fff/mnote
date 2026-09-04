@@ -548,6 +548,7 @@ async fn put_note(
     require_ready(&user)?;
     let note = notes::put_note(&state.vault_dir(&user.username), &id, &body.content)?;
     state.live.replace(user.id, &note.id, &note.content);
+    state.live.index(user.id, notes::to_meta(&note));
     Ok(Json(note))
 }
 
@@ -1080,11 +1081,13 @@ fn schedule_persist(state: AppState, user: User, persist: live::Persist) {
         if state.live.rev(user.id, &persist.path) != Some(persist.rev) {
             return;
         }
-        let _ = notes::put_note(
+        if let Ok(note) = notes::put_note(
             &state.vault_dir(&user.username),
             &persist.path,
             &persist.content,
-        );
+        ) {
+            state.live.index(user.id, notes::to_meta(&note));
+        }
     });
 }
 

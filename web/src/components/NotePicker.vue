@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { api, ApiError, type NoteMeta } from "../api";
+import { api, ApiError, type NoteMeta, type SearchHit } from "../api";
 import {
   buildPickerSections,
   pickerItems,
@@ -9,7 +9,7 @@ import {
   type PickerItem,
 } from "../lib/picker";
 import { noteFolderLabel } from "../lib/paths";
-import { tagsFromNotes } from "../lib/tags";
+import { normalizeTag, pendingTagReveal, tagsFromNotes } from "../lib/tags";
 import { openInWorkspace, type OpenMode } from "../workspace";
 
 const emit = defineEmits<{ created: [] }>();
@@ -19,6 +19,7 @@ const results = ref<NoteMeta[]>([]);
 const folders = ref<string[]>([]);
 const foldersReady = ref(false);
 const tagIndex = ref<{ name: string; count: number }[]>([]);
+const tagHits = ref<SearchHit[]>([]);
 const collection = ref<PickerCollection | null>(null);
 const open = ref(false);
 const openMode = ref<OpenMode>("replace");
@@ -33,6 +34,11 @@ let searchId = 0;
 const trimmed = computed(() => query.value.trim());
 const bang = computed(() => trimmed.value.startsWith("!"));
 const hash = computed(() => trimmed.value.startsWith("#"));
+const exactTag = computed(() => {
+  const name = normalizeTag(trimmed.value);
+  if (!name || !tagIndex.value.some((tag) => tag.name === name)) return null;
+  return name;
+});
 const folderQuery = computed(() => (trimmed.value.endsWith("/") ? trimmed.value.slice(0, -1) : ""));
 const sections = computed(() =>
   buildPickerSections({
@@ -40,6 +46,7 @@ const sections = computed(() =>
     notes: results.value,
     folders: folders.value,
     tags: tagIndex.value,
+    tagHits: tagHits.value,
     collection: collection.value,
   }),
 );
@@ -64,6 +71,7 @@ function show(mode: OpenMode = "replace", collectionKind?: PickerCollection, ini
   folders.value = [];
   foldersReady.value = false;
   tagIndex.value = [];
+  tagHits.value = [];
   collection.value = null;
   error.value = "";
   selected.value = 0;
@@ -71,7 +79,7 @@ function show(mode: OpenMode = "replace", collectionKind?: PickerCollection, ini
     void enterCollection(collectionKind);
     return;
   }
-  if (initialQuery?.startsWith("#")) void ensureTags();
+  if (initialQuery?.startsWith("#")) void syncHash();
   void nextTick(() => input.value?.focus());
 }
 
@@ -95,6 +103,14 @@ function indexOf(item: PickerItem): number {
 async function select(note: NoteMeta) {
   close();
   await router.push(openInWorkspace(note.id, note.title, openMode.value));
+}
+
+async function selectHit(hit: Extract<PickerItem, { type: "tag-hit" }>) {
+  if (hit.from != null && hit.to != null) {
+    pendingTagReveal.value = { id: hit.id, from: hit.from, to: hit.to };
+  }
+  close();
+  await router.push(openInWorkspace(hit.id, hit.title, openMode.value));
 }
 
 async function jump(to: string) {
@@ -148,6 +164,17 @@ async function ensureTags() {
   }
 }
 
+async function syncHash() {
+  await ensureTags();
+  const name = normalizeTag(trimmed.value);
+  if (!name || !tagIndex.value.some((tag) => tag.name === name)) {
+    tagHits.value = [];
+    return;
+  }
+  const hits = await api.search(`#${name}`).catch(() => []);
+  tagHits.value = hits.filter((hit) => hit.kind !== "parked");
+}
+
 function leaveCollection() {
   collection.value = null;
   query.value = "";
@@ -197,6 +224,7 @@ function pickTag(name: string) {
 
 function activate(item: PickerItem) {
   if (item.type === "note") void select(item.note);
+  else if (item.type === "tag-hit") void selectHit(item);
   else if (item.type === "folder") pickFolder(item.path);
   else if (item.type === "tag") pickTag(item.name);
   else if (item.type === "search-folder") enterFolderMode();
@@ -258,7 +286,7 @@ watch(query, () => {
   if (hash.value) {
     collection.value = null;
     selected.value = 0;
-    void ensureTags();
+    void syncHash();
     clampSelected();
     return;
   }
@@ -348,6 +376,16 @@ defineExpose({ show, showTag, open });
                 <small>{{ item.count }}</small>
               </button>
               <button
+                v-else-if="item.type === 'tag-hit'"
+                type="button"
+                data-testid="picker-tag-hit"
+                :class="{ active: selected === indexOf(item) }"
+                @click="selectHit(item)"
+              >
+                <span>{{ item.title }}</span>
+                <small>L{{ item.line ?? "?" }} {{ item.snippet }}</small>
+              </button>
+              <button
                 v-else-if="item.type === 'search-folder'"
                 type="button"
                 data-testid="picker-search-folder"
@@ -397,6 +435,7 @@ defineExpose({ show, showTag, open });
           </ul>
         </section>
         <p v-if="bang && !sections.length" class="muted picker-message">No folders yet</p>
+        <p v-else-if="exactTag && !tagHits.length" class="muted picker-message">No lines with this tag</p>
         <p v-else-if="hash && !sections.length" class="muted picker-message">No tags yet</p>
         <p v-else-if="collection && !results.length && collection !== 'tags'" class="muted picker-message">No notes yet</p>
         <p v-else-if="collection === 'tags' && tagIndex.length === 0" class="muted picker-message">No tags yet</p>

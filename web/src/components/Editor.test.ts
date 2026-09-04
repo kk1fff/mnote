@@ -36,9 +36,12 @@ describe("Editor", () => {
       excerpt: () => string;
       revealExcerpt: (quote: string) => boolean;
       revealRange: (from: number, to: number) => boolean;
+      revealTag: (from: number, to: number) => boolean;
     };
     expect(exposed.revealExcerpt("retry budget")).toBe(true);
     expect(exposed.revealRange(0, 3)).toBe(true);
+    expect(exposed.revealTag(4, 9)).toBe(true);
+    expect(wrapper.find(".cm-tag-flash").exists()).toBe(true);
     wrapper.unmount();
   });
 });

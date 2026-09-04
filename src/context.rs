@@ -948,6 +948,9 @@ pub fn search(
                     kind: Some("note".into()),
                     parked_id: None,
                     context: Some(context_line(row)),
+                    from: None,
+                    to: None,
+                    line: None,
                 });
             } else if let Some(pid) = row.parked_id {
                 let title = row
@@ -963,6 +966,9 @@ pub fn search(
                     kind: Some("parked".into()),
                     parked_id: Some(pid),
                     context: Some(context_line(row)),
+                    from: None,
+                    to: None,
+                    line: None,
                 });
             }
         }
@@ -1006,6 +1012,9 @@ pub fn search(
             kind: Some("parked".into()),
             parked_id: Some(pid),
             context: Some(context_line(row)),
+            from: None,
+            to: None,
+            line: None,
         });
     }
     Ok(out)
@@ -1037,6 +1046,9 @@ fn parked_tag_hits(state: &AppState, user_id: i64, tag: &str) -> Result<Vec<Sear
             kind: Some("parked".into()),
             parked_id: Some(item.id),
             context: None,
+            from: None,
+            to: None,
+            line: None,
         });
     }
     Ok(hits)

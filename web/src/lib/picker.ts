@@ -1,6 +1,6 @@
-import type { NoteMeta } from "../api";
+import type { NoteMeta, SearchHit } from "../api";
 import { parseCreateQuery } from "./paths";
-import { noteHasTag, tagsFromNotes } from "./tags";
+import { tagsFromNotes } from "./tags";
 
 export type PickerCollection = "recent" | "favorites" | "tags";
 
@@ -13,6 +13,16 @@ export type PickerItem =
   | { type: "note"; key: string; note: NoteMeta }
   | { type: "folder"; key: string; path: string }
   | { type: "tag"; key: string; name: string; count: number }
+  | {
+      type: "tag-hit";
+      key: string;
+      id: string;
+      title: string;
+      snippet: string;
+      line?: number;
+      from?: number;
+      to?: number;
+    }
   | { type: "search-folder"; key: "search-folder" }
   | { type: "create"; key: "create"; draft: { title: string; folder: string }; label: string };
 
@@ -54,6 +64,7 @@ export function buildPickerSections(input: {
   notes: NoteMeta[];
   folders: string[];
   tags?: { name: string; count: number }[];
+  tagHits?: SearchHit[];
   collection?: PickerCollection | null;
 }): PickerSection[] {
   const trimmed = input.query.trim();
@@ -79,9 +90,16 @@ export function buildPickerSections(input: {
     if (exact) {
       return section(
         "note",
-        input.notes
-          .filter((note) => noteHasTag(note, needle))
-          .map((note) => ({ type: "note" as const, key: note.id, note })),
+        (input.tagHits ?? []).map((hit) => ({
+          type: "tag-hit" as const,
+          key: `${hit.id}:${hit.from ?? hit.line ?? 0}`,
+          id: hit.id,
+          title: hit.title,
+          snippet: hit.snippet,
+          line: hit.line,
+          from: hit.from,
+          to: hit.to,
+        })),
       );
     }
     const hits = tags.filter((tag) => !needle || tag.name.includes(needle));
