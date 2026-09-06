@@ -59,7 +59,7 @@ export async function editorText(page: Page): Promise<string> {
 }
 
 export async function waitSaved(page: Page) {
-  await expect(page.getByTestId("note-status")).toHaveText(/Saved|Editing/, { timeout: 10_000 });
+  await expect(page.getByTestId("note-saved-toast")).toHaveText("Saved", { timeout: 10_000 });
 }
 
 export async function secondPage(browser: Browser, storageState: string): Promise<Page> {

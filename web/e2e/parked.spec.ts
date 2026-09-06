@@ -10,7 +10,7 @@ test("park from a note and make a note", async ({ page }) => {
   const marker = uid("retry");
   await typeInEditor(page, marker);
   await noteAction(page, "save");
-  await expect(page.getByTestId("note-status")).toHaveText("Saved");
+  await expect(page.getByTestId("note-saved-toast")).toHaveText("Saved");
 
   await noteAction(page, "park");
   await expect(page.getByTestId("park-capture")).toBeVisible();

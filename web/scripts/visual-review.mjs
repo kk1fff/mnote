@@ -115,16 +115,19 @@ function sameChrome(before, after, label) {
 async function tagsChrome(root) {
   return root.locator(".note-tags").first().evaluate((tags) => {
     const bar = tags.closest(".bar");
-    const actions = bar?.querySelector(".actions");
+    const preview = bar?.querySelector(".preview-desktop");
+    const more = bar?.querySelector(".actions-more");
+    const previewOn = preview && window.getComputedStyle(preview).display !== "none";
+    const anchor = previewOn ? preview : more;
     const toggle = tags.querySelector(".note-tags-toggle");
     const box = tags.getBoundingClientRect();
-    const actionsBox = actions?.getBoundingClientRect();
+    const anchorBox = anchor?.getBoundingClientRect();
     const toggleBox = toggle?.getBoundingClientRect();
     return {
       right: box.right,
       left: box.left,
       toggleX: toggleBox?.x ?? 0,
-      actionsLeft: actionsBox?.left ?? 0,
+      actionsLeft: anchorBox?.left ?? 0,
       barH: bar?.getBoundingClientRect().height ?? 0,
       empty: tags.classList.contains("is-empty"),
     };
@@ -161,12 +164,36 @@ function editor(page) {
   return page.locator("[data-testid='pane-primary'] .cm-content, [data-testid='editor'] .cm-content").first();
 }
 
+async function barHeight(page) {
+  return page.locator(".bar").first().evaluate((el) => el.getBoundingClientRect().height);
+}
+
+async function captureSaveStatus(page, unsavedName, toastName) {
+  const before = await barHeight(page);
+  await editor(page).click();
+  await page.keyboard.type(" ");
+  await page.getByTestId("note-status").waitFor({ timeout: 3000 });
+  const during = await barHeight(page);
+  if (Math.abs(during - before) > 1) {
+    console.warn(`unsaved overlay shifted the header on ${unsavedName}: ${before} -> ${during}`);
+  }
+  await shot(page, unsavedName);
+  await page.getByTestId("note-saved-toast").waitFor({ timeout: 4000 });
+  await shot(page, toastName);
+  await page.getByTestId("note-saved-toast").waitFor({ state: "hidden", timeout: 4000 });
+  const after = await barHeight(page);
+  if (Math.abs(after - before) > 1) {
+    console.warn(`saved toast shifted the header on ${toastName}: ${before} -> ${after}`);
+  }
+}
+
 await page.waitForSelector('[data-testid="editor"]');
 if ((await editor(page).innerText()).trim().length < 8) {
   await editor(page).click();
   await page.keyboard.type("# Launch plan\n\nDecide milestones and owners.\n");
   await page.waitForTimeout(300);
 }
+await captureSaveStatus(page, "31-unsaved-desktop-light", "32-saved-toast-desktop-light");
 await shot(page, "02-note-desktop-light");
 
 await editor(page).click();
@@ -329,6 +356,7 @@ await page.evaluate(() => {
   document.documentElement.style.colorScheme = "dark";
 });
 await page.waitForTimeout(150);
+await captureSaveStatus(page, "31b-unsaved-desktop-dark", "32b-saved-toast-desktop-dark");
 await shot(page, "08-note-desktop-dark");
 await page.getByTestId("sidebar-cal-toggle").click();
 await shot(page, "08d-sidebar-calendar-folded-dark");
@@ -387,6 +415,7 @@ const m = await mobile.newPage();
 await m.addInitScript(() => localStorage.setItem("mnote-theme", "light"));
 await login(m);
 await m.waitForSelector('[data-testid="editor"]');
+await captureSaveStatus(m, "31c-unsaved-mobile", "32c-saved-toast-mobile");
 await shot(m, "10-note-mobile");
 try {
   const tagsMobileBefore = await tagsChrome(m);

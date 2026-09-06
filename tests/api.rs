@@ -265,7 +265,7 @@ async fn daily_crud_list_search_backlinks() {
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["title"], "2026-08-22");
-    assert!(body["content"].as_str().unwrap().contains("2026-08-22"));
+    assert_eq!(body["content"], "");
     let daily_id = body["id"].as_str().unwrap().to_string();
 
     let (status, _, _) = h

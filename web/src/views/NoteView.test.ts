@@ -129,11 +129,11 @@ describe("NoteView", () => {
     const wrapper = mount(NoteView, { global: { plugins: [router] } });
     await flushPromises();
     await wrapper.get(".fake-editor").setValue("edited");
-    expect(wrapper.text()).toContain("Editing");
+    expect(wrapper.get('[data-testid="note-status"]').text()).toBe("Unsaved");
     await vi.advanceTimersByTimeAsync(800);
     await flushPromises();
     expect(api.putNote).not.toHaveBeenCalled();
-    expect(wrapper.text()).toContain("Saved");
+    expect(wrapper.get('[data-testid="note-saved-toast"]').text()).toBe("Saved");
   });
 
   it("shows an error when a note is missing", async () => {

@@ -275,7 +275,7 @@ defineExpose({ load });
     <button class="new-note-button ghost sidebar-search" type="button" aria-label="Search notes" @click="emit('open-picker')">
       <span>Search notes</span><kbd aria-hidden="true">{{ searchShortcut }}</kbd>
     </button>
-    <button class="sidebar-create" type="button" data-testid="new-note" @click="emit('create-note')">＋ New note</button>
+    <button class="ghost sidebar-create" type="button" data-testid="new-note" @click="emit('create-note')">＋ New note</button>
     <div class="park-row">
       <button class="parked-button" type="button" data-testid="sidebar-park" title="Capture a thought to organize later" @click="showParkCapture({})">
         Park a thought

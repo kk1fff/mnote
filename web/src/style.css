@@ -767,6 +767,7 @@ button.icon-btn,
 }
 
 .note-pane {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -795,16 +796,30 @@ button.icon-btn,
   min-width: 16rem;
 }
 
-.workspace.split .note-status {
+.note-status-float {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+  top: calc(var(--bar-height) + env(safe-area-inset-top) + 0.4rem);
+  right: max(0.85rem, env(safe-area-inset-right));
+  z-index: 8;
+  pointer-events: none;
+  max-width: 16rem;
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.note-status-float.is-unsaved {
+  color: var(--danger);
+}
+
+.note-status-float.is-saved {
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
 .workspace-pane.unfocused .note-heading h1,
@@ -1283,13 +1298,7 @@ button.icon-btn,
   justify-content: flex-start;
 }
 
-.note-status {
-  max-width: 7.5rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.75rem;
-}
+
 
 .editor,
 .preview {
@@ -1930,17 +1939,7 @@ button.icon-btn,
     min-width: 0;
   }
 
-  .note-status {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
+
 
   .sidebar > .sidebar-footer-icons {
     display: none;
@@ -2212,12 +2211,26 @@ button.icon-btn,
   min-height: 2.5rem;
 }
 .sidebar-search kbd { font: inherit; font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; }
-.sidebar-create { margin-top: 0.5rem; min-height: 2.4rem; text-align: left; font-weight: 600; }
+.sidebar-create {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  margin-top: 0.5rem;
+  min-height: 2.4rem;
+  text-align: left;
+  font-weight: 450;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+}
+.sidebar-create:hover {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
 .sidebar .park-row { margin-top: 0.6rem; }
 .note-heading [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 button:disabled { cursor: default; opacity: 0.55; }
 .preview-desktop { min-height: 2rem; }
-.note-status { width: 4.5rem; text-align: right; }
 .actions-menu { gap: 0.15rem; padding: 0.5rem; }
 .actions-menu button { display: flex; align-items: center; border-color: transparent; text-align: left; padding: 0.45rem 0.7rem; }
 .actions-menu .danger-action { color: var(--danger); border-top: 1px solid var(--border); border-radius: 0 0 6px 6px; margin-top: 0.35rem; padding-top: 0.65rem; }

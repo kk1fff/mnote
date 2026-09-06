@@ -88,7 +88,7 @@ test("save keeps content after reload", async ({ page }) => {
   const marker = uid("body");
   await typeInEditor(page, marker);
   await noteAction(page, "save");
-  await expect(page.getByTestId("note-status")).toHaveText("Saved");
+  await expect(page.getByTestId("note-saved-toast")).toHaveText("Saved");
   await page.reload();
   await expect(page.locator(".cm-content")).toContainText(marker);
 });
@@ -137,7 +137,7 @@ test("delete warns about backlinks and leaves the link", async ({ page }) => {
   await createNote(page, source);
   await typeInEditor(page, `[[${target}]]`);
   await noteAction(page, "save");
-  await expect(page.getByTestId("note-status")).toHaveText("Saved");
+  await expect(page.getByTestId("note-saved-toast")).toHaveText("Saved");
   await openPicker(page);
   await page.getByTestId("picker-input").fill(target);
   await page.getByTestId("picker").getByRole("button", { name: target }).click();
@@ -180,7 +180,7 @@ test("backlinks list the linking note", async ({ page }) => {
   await createNote(page, source);
   await typeInEditor(page, `[[${target}]]`);
   await noteAction(page, "save");
-  await expect(page.getByTestId("note-status")).toHaveText("Saved");
+  await expect(page.getByTestId("note-saved-toast")).toHaveText("Saved");
   await openPicker(page);
   await page.getByTestId("picker-input").fill(target);
   await page.getByTestId("picker").getByRole("button", { name: target }).click();

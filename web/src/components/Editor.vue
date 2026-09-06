@@ -491,7 +491,7 @@ onMounted(() => {
             color: "var(--text)",
           },
           ".cm-line": { color: "var(--text)" },
-          ".cm-context-line": { boxShadow: "inset -2px 0 0 var(--accent)" },
+          ".cm-context-line": { boxShadow: "inset -1px 0 0 var(--text-muted)" },
           ".cm-placeholder": { color: "var(--text-muted)" },
           "&.cm-focused": { outline: "none" },
         }),
@@ -501,9 +501,7 @@ onMounted(() => {
   if (props.remotes?.length) {
     view.dispatch({ effects: setRemotes.of(props.remotes) });
   }
-  if (props.contextOrdinals?.length) {
-    view.dispatch({ effects: setContextLines.of(props.contextOrdinals) });
-  }
+  syncContextLines();
   document.addEventListener("mousedown", onDocClick);
 });
 
@@ -519,11 +517,14 @@ watch(
   },
 );
 
+function syncContextLines() {
+  const ords = props.showContext ? (props.contextOrdinals ?? []) : [];
+  view?.dispatch({ effects: setContextLines.of(ords) });
+}
+
 watch(
-  () => props.contextOrdinals,
-  (ords) => {
-    view?.dispatch({ effects: setContextLines.of(ords ?? []) });
-  },
+  () => [props.showContext, props.contextOrdinals] as const,
+  () => syncContextLines(),
 );
 
 function excerpt(): string {

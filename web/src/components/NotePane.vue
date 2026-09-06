@@ -54,6 +54,7 @@ const tags = computed(() => extractHashtags(content.value));
 const hasConflictMarkers = computed(() => /^<<<<<<< this device$/m.test(content.value) && /^>>>>>>> other device$/m.test(content.value));
 const preview = ref(false);
 const status = ref("");
+const savedToast = ref(false);
 const links = ref<NoteMeta[]>([]);
 const remotes = ref<RemoteCaret[]>([]);
 const isFavorite = ref(false);
@@ -87,7 +88,31 @@ const deleteError = ref("");
 let replacing = false;
 const parkShortcut = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘↵" : "Ctrl+↵";
 let saveTimer: number | undefined;
+let toastTimer: number | undefined;
 let loadedId = "";
+
+function clearSavedToast() {
+  window.clearTimeout(toastTimer);
+  savedToast.value = false;
+}
+
+function flashSaved() {
+  status.value = "";
+  savedToast.value = true;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    savedToast.value = false;
+  }, 1600);
+}
+
+function setStatus(next: string) {
+  if (next === "Saved") {
+    flashSaved();
+    return;
+  }
+  clearSavedToast();
+  status.value = next;
+}
 let base = "";
 let rev = 0;
 let applyingRemote = false;
@@ -96,10 +121,10 @@ let stopLive: (() => void) | undefined;
 async function load() {
   const id = props.noteId;
   if (!id) {
-    status.value = "Note not found";
+    setStatus("Note not found");
     return;
   }
-  status.value = "Loading…";
+  setStatus("Loading…");
   remotes.value = [];
   title.value = "";
   folder.value = "";
@@ -113,16 +138,16 @@ async function load() {
     folder.value = note.folder ?? "";
     rememberTitle(note.id, note.title);
     base = note.content;
-    status.value = "Saved";
+    setStatus("");
   } catch (err) {
-    status.value = err instanceof ApiError && err.status === 404 ? "Note not found" : "Failed to load";
+    setStatus(err instanceof ApiError && err.status === 404 ? "Note not found" : "Failed to load");
     return;
   }
   const draft = loadDraft(id);
   if (draft && draft.local !== content.value) {
     const merged = threeWay(draft.base, draft.local, content.value);
     applyRemote(merged.content);
-    status.value = merged.conflict ? "Conflict — keep both, then save" : "Restored local draft";
+    setStatus(merged.conflict ? "Conflict — keep both, then save" : "Restored local draft");
   }
   client.value.connect();
   client.value.open(id, content.value);
@@ -156,7 +181,7 @@ function onLive(event: LiveEvent) {
   if (event.type === "status") {
     if (!event.connected && loadedId) {
       saveDraft(loadedId, base, content.value);
-      status.value = "Offline — draft saved";
+      setStatus("Offline — draft saved");
     }
     return;
   }
@@ -170,7 +195,7 @@ function onLive(event: LiveEvent) {
       base = event.content;
       clearDraft(id);
     }
-    if (merged.conflict) status.value = "Conflict — keep both, then save";
+    if (merged.conflict) setStatus("Conflict — keep both, then save");
     remotes.value = [];
     return;
   }
@@ -199,7 +224,7 @@ function onLive(event: LiveEvent) {
     }
     if (event.conflict || merged.conflict) {
       remotes.value = [];
-      status.value = "Conflict — keep both, then save";
+      setStatus("Conflict — keep both, then save");
     }
     return;
   }
@@ -239,7 +264,7 @@ function markGone() {
   links.value = [];
   remotes.value = [];
   deleteOpen.value = false;
-  status.value = "Note not found";
+  setStatus("Note not found");
 }
 
 function onLiveChange(change: { from: number; to: number; insert: string; content: string }) {
@@ -250,24 +275,24 @@ function onLiveChange(change: { from: number; to: number; insert: string; conten
     client.value.change(id, rev, change.content, change.from, change.to, change.insert);
     rev += 1;
   } else {
-    status.value = "Offline — draft saved";
+    setStatus("Offline — draft saved");
   }
 }
 
 async function save() {
   const id = loadedId || props.noteId;
   if (!id) return;
-  status.value = "Saving…";
+  setStatus("Saving…");
   try {
     await api.putNote(id, content.value);
     base = content.value;
     clearDraft(id);
-    status.value = "Saved";
+    setStatus("Saved");
     links.value = await api.backlinks(id).catch(() => []);
     emit("index");
   } catch {
     saveDraft(id, base, content.value);
-    status.value = "Save failed — draft kept";
+    setStatus("Save failed — draft kept");
   }
 }
 
@@ -297,10 +322,10 @@ async function saveMeta() {
     folder.value = note.folder ?? "";
     rememberTitle(note.id, note.title);
     editingMeta.value = false;
-    status.value = "Saved";
+    setStatus("Saved");
     emit("index");
   } catch (err) {
-    status.value = err instanceof ApiError ? err.code : "Could not rename";
+    setStatus(err instanceof ApiError ? err.code : "Could not rename");
   }
 }
 
@@ -309,7 +334,7 @@ async function onRestored(note: Note) {
   applyRemote(note.content);
   base = note.content;
   clearDraft(note.id);
-  status.value = "Restored";
+  setStatus("Restored");
   queueMicrotask(() => {
     replacing = false;
   });
@@ -324,7 +349,7 @@ async function toggleFavorite() {
     isFavorite.value = !isFavorite.value;
     setPinned(id, isFavorite.value);
   } catch {
-    status.value = "Could not update favorite";
+    setStatus("Could not update favorite");
   }
 }
 
@@ -333,6 +358,8 @@ const contextOrdinals = computed(() =>
     .filter((block) => block.ordinal != null && noteContext.value.events.some((ev) => ev.block_id === block.id))
     .map((block) => block.ordinal as number),
 );
+
+const visibleContextOrdinals = computed(() => (showContext.value ? contextOrdinals.value : []));
 
 const selectedEvents = computed(() => {
   if (selectedOrdinal.value == null) return [];
@@ -561,14 +588,14 @@ watch(content, () => {
   if (!loadedId || applyingRemote) return;
   saveDraft(loadedId, base, content.value);
   if (client.value.connected) {
-    status.value = "Editing";
+    setStatus("Unsaved");
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
-      status.value = "Saved";
+      setStatus("Saved");
     }, 800);
     return;
   }
-  status.value = "Offline — draft saved";
+  setStatus("Offline — draft saved");
   queueSave();
 });
 
@@ -612,6 +639,8 @@ onBeforeUnmount(() => {
     setWhereHook(null);
   }
   window.clearTimeout(flushTimer);
+  window.clearTimeout(saveTimer);
+  clearSavedToast();
   void flushContext();
   document.removeEventListener("click", onDocClick);
   window.removeEventListener("visibilitychange", onFlushNow);
@@ -703,7 +732,6 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div ref="actionsEl" class="actions" :class="{ open: actionsOpen }">
-        <span class="muted note-status" data-testid="note-status" role="status" :title="status">{{ status }}</span>
         <button type="button" class="ghost preview-desktop" :aria-pressed="preview" @click="preview = !preview">{{ preview ? 'Edit' : 'Preview' }}</button>
         <button
           type="button"
@@ -758,6 +786,23 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </header>
+    <div
+      v-if="status"
+      class="note-status-float"
+      :class="{ 'is-unsaved': status === 'Unsaved' }"
+      data-testid="note-status"
+      role="status"
+    >
+      {{ status }}
+    </div>
+    <div
+      v-else-if="savedToast"
+      class="note-status-float is-saved"
+      data-testid="note-saved-toast"
+      role="status"
+    >
+      Saved
+    </div>
     <div v-if="hasConflictMarkers" class="conflict-notice" role="status" data-testid="conflict-notice">
       <span><strong>Conflict markers found.</strong> Review both versions in the note before removing the markers.</span>
       <button type="button" class="ghost" @click="history?.show()">Review history</button>
@@ -772,7 +817,7 @@ onBeforeUnmount(() => {
       :folder="folder"
       :remotes="remotes"
       :show-context="showContext"
-      :context-ordinals="contextOrdinals"
+      :context-ordinals="visibleContextOrdinals"
       @live-change="onLiveChange"
       @cursor="client.cursor($event.from, $event.to)"
       @paragraph-commit="queueContext($event.ordinal, 'auto')"

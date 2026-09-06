@@ -919,7 +919,7 @@ pub fn get_or_create_daily(vault: &Path, date: &str) -> Result<Note, AppError> {
     if let Some(existing) = find_by_path(vault, "", &date)? {
         return Ok(existing);
     }
-    create_note(vault, &date, "", Some(&format!("# {date}\n\n")))
+    create_note(vault, &date, "", None)
 }
 
 pub fn note_meta(vault: &Path, id: &str) -> Result<NoteMeta, AppError> {
@@ -1489,7 +1489,8 @@ mod tests {
         let conflict = create_note(vault, "one", "ideas", None).unwrap_err();
         assert!(conflict_id(&conflict).is_some());
         let daily = get_or_create_daily(vault, "2026-08-22").unwrap();
-        assert!(daily.content.contains("2026-08-22"));
+        assert_eq!(daily.title, "2026-08-22");
+        assert_eq!(daily.content, "");
         let again = get_or_create_daily(vault, "2026-08-22").unwrap();
         assert_eq!(again.id, daily.id);
         create_note(vault, "2026-08-22", "ideas", Some("other day")).unwrap();

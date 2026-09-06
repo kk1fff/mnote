@@ -23,14 +23,14 @@ test("history lists a prior session and restore brings it back", async ({ page }
   const first = uid("v1");
   await typeInEditor(page, first);
   await noteAction(page, "save");
-  await expect(page.getByTestId("note-status")).toHaveText("Saved");
+  await expect(page.getByTestId("note-saved-toast")).toHaveText("Saved");
   const noteId = noteIdFromUrl(page.url());
   ageSession(noteId);
 
   const second = uid("v2");
   await typeInEditor(page, ` ${second}`);
   await noteAction(page, "save");
-  await expect(page.getByTestId("note-status")).toHaveText("Saved");
+  await expect(page.getByTestId("note-saved-toast")).toHaveText("Saved");
 
   await noteAction(page, "history");
   await expect(page.getByTestId("history-panel")).toBeVisible();
