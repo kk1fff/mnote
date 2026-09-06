@@ -15,6 +15,10 @@ import { openInWorkspace, type OpenMode } from "../workspace";
 const emit = defineEmits<{ created: [] }>();
 const router = useRouter();
 const query = ref("");
+const creating = ref(false);
+const searching = ref(false);
+const createBusy = ref(false);
+let returnFocus: HTMLElement | null = null;
 const results = ref<NoteMeta[]>([]);
 const folders = ref<string[]>([]);
 const foldersReady = ref(false);
@@ -41,7 +45,7 @@ const exactTag = computed(() => {
 });
 const folderQuery = computed(() => (trimmed.value.endsWith("/") ? trimmed.value.slice(0, -1) : ""));
 const sections = computed(() =>
-  buildPickerSections({
+  creating.value && !trimmed.value ? [] : buildPickerSections({
     query: query.value,
     notes: results.value,
     folders: folders.value,
@@ -64,6 +68,8 @@ const itemOffset = computed(() => {
 });
 
 function show(mode: OpenMode = "replace", collectionKind?: PickerCollection, initialQuery?: string) {
+  returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  creating.value = false;
   open.value = true;
   openMode.value = mode;
   query.value = initialQuery ?? "";
@@ -83,12 +89,21 @@ function show(mode: OpenMode = "replace", collectionKind?: PickerCollection, ini
   void nextTick(() => input.value?.focus());
 }
 
+function showCreate() {
+  show();
+  creating.value = true;
+}
+
 function showTag(tag: string) {
   show("replace", undefined, `#${tag}`);
 }
 
 function close() {
   open.value = false;
+  window.clearTimeout(searchTimer);
+  searchId++;
+  searching.value = false;
+  void nextTick(() => returnFocus?.isConnected && returnFocus.focus());
 }
 
 function clampSelected() {
@@ -119,7 +134,8 @@ async function jump(to: string) {
 }
 
 async function create() {
-  if (!createItem.value) return;
+  if (!createItem.value || createBusy.value || searching.value) return;
+  createBusy.value = true;
   error.value = "";
   try {
     const note = await api.createNote(createItem.value.draft.title, createItem.value.draft.folder);
@@ -128,6 +144,8 @@ async function create() {
     await router.push(openInWorkspace(note.id, note.title, openMode.value));
   } catch (err) {
     error.value = err instanceof ApiError ? err.code : "Could not create note";
+  } finally {
+    createBusy.value = false;
   }
 }
 
@@ -240,6 +258,15 @@ function submit() {
 }
 
 function onKey(event: KeyboardEvent) {
+  if (event.key === "Tab") {
+    const dialog = input.value?.closest('[role="dialog"]');
+    const controls = [...(dialog?.querySelectorAll<HTMLElement>('input, button:not(:disabled)') ?? [])];
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    return;
+  }
   if (event.key === "Escape") {
     event.preventDefault();
     if (collection.value) {
@@ -274,6 +301,7 @@ function onKey(event: KeyboardEvent) {
 watch(query, () => {
   window.clearTimeout(searchTimer);
   const requestId = ++searchId;
+  searching.value = false;
   error.value = "";
   if (bang.value) {
     collection.value = null;
@@ -300,6 +328,8 @@ watch(query, () => {
     selected.value = 0;
     return;
   }
+  results.value = [];
+  searching.value = true;
   searchTimer = window.setTimeout(async () => {
     try {
       const notes = await api.titleSearch(q);
@@ -310,9 +340,12 @@ watch(query, () => {
       }
     } catch {
       if (requestId === searchId) {
+        error.value = "Could not search notes. Please try again.";
         results.value = [];
         selected.value = items.value.findIndex((item) => item.type === "create");
       }
+    } finally {
+      if (requestId === searchId) searching.value = false;
     }
   }, 120);
 });
@@ -321,29 +354,28 @@ watch(items, () => {
   if (selected.value > maxIndex.value || selected.value < 0) clampSelected();
 });
 
-defineExpose({ show, showTag, open });
+defineExpose({ show, showCreate, showTag, open });
 </script>
 
 <template>
   <div v-if="open" class="picker-scrim" @click.self="close">
-    <section class="note-picker" data-testid="picker" role="dialog" aria-modal="true" aria-label="Open or create note">
+    <section class="note-picker" data-testid="picker" role="dialog" aria-modal="true" aria-label="Open or create note" @keydown="onKey">
       <form class="picker-field" @submit.prevent="submit">
-        <div class="picker-mirror" aria-hidden="true">
-          <span class="picker-spacer">{{ query }}</span>
-          <span v-if="canCreate" class="picker-hint"> {{ createShortcut }} create</span>
-        </div>
         <input
           ref="input"
           v-model="query"
           type="search"
-          :placeholder="hash ? 'Search tags' : bang ? 'Search folders' : 'Search or create a note'"
+          :placeholder="hash ? 'Search tags' : bang ? 'Search folders' : creating ? 'Name your new note' : 'Search or create a note'"
           data-testid="picker-input"
           aria-label="Search or create a note"
-          @keydown="onKey"
         />
+        <button type="button" class="ghost picker-close" aria-label="Close picker" @click="close">Close</button>
       </form>
       <p v-if="error" class="error picker-message">{{ error }}</p>
-      <div v-else class="picker-body">
+      <div v-else class="picker-body" :aria-busy="searching">
+        <p v-if="searching" class="muted picker-message" role="status">Searching notes…</p>
+        <p v-else-if="trimmed && !bang && !hash && !folderQuery && !results.length" class="muted picker-message" role="status">No matching notes. Create one below.</p>
+        <p v-if="creating && !trimmed" class="muted picker-message">Give your note a title. Use folder/title to organize it.</p>
         <section v-for="section in sections" :key="section.id" class="picker-section">
           <p class="picker-section-title">{{ section.label }}</p>
           <ul class="picker-results">
@@ -425,6 +457,7 @@ defineExpose({ show, showTag, open });
                 type="button"
                 data-testid="picker-create"
                 class="picker-create"
+                :disabled="createBusy || searching"
                 :class="{ active: selected === indexOf(item) }"
                 @click="create"
               >
@@ -445,11 +478,12 @@ defineExpose({ show, showTag, open });
         >
           No notes in {{ trimmed }}
         </p>
-        <p v-else-if="!trimmed && !collection" class="muted picker-message">Type a title to search or create a note</p>
+        <p v-else-if="!trimmed && !collection && !creating" class="muted picker-message">Type a title to search or create a note</p>
         <p v-if="!bang && folderQuery && !canCreate" class="muted picker-message">
           Type a name to create in {{ trimmed }}
         </p>
       </div>
+      <footer class="picker-footer"><span>↑ ↓ Navigate · ↵ Open · Esc {{ collection || bang || hash ? "Back" : "Close" }}</span><span v-if="canCreate">{{ createShortcut }} create</span></footer>
     </section>
   </div>
 </template>

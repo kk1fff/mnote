@@ -24,6 +24,7 @@ const themeLabel = computed(() => {
   return "System";
 });
 
+const searchShortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K";
 const notes = ref<NoteMeta[]>([]);
 const route = useRoute();
 const router = useRouter();
@@ -253,6 +254,7 @@ onBeforeUnmount(() => {
 const emit = defineEmits<{
   "open-picker": [collection?: PickerCollection];
   "open-parked": [];
+  "create-note": [];
   close: [];
 }>();
 
@@ -270,10 +272,13 @@ defineExpose({ load });
         Close
       </button>
     </div>
-    <button class="new-note-button ghost" type="button" @click="emit('open-picker')">Go to…</button>
+    <button class="new-note-button ghost sidebar-search" type="button" aria-label="Search notes" @click="emit('open-picker')">
+      <span>Search notes</span><kbd aria-hidden="true">{{ searchShortcut }}</kbd>
+    </button>
+    <button class="sidebar-create" type="button" data-testid="new-note" @click="emit('create-note')">＋ New note</button>
     <div class="park-row">
-      <button class="parked-button" type="button" data-testid="sidebar-park" @click="showParkCapture({})">
-        Park
+      <button class="parked-button" type="button" data-testid="sidebar-park" title="Capture a thought to organize later" @click="showParkCapture({})">
+        Park a thought
       </button>
       <button
         v-if="parkedItems.length"

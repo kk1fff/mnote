@@ -34,7 +34,7 @@ export async function noteAction(page: Page, testId: string) {
 }
 
 export async function openPicker(page: Page) {
-  await page.getByTestId("sidebar").getByRole("button", { name: "Go to…" }).click();
+  await page.getByTestId("sidebar").getByRole("button", { name: "Search notes" }).click();
   await expect(page.getByTestId("picker")).toBeVisible();
 }
 

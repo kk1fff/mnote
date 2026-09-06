@@ -241,6 +241,10 @@ async fn live_keeps_peers_after_http_put_and_stale_reconnect() {
         .unwrap();
     assert_eq!(put.status(), StatusCode::OK);
 
+    // HTTP saves publish note metadata even while live content stays in its session.
+    let index = next_json(&mut b).await;
+    assert_eq!(index["type"], "index");
+    assert_eq!(index["note"]["id"], note_id);
     let no_resync = tokio::time::timeout(std::time::Duration::from_millis(80), b.next()).await;
     assert!(no_resync.is_err(), "http put must not resync live peers");
 

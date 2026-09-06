@@ -15,7 +15,8 @@ fs.mkdirSync(out, { recursive: true });
 
 async function shot(page, name) {
   const file = path.join(out, `${name}.png`);
-  await page.screenshot({ path: file, fullPage: false });
+  await page.waitForLoadState("networkidle");
+  await page.screenshot({ path: file, fullPage: false, animations: "disabled" });
   console.log(file);
 }
 
@@ -75,7 +76,10 @@ async function closeSheet(page) {
 }
 
 async function openPicker(page) {
-  await page.getByTestId("sidebar").getByRole("button", { name: "Go to…" }).click();
+  const navOpen = await page.locator('.app-shell').evaluate(el => el.classList.contains('nav-open'));
+  const menu = page.getByRole('button', { name: 'Menu', exact: true });
+  if (!navOpen && await menu.isVisible()) await menu.click();
+  await page.getByTestId("sidebar").getByRole("button", { name: "Search notes" }).click();
   await page.waitForSelector('[data-testid="picker"]');
 }
 
@@ -148,7 +152,7 @@ const browser = await chromium.launch({ headless: true });
 
 const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await desktop.newPage();
-await page.addInitScript(() => localStorage.setItem("mnote-theme", "light"));
+await page.addInitScript(() => { if (!localStorage.getItem("mnote-theme")) localStorage.setItem("mnote-theme", "light"); });
 await ready(page, "/login");
 await shot(page, "01-login-light");
 await login(page);
@@ -410,6 +414,8 @@ await shot(m, "11b-image-picker-mobile");
 await closeSheet(m);
 await m.getByRole("button", { name: "Menu" }).click();
 await shot(m, "12-note-mobile-nav");
+await m.getByTestId("sidebar").getByRole("button", { name: "Sign out", exact: true }).scrollIntoViewIfNeeded();
+await shot(m, "12c-mobile-nav-account");
 await m.getByTestId("tree-more").first().click();
 await m.waitForSelector('[data-testid="tree-menu"]');
   await shot(m, "12b-sidebar-menu-mobile");
@@ -442,5 +448,45 @@ await ready(ld, "/login");
 await shot(ld, "13-login-dark");
 await loginDark.close();
 
+for (const mobile of [false, true]) {
+  for (const theme of ["light", "dark"]) {
+    const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 } });
+    const p = await context.newPage();
+    await p.addInitScript(value => localStorage.setItem("mnote-theme", value), theme);
+    await login(p);
+    await p.waitForSelector('[data-testid="editor"]');
+    const label = `${mobile ? "mobile" : "desktop"}-${theme}`;
+    await shot(p, `25-workspace-${label}`);
+    if (mobile) await p.getByRole("button", { name: "Menu", exact: true }).click();
+    await p.getByTestId("new-note").click();
+    await shot(p, `26-new-note-${label}`);
+    await p.getByTestId("picker-input").fill("A thoughtful new idea with a longer title");
+    await p.getByText("No matching notes. Create one below.").waitFor();
+    await shot(p, `27-search-empty-${label}`);
+    await p.getByRole("button", { name: "Close picker" }).click();
+    if (mobile && await p.getByRole("button", { name: "Close sidebar" }).isVisible()) await p.getByRole("button", { name: "Close sidebar" }).click();
+    await p.getByRole("button", { name: "More actions" }).click();
+    await shot(p, `28-actions-${label}`);
+    await p.keyboard.press("Escape");
+    await noteAction(p, "history");
+    await shot(p, `29-history-${label}`);
+    await closeSheet(p);
+    await openPicker(p);
+    await p.getByTestId("picker-input").fill("Conflict review sample");
+    const existing = p.getByTestId("picker").getByRole("button", { name: "Conflict review sample", exact: true });
+    await p.waitForTimeout(250);
+    if (await existing.count()) await existing.click();
+    else await p.getByTestId("picker-create").click();
+    await p.waitForSelector('[data-testid="editor"]');
+    await p.waitForLoadState("networkidle");
+    await editor(p).click();
+    await p.keyboard.press("ControlOrMeta+a");
+    await p.keyboard.insertText("<<<<<<< this device\nFirst idea\n=======\nSecond idea\n>>>>>>> other device");
+    await noteAction(p, "save");
+    await p.getByTestId("conflict-notice").waitFor();
+    await shot(p, `30-conflict-${label}`);
+    await context.close();
+  }
+}
 await browser.close();
 console.log(`visual review wrote ${out}`);

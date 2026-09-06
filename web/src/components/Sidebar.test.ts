@@ -104,7 +104,7 @@ describe("Sidebar", () => {
     await flushPromises();
     expect(wrapper.text()).toContain("ideas");
     expect(wrapper.text()).toContain("One");
-    expect(wrapper.get(".new-note-button").text()).toBe("Go to…");
+    expect(wrapper.get(".new-note-button").text()).toContain("Search notes");
     await wrapper.get('[data-testid="theme-toggle"]').trigger("click");
     expect(wrapper.get('[data-testid="theme-option-system"]').attributes("aria-checked")).toBe("true");
     await wrapper.get('[data-testid="theme-option-light"]').trigger("click");

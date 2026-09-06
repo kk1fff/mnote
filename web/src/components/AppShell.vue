@@ -14,6 +14,7 @@ const sidebar = ref<{ load: () => Promise<void> } | null>(null);
 const picker = ref<{
   show: (mode?: OpenMode, collection?: PickerCollection) => void;
   showTag: (tag: string) => void;
+  showCreate: () => void;
   open: boolean;
 } | null>(null);
 const parked = ref<{ show: (id?: number) => void } | null>(null);
@@ -32,7 +33,7 @@ defineExpose({
 });
 
 function onKey(event: KeyboardEvent) {
-  if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "o") {
+  if ((event.metaKey || event.ctrlKey) && ((event.shiftKey && event.key.toLowerCase() === "o") || (!event.shiftKey && event.key.toLowerCase() === "k"))) {
     event.preventDefault();
     picker.value?.show();
   }
@@ -69,6 +70,7 @@ onBeforeUnmount(() => {
       ref="sidebar"
       @open-picker="(collection) => picker?.show('replace', collection)"
       @open-parked="parked?.show()"
+      @create-note="picker?.showCreate()"
       @close="open = false"
     />
     <slot :toggle="() => (open = !open)" />

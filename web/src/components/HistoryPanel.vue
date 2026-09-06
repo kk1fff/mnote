@@ -22,6 +22,12 @@ const revision = ref<HistoryRev | null>(null);
 const error = ref("");
 const confirming = ref(false);
 const busy = ref(false);
+let revisionRequest = 0;
+const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+function localDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : dateFormatter.format(date);
+}
 
 const previewSource = () =>
   selected.value === "now" ? props.current : (revision.value?.content ?? "");
@@ -33,6 +39,7 @@ const previewMeta = () => {
 };
 
 async function show() {
+  revisionRequest++;
   error.value = "";
   confirming.value = false;
   selected.value = "now";
@@ -48,6 +55,8 @@ async function show() {
 }
 
 function close() {
+  if (busy.value) return;
+  revisionRequest++;
   open.value = false;
   confirming.value = false;
 }
@@ -64,6 +73,9 @@ function onWindowKey(event: KeyboardEvent) {
 }
 
 async function select(rev: string) {
+  if (busy.value) return;
+  const request = ++revisionRequest;
+  revision.value = null;
   error.value = "";
   confirming.value = false;
   selected.value = rev;
@@ -73,8 +85,10 @@ async function select(rev: string) {
     return;
   }
   try {
-    revision.value = await api.noteRevision(props.noteId, rev);
+    const result = await api.noteRevision(props.noteId, rev);
+    if (request === revisionRequest) revision.value = result;
   } catch {
+    if (request !== revisionRequest) return;
     error.value = "Could not load version";
     revision.value = null;
   }
@@ -90,6 +104,7 @@ async function restore() {
   busy.value = true;
   try {
     const note = await api.restoreNote(props.noteId, selected.value);
+    busy.value = false;
     close();
     emit("restored", note);
   } catch {
@@ -140,7 +155,7 @@ defineExpose({ show, open });
               @click="select(item.rev)"
             >
               <span>{{ ageLabel(item.created_at) }}</span>
-              <small>{{ item.created_at }}</small>
+              <small :title="item.created_at">{{ localDate(item.created_at) }}</small>
             </button>
           </li>
           <li v-if="events?.length" class="history-context-label">Context</li>
@@ -161,6 +176,7 @@ defineExpose({ show, open });
           <Preview :source="previewSource()" />
           <p v-if="error" class="error parked-empty">{{ error }}</p>
           <div class="history-actions">
+            <span v-if="confirming" class="muted history-restore-help">Replace this note with the selected version? Your current version stays in history.</span>
             <button
               v-if="selected !== 'now'"
               type="button"

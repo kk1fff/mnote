@@ -381,3 +381,24 @@ test("wiki create row inserts a link without creating", async ({ page }) => {
   await expect(page.locator(".cm-content")).toContainText(`[[${missing}]]`);
   expect(created).toEqual([]);
 });
+
+
+test("new note entry point, search dismissal, and conflict guidance", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await page.getByTestId("new-note").click();
+  await expect(page.getByTestId("picker-input")).toHaveAttribute("placeholder", "Name your new note");
+  const title = uid("Design-review");
+  await page.getByTestId("picker-input").fill(title);
+  await expect(page.getByTestId("picker")).toContainText("No matching notes");
+  await page.getByTestId("picker-create").click();
+  await expect(page.getByTestId("note-title")).toHaveText(title);
+  await page.keyboard.press("Control+k");
+  await expect(page.getByTestId("picker")).toBeVisible();
+  await page.getByRole("button", { name: "Close picker" }).click();
+  await expect(page.getByTestId("picker")).toHaveCount(0);
+  await typeInEditor(page, "<<<<<<< this device\nFirst idea\n=======\nSecond idea\n>>>>>>> other device");
+  await expect(page.getByTestId("conflict-notice")).toBeVisible();
+  await page.getByRole("button", { name: "Review history" }).click();
+  await expect(page.getByTestId("history-panel")).toBeVisible();
+});

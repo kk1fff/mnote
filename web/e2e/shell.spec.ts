@@ -11,7 +11,8 @@ test("sidebar links open images and picker collections", async ({ page }) => {
   await page.waitForURL(/\/n\//);
   await page.getByTestId("sidebar-favorites").click();
   await expect(page.getByTestId("picker-back")).toBeVisible();
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Close picker" }).click();
+  await expect(page.getByTestId("picker")).toHaveCount(0);
   await page.getByTestId("sidebar-recent").click();
   await expect(page.getByTestId("picker-back")).toBeVisible();
 });
@@ -48,4 +49,18 @@ test("bob cannot open alice's note", async ({ page, browser }) => {
   await expect(bobPage.getByTestId("note-status")).toHaveText("Note not found");
   await expect(bobPage.getByTestId("sidebar")).not.toContainText(title);
   await bob.close();
+});
+
+
+test("account controls remain reachable in a short mobile drawer", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  const signOut = page.getByTestId("sidebar").getByRole("button", { name: "Sign out", exact: true });
+  await signOut.scrollIntoViewIfNeeded();
+  await expect(signOut).toBeInViewport();
+  const search = page.getByRole("button", { name: "Search notes", exact: true });
+  await search.scrollIntoViewIfNeeded();
+  await expect(search).toBeInViewport();
 });

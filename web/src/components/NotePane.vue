@@ -51,6 +51,7 @@ const tagsOpen = ref(false);
 const tagsEl = ref<HTMLElement | null>(null);
 const content = ref("");
 const tags = computed(() => extractHashtags(content.value));
+const hasConflictMarkers = computed(() => /^<<<<<<< this device$/m.test(content.value) && /^>>>>>>> other device$/m.test(content.value));
 const preview = ref(false);
 const status = ref("");
 const links = ref<NoteMeta[]>([]);
@@ -633,7 +634,7 @@ onBeforeUnmount(() => {
             @keydown.escape.prevent="cancelMeta"
           />
         </form>
-        <h1 v-else data-testid="note-title" title="Rename note" @click="beginMeta">{{ title || "Note" }}</h1>
+        <h1 v-else data-testid="note-title" title="Rename note" tabindex="0" @keydown.enter.prevent="beginMeta" @keydown.space.prevent="beginMeta" @click="beginMeta">{{ title || "Note" }}</h1>
         <div class="note-folder-row">
           <input
             v-if="editingMeta"
@@ -651,6 +652,9 @@ onBeforeUnmount(() => {
             :class="{ 'is-empty': !folder }"
             data-testid="note-folder"
             title="Move note"
+            tabindex="0"
+            @keydown.enter.prevent="beginMeta"
+            @keydown.space.prevent="beginMeta"
             @click="beginMeta"
           >
             {{ folder }}
@@ -699,7 +703,8 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div ref="actionsEl" class="actions" :class="{ open: actionsOpen }">
-        <span class="muted note-status" data-testid="note-status">{{ status }}</span>
+        <span class="muted note-status" data-testid="note-status" role="status" :title="status">{{ status }}</span>
+        <button type="button" class="ghost preview-desktop" :aria-pressed="preview" @click="preview = !preview">{{ preview ? 'Edit' : 'Preview' }}</button>
         <button
           type="button"
           class="actions-more"
@@ -746,13 +751,17 @@ onBeforeUnmount(() => {
           >
             {{ showContext ? "Hide context" : "Context" }}
           </button>
-          <button type="button" class="ghost" data-testid="delete-note-open" @click="runAction(showDelete)">
+          <button type="button" class="ghost danger-action" data-testid="delete-note-open" @click="runAction(showDelete)">
             Delete
           </button>
           <button type="button" data-testid="save" @click="runAction(() => void save())">Save</button>
         </div>
       </div>
     </header>
+    <div v-if="hasConflictMarkers" class="conflict-notice" role="status" data-testid="conflict-notice">
+      <span><strong>Conflict markers found.</strong> Review both versions in the note before removing the markers.</span>
+      <button type="button" class="ghost" @click="history?.show()">Review history</button>
+    </div>
     <Preview v-if="preview" :source="content" />
     <Editor
       v-else

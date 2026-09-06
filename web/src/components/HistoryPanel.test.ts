@@ -1,7 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 import { describe, expect, it, vi } from "vitest";
-import { api } from "../api";
+import { api, type HistoryRev } from "../api";
 import HistoryPanel from "./HistoryPanel.vue";
 
 vi.mock("../api", async () => {
@@ -65,4 +65,28 @@ describe("HistoryPanel", () => {
     expect(api.restoreNote).toHaveBeenCalledWith("n1", "2026-08-22T14-30-00Z");
     expect(wrapper.emitted("restored")?.[0][0]).toMatchObject({ content: "old body" });
   });
+  it("ignores a slow revision after another is selected and disables restore while loading", async () => {
+    const entries = ["first", "second"].map(rev => ({ rev, created_at: "2026-08-22T14:30:00Z", bytes: 12 }));
+    vi.mocked(api.noteHistory).mockResolvedValue(entries);
+    let finishFirst!: (value: HistoryRev) => void;
+    vi.mocked(api.noteRevision)
+      .mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve; }))
+      .mockResolvedValueOnce({ ...entries[1], title: "Second", folder: "", content: "second version" });
+    const wrapper = await mountPanel();
+    wrapper.vm.show();
+    await flushPromises();
+    await wrapper.findAll('[data-testid="history-row"]')[0].trigger("click");
+    expect(wrapper.get('[data-testid="history-restore"]').attributes("disabled")).toBeDefined();
+    await wrapper.findAll('[data-testid="history-row"]')[1].trigger("click");
+    await flushPromises();
+    finishFirst({ ...entries[0], title: "First", folder: "", content: "stale version" });
+    await flushPromises();
+    expect(wrapper.text()).toContain("second version");
+    expect(wrapper.text()).not.toContain("stale version");
+    await wrapper.get('[data-testid="history-now"]').trigger("click");
+    expect(wrapper.text()).toContain("live body");
+    expect(wrapper.find('[data-testid="history-restore"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
 });
