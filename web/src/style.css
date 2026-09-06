@@ -654,7 +654,7 @@ button.icon-btn,
 .sidebar li,
 .results li,
 .backlinks li {
-  margin: 0.2rem 0;
+  margin: 0.04rem 0;
 }
 
 .sidebar .tree .tree {
@@ -679,9 +679,10 @@ button.icon-btn,
   flex: 1;
   min-width: 0;
   display: block;
-  padding: 0.32rem 0.35rem 0.32rem 0.5rem;
+  padding: 0.16rem 0.3rem 0.16rem 0.35rem;
   border-radius: 8px;
   color: var(--text);
+  font-size: 0.8125rem;
   text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -739,7 +740,8 @@ button.icon-btn,
   border: 0;
   background: none;
   color: var(--text-muted);
-  padding: 0.28rem 0.5rem;
+  padding: 0.16rem 0.3rem 0.16rem 0.35rem;
+  font-size: 0.8125rem;
 }
 
 .search input,
@@ -1230,10 +1232,10 @@ button.icon-btn,
 }
 
 .preview {
-  padding: 1.25rem 1.75rem 2rem;
+  padding: 0.55rem 0.6rem 1.15rem;
   font-family: var(--font-note);
-  font-size: 1.08rem;
-  line-height: 1.7;
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 
 .preview h1,
@@ -1377,11 +1379,17 @@ button.icon-btn,
 
 .cm-editor {
   height: 100%;
+  font-size: 13px;
   background: transparent;
   color: var(--text);
 }
 
-.cm-editor .cm-content,
+.cm-editor .cm-content {
+  padding: 0.55rem 0.6rem 1.15rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
 .cm-editor .cm-line {
   color: var(--text);
 }
@@ -1883,7 +1891,10 @@ button.icon-btn,
     min-height: 2.5rem;
   }
 
-  .preview,
+  .preview {
+    padding-bottom: max(1.15rem, env(safe-area-inset-bottom));
+  }
+
   .results {
     padding: 1rem;
     padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
@@ -2034,15 +2045,7 @@ button.icon-btn,
     font-size: 0.95rem;
   }
 
-  .preview {
-    padding: 0.85rem 1.1rem 1.4rem;
-  }
-
-  .cm-editor .cm-content {
-    padding: 0.7rem 0.9rem 1.4rem;
-  }
-
-    .note-picker input {
+  .note-picker input {
     padding: 0.65rem 0.85rem;
     font-size: 0.95rem;
   }
@@ -2101,7 +2104,7 @@ button.icon-btn,
   .sidebar li,
   .results li,
   .backlinks li {
-    margin: 0.08rem 0;
+    margin: 0.04rem 0;
   }
 
   .sidebar .tree-more {
@@ -2175,8 +2178,7 @@ button:disabled { cursor: default; opacity: 0.55; }
 .history-list small { font-size: 0.7rem; }
 .history-restore-help { font-size: 0.8rem; flex: 1; }
 .history-actions button { flex-shrink: 0; }
-.cm-editor .cm-content { padding: 1.25rem clamp(1rem, 3vw, 2.75rem) 3rem; line-height: 1.65; }
-.note-pane > .preview { padding: 1.25rem clamp(1rem, 3vw, 2.75rem) 3rem; }
+.note-pane > .preview { padding: 0.55rem 0.6rem 1.15rem; }
 @media (min-width: 721px) {
   :root { --bar-height: 3.5rem; --sidebar-width: 16rem; }
   .note-heading { --title-h: 1.55rem; --folder-h: 1.2rem; height: 2.85rem; }

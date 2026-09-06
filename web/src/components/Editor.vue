@@ -480,13 +480,12 @@ onMounted(() => {
         EditorView.theme({
           "&": {
             height: "100%",
-            fontSize: "16px",
+            fontSize: "13px",
             backgroundColor: "transparent",
             color: "var(--text)",
           },
           ".cm-scroller": { fontFamily: "var(--font-mono)" },
           ".cm-content": {
-            padding: "1.1rem 1.25rem 2rem",
             caretColor: "var(--text)",
             color: "var(--text)",
           },
