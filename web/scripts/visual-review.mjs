@@ -20,6 +20,60 @@ async function shot(page, name) {
   console.log(file);
 }
 
+async function shotMotion(page, name) {
+  const file = path.join(out, `${name}.png`);
+  await page.screenshot({ path: file, fullPage: false, animations: "allow" });
+  console.log(file);
+}
+
+async function shotFolding(page, toggle, midName, restName) {
+  await toggle.click();
+  await toggle.evaluate((btn) => {
+    const root = btn.closest(".sidebar-section, li") ?? btn.parentElement;
+    const fold = root?.querySelector(".sidebar-fold");
+    const chevron = btn.querySelector(".fold-chevron");
+    if (fold instanceof HTMLElement) {
+      fold.style.transition = "none";
+      fold.style.gridTemplateRows = "0.45fr";
+    }
+    if (chevron instanceof HTMLElement) {
+      chevron.style.transition = "none";
+      chevron.style.transform = "rotate(-45deg)";
+    }
+  });
+  await shotMotion(page, midName);
+  await toggle.evaluate((btn) => {
+    const root = btn.closest(".sidebar-section, li") ?? btn.parentElement;
+    const fold = root?.querySelector(".sidebar-fold");
+    const chevron = btn.querySelector(".fold-chevron");
+    if (fold instanceof HTMLElement) {
+      fold.style.transition = "";
+      fold.style.gridTemplateRows = "";
+    }
+    if (chevron instanceof HTMLElement) {
+      chevron.style.transition = "";
+      chevron.style.transform = "";
+    }
+  });
+  await shot(page, restName);
+}
+
+async function unfold(page, toggle) {
+  await toggle.click();
+  await page.waitForTimeout(160);
+}
+
+async function ensureTreeFolder(page) {
+  const folder = page.getByTestId("tree-folder").first();
+  if (await folder.count()) return folder;
+  await page.getByTestId("note-folder").click();
+  await page.waitForSelector('[data-testid="note-folder-input"]');
+  await page.getByTestId("note-folder-input").fill("ideas");
+  await page.getByTestId("note-title-input").press("Enter");
+  await page.waitForSelector('[data-testid="tree-folder"]');
+  return page.getByTestId("tree-folder").first();
+}
+
 async function ready(page, pathName = "/login") {
   const res = await page.goto(`${url}${pathName}`, { waitUntil: "networkidle" });
   if (!res || res.status() >= 500) {
@@ -73,6 +127,13 @@ async function closeSheet(page) {
   if (await close.count()) await close.click().catch(() => undefined);
   await page.keyboard.press("Escape").catch(() => undefined);
   await page.waitForTimeout(150);
+}
+
+async function leaveMeta(page) {
+  if (await page.locator('[data-testid="note-title-input"]').count()) {
+    await page.keyboard.press("Escape").catch(() => undefined);
+    await page.getByTestId("note-title").waitFor({ state: "visible", timeout: 3000 }).catch(() => undefined);
+  }
 }
 
 async function openPicker(page) {
@@ -246,9 +307,18 @@ try {
   } catch {
     console.warn("note tags row did not appear");
   }
-await page.getByTestId("sidebar-cal-toggle").click();
-await shot(page, "02f-sidebar-calendar-folded-light");
-await page.getByTestId("sidebar-cal-toggle").click();
+  await leaveMeta(page);
+await shotFolding(page, page.getByTestId("sidebar-links-toggle"), "02g-sidebar-links-folding-light", "02h-sidebar-links-folded-light");
+await unfold(page, page.getByTestId("sidebar-links-toggle"));
+await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "02i-sidebar-calendar-folding-light", "02f-sidebar-calendar-folded-light");
+await unfold(page, page.getByTestId("sidebar-cal-toggle"));
+try {
+  const folder = await ensureTreeFolder(page);
+  await shotFolding(page, folder, "02j-sidebar-folder-folding-light", "02k-sidebar-folder-folded-light");
+  await unfold(page, folder);
+} catch {
+  console.warn("sidebar folder fold did not appear");
+}
 await page.getByTestId("sidebar-favorites").click();
 await page.waitForSelector('[data-testid="picker-back"]');
 await shot(page, "18d-picker-favorites-sidebar-light");
@@ -276,6 +346,7 @@ await page.getByTestId("insert-image").click();
 await page.waitForSelector('[data-testid="asset-picker"]');
 await shot(page, "02e-image-picker-light");
 await closeSheet(page);
+await leaveMeta(page);
 
 const barBefore = await page.locator(".bar").evaluate((el) => el.getBoundingClientRect().height);
 await page.getByTestId("note-title").click();
@@ -386,9 +457,17 @@ await page.evaluate(() => {
 await page.waitForTimeout(150);
 await captureSaveStatus(page, "31b-unsaved-desktop-dark", "32b-saved-toast-desktop-dark");
 await shot(page, "08-note-desktop-dark");
-await page.getByTestId("sidebar-cal-toggle").click();
-await shot(page, "08d-sidebar-calendar-folded-dark");
-await page.getByTestId("sidebar-cal-toggle").click();
+await shotFolding(page, page.getByTestId("sidebar-links-toggle"), "08e-sidebar-links-folding-dark", "08f-sidebar-links-folded-dark");
+await unfold(page, page.getByTestId("sidebar-links-toggle"));
+await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "08g-sidebar-calendar-folding-dark", "08d-sidebar-calendar-folded-dark");
+await unfold(page, page.getByTestId("sidebar-cal-toggle"));
+try {
+  const folder = await ensureTreeFolder(page);
+  await shotFolding(page, folder, "08h-sidebar-folder-folding-dark", "08i-sidebar-folder-folded-dark");
+  await unfold(page, folder);
+} catch {
+  console.warn("sidebar folder fold did not appear (dark)");
+}
   await shot(page, "15-tabs-dark");
   await shot(page, "17-split-dark");
   await openPicker(page);
@@ -463,6 +542,11 @@ await shot(m, "11b-image-picker-mobile");
 await closeSheet(m);
 await m.getByRole("button", { name: "Menu" }).click();
 await shot(m, "12-note-mobile-nav");
+await m.getByTestId("sidebar-cal-toggle").click();
+await m.waitForTimeout(160);
+await shot(m, "12d-sidebar-calendar-folded-mobile");
+await m.getByTestId("sidebar-cal-toggle").click();
+await m.waitForTimeout(160);
 await m.getByTestId("sidebar").getByRole("button", { name: "Sign out", exact: true }).scrollIntoViewIfNeeded();
 await shot(m, "12c-mobile-nav-account");
 await m.getByTestId("tree-more").first().click();

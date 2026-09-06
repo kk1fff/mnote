@@ -3,6 +3,7 @@ import type { NoteMeta } from "../api";
 import { noteHref } from "../lib/paths";
 import type { TreeNode } from "../lib/tree";
 import NoteTree from "./NoteTree.vue";
+import SidebarFold from "./SidebarFold.vue";
 
 defineProps<{
   nodes: TreeNode[];
@@ -26,19 +27,27 @@ function onOpen(event: MouseEvent, id: string) {
   <ul class="tree">
     <li v-for="node in nodes" :key="node.kind === 'folder' ? `f:${node.path}` : node.note.id">
       <template v-if="node.kind === 'folder'">
-        <button type="button" class="linkish folder" @click="emit('toggle', node.path)">
-          {{ collapsed.has(node.path) ? "▸" : "▾" }} {{ node.name }}
+        <button
+          type="button"
+          class="linkish folder"
+          data-testid="tree-folder"
+          :aria-expanded="!collapsed.has(node.path)"
+          @click="emit('toggle', node.path)"
+        >
+          <span class="fold-chevron" :class="{ folded: collapsed.has(node.path) }" aria-hidden="true">▾</span>
+          {{ node.name }}
         </button>
-        <NoteTree
-          v-if="!collapsed.has(node.path)"
-          :nodes="node.children"
-          :active-ids="activeIds"
-          :collapsed="collapsed"
-          :menu-id="menuId"
-          @toggle="emit('toggle', $event)"
-          @menu="(note, event) => emit('menu', note, event)"
-          @open="(id, event) => emit('open', id, event)"
-        />
+        <SidebarFold :open="!collapsed.has(node.path)">
+          <NoteTree
+            :nodes="node.children"
+            :active-ids="activeIds"
+            :collapsed="collapsed"
+            :menu-id="menuId"
+            @toggle="emit('toggle', $event)"
+            @menu="(note, event) => emit('menu', note, event)"
+            @open="(id, event) => emit('open', id, event)"
+          />
+        </SidebarFold>
       </template>
       <div
         v-else

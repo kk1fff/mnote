@@ -245,7 +245,7 @@ test("tree collapse persists across navigation and reload", async ({ page }) => 
   await page.goto("/search");
   await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
   await expect(page.getByTestId("sidebar").getByRole("link", { name: title })).toHaveCount(0);
-  await expect(folder()).toContainText("▸");
+  await expect(folder()).toHaveAttribute("aria-expanded", "false");
   await page.reload();
   await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
   await expect(page.getByTestId("sidebar").getByRole("link", { name: title })).toHaveCount(0);

@@ -17,6 +17,7 @@ import { cycleTheme, setThemeMode, themeMode, type ThemeMode } from "../theme";
 import DeleteNoteDialog from "./DeleteNoteDialog.vue";
 import NoteTree from "./NoteTree.vue";
 import SidebarCalendar from "./SidebarCalendar.vue";
+import SidebarFold from "./SidebarFold.vue";
 
 const themeLabel = computed(() => {
   if (themeMode.value === "light") return "Light";
@@ -300,25 +301,27 @@ defineExpose({ load });
         @click="toggleSidebarSection('linksOpen')"
       >
         <span>Links</span>
-        <span aria-hidden="true">{{ sidebarPrefs.linksOpen ? "▾" : "▸" }}</span>
+        <span class="fold-chevron" :class="{ folded: !sidebarPrefs.linksOpen }" aria-hidden="true">▾</span>
       </button>
-      <div v-if="sidebarPrefs.linksOpen" class="sidebar-links">
-        <button type="button" class="sidebar-link" data-testid="sidebar-images" @click="openImages">Images</button>
-        <button
-          type="button"
-          class="sidebar-link"
-          data-testid="sidebar-favorites"
-          @click="emit('open-picker', 'favorites')"
-        >
-          Favorites
-        </button>
-        <button type="button" class="sidebar-link" data-testid="sidebar-recent" @click="emit('open-picker', 'recent')">
-          Recent
-        </button>
-        <button type="button" class="sidebar-link" data-testid="sidebar-tags" @click="emit('open-picker', 'tags')">
-          Tags
-        </button>
-      </div>
+      <SidebarFold :open="sidebarPrefs.linksOpen">
+        <div class="sidebar-links">
+          <button type="button" class="sidebar-link" data-testid="sidebar-images" @click="openImages">Images</button>
+          <button
+            type="button"
+            class="sidebar-link"
+            data-testid="sidebar-favorites"
+            @click="emit('open-picker', 'favorites')"
+          >
+            Favorites
+          </button>
+          <button type="button" class="sidebar-link" data-testid="sidebar-recent" @click="emit('open-picker', 'recent')">
+            Recent
+          </button>
+          <button type="button" class="sidebar-link" data-testid="sidebar-tags" @click="emit('open-picker', 'tags')">
+            Tags
+          </button>
+        </div>
+      </SidebarFold>
     </div>
     <div class="note-library">
       <p class="section-label">Notes</p>
@@ -343,14 +346,15 @@ defineExpose({ load });
         @click="toggleSidebarSection('calendarOpen')"
       >
         <span>Calendar</span>
-        <span aria-hidden="true">{{ sidebarPrefs.calendarOpen ? "▾" : "▸" }}</span>
+        <span class="fold-chevron" :class="{ folded: !sidebarPrefs.calendarOpen }" aria-hidden="true">▾</span>
       </button>
-      <SidebarCalendar
-        v-if="sidebarPrefs.calendarOpen"
-        :journal-dates="journalDates"
-        :active-date="activeDaily"
-        @select="void openDaily($event)"
-      />
+      <SidebarFold :open="sidebarPrefs.calendarOpen">
+        <SidebarCalendar
+          :journal-dates="journalDates"
+          :active-date="activeDaily"
+          @select="void openDaily($event)"
+        />
+      </SidebarFold>
     </div>
     <Teleport to="body">
       <div

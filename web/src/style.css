@@ -533,6 +533,31 @@ button.icon-btn,
   background: transparent;
 }
 
+.fold-chevron {
+  display: inline-block;
+  flex-shrink: 0;
+  transition: transform 0.16s ease;
+}
+
+.fold-chevron.folded {
+  transform: rotate(-90deg);
+}
+
+.sidebar-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.16s ease;
+}
+
+.sidebar-fold.is-open {
+  grid-template-rows: 1fr;
+}
+
+.sidebar-fold-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .sidebar-links {
   display: flex;
   flex-direction: column;
@@ -735,8 +760,11 @@ button.icon-btn,
 }
 
 .sidebar .folder {
+  display: flex;
   width: 100%;
   justify-content: flex-start;
+  align-items: center;
+  gap: 0.28rem;
   border: 0;
   background: none;
   color: var(--text-muted);

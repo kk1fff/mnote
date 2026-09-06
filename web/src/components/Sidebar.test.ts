@@ -79,8 +79,9 @@ describe("Sidebar", () => {
     await router.isReady();
     const wrapper = mount(Sidebar, { global: { plugins: [router] } });
     await flushPromises();
-    expect(wrapper.text()).toContain("ideas");
-    expect(wrapper.text()).not.toContain("One");
+    expect(wrapper.get('[data-testid="tree-folder"]').text()).toContain("ideas");
+    expect(wrapper.get('[data-testid="tree-folder"]').attributes("aria-expanded")).toBe("false");
+    expect(wrapper.get(".tree-link").element.closest("[inert]")).toBeTruthy();
   });
 
   it("lists notes and signs out", async () => {
@@ -267,11 +268,13 @@ describe("Sidebar", () => {
     await wrapper.get('[data-testid="sidebar-tags"]').trigger("click");
     expect(wrapper.emitted("open-picker")?.at(-1)).toEqual(["tags"]);
     await wrapper.get('[data-testid="sidebar-links-toggle"]').trigger("click");
-    expect(wrapper.find('[data-testid="sidebar-images"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="sidebar-links-toggle"]').attributes("aria-expanded")).toBe("false");
+    expect(wrapper.get('[data-testid="sidebar-images"]').element.closest("[inert]")).toBeTruthy();
     wrapper.unmount();
     const again = mount(Sidebar, { global: { plugins: [router] } });
     await flushPromises();
-    expect(again.find('[data-testid="sidebar-images"]').exists()).toBe(false);
+    expect(again.get('[data-testid="sidebar-links-toggle"]').attributes("aria-expanded")).toBe("false");
+    expect(again.get('[data-testid="sidebar-images"]').element.closest("[inert]")).toBeTruthy();
     again.unmount();
   });
 
