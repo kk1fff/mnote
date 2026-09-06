@@ -2139,10 +2139,11 @@ button.icon-btn,
 .sidebar-create {
   display: flex;
   width: 100%;
-  justify-content: flex-start;
+  align-items: center;
+  justify-content: center;
   margin-top: 0.5rem;
   min-height: 2.4rem;
-  text-align: left;
+  text-align: center;
   font-weight: 450;
   background: transparent;
   border-color: transparent;
