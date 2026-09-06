@@ -47,10 +47,12 @@ const folder = ref("");
 const draftTitle = ref("");
 const draftFolder = ref("");
 const editingMeta = ref(false);
-const tagsOpen = ref(false);
-const tagsEl = ref<HTMLElement | null>(null);
+const tagsListEl = ref<HTMLElement | null>(null);
+const tagsFade = ref({ left: false, right: false });
 const content = ref("");
 const tags = computed(() => extractHashtags(content.value));
+const showTags = computed(() => tags.value.length > 0 && !editingMeta.value);
+let tagsResize: ResizeObserver | undefined;
 const hasConflictMarkers = computed(() => /^<<<<<<< this device$/m.test(content.value) && /^>>>>>>> other device$/m.test(content.value));
 const preview = ref(false);
 const status = ref("");
@@ -129,7 +131,6 @@ async function load() {
   title.value = "";
   folder.value = "";
   editingMeta.value = false;
-  tagsOpen.value = false;
   try {
     const note = await api.getNote(id);
     applyRemote(note.content);
@@ -472,14 +473,6 @@ function closeActions() {
   actionsOpen.value = false;
 }
 
-function toggleTags() {
-  tagsOpen.value = !tagsOpen.value;
-}
-
-function closeTags() {
-  tagsOpen.value = false;
-}
-
 function showDelete() {
   if (!loadedId) return;
   deleteError.value = "";
@@ -521,18 +514,37 @@ function onDocClick(event: MouseEvent) {
   if (actionsOpen.value && actionsEl.value && !actionsEl.value.contains(target as Node)) {
     closeActions();
   }
-  if (tagsOpen.value && tagsEl.value && !tagsEl.value.contains(target as Node)) {
-    closeTags();
-  }
   if (selectedOrdinal.value == null || !(target instanceof Element)) return;
   if (target.closest("[data-testid='context-pop']") || target.closest(".cm-editor")) return;
   closeContextPop();
 }
 
 function onTagClick(tag: string) {
-  closeTags();
   openTag(tag);
 }
+
+function updateTagsFade() {
+  const el = tagsListEl.value;
+  const next = !el
+    ? { left: false, right: false }
+    : {
+        left: el.scrollLeft > 1,
+        right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
+      };
+  if (next.left === tagsFade.value.left && next.right === tagsFade.value.right) return;
+  tagsFade.value = next;
+}
+
+watch([tagsListEl, tags], () => {
+  tagsResize?.disconnect();
+  tagsResize = undefined;
+  const el = tagsListEl.value;
+  if (el && typeof ResizeObserver !== "undefined") {
+    tagsResize = new ResizeObserver(() => updateTagsFade());
+    tagsResize.observe(el);
+  }
+  nextTick(updateTagsFade);
+});
 
 function onKey(event: KeyboardEvent) {
   if (event.key === "Escape" && selectedOrdinal.value != null) {
@@ -641,6 +653,7 @@ onBeforeUnmount(() => {
   window.clearTimeout(flushTimer);
   window.clearTimeout(saveTimer);
   clearSavedToast();
+  tagsResize?.disconnect();
   void flushContext();
   document.removeEventListener("click", onDocClick);
   window.removeEventListener("visibilitychange", onFlushNow);
@@ -664,7 +677,7 @@ onBeforeUnmount(() => {
           />
         </form>
         <h1 v-else data-testid="note-title" title="Rename note" tabindex="0" @keydown.enter.prevent="beginMeta" @keydown.space.prevent="beginMeta" @click="beginMeta">{{ title || "Note" }}</h1>
-        <div class="note-folder-row">
+        <div class="note-folder-row" :class="{ 'has-tags': showTags }">
           <input
             v-if="editingMeta"
             v-model="draftFolder"
@@ -680,7 +693,7 @@ onBeforeUnmount(() => {
             class="muted note-folder"
             :class="{ 'is-empty': !folder }"
             data-testid="note-folder"
-            title="Move note"
+            :title="folder || 'Move note'"
             tabindex="0"
             @keydown.enter.prevent="beginMeta"
             @keydown.space.prevent="beginMeta"
@@ -688,47 +701,31 @@ onBeforeUnmount(() => {
           >
             {{ folder }}
           </p>
-        <div
-          ref="tagsEl"
-          class="note-tags"
-          :class="{ open: tagsOpen, 'is-empty': !tags.length }"
-          data-testid="note-tags"
-        >
-          <button
-            type="button"
-            class="note-tags-toggle"
-            data-testid="note-tags-open"
-            aria-label="Tags"
-            :aria-expanded="tagsOpen"
-            @click.stop="toggleTags"
+          <div
+            v-if="showTags"
+            class="note-tags"
+            :class="{ 'fade-left': tagsFade.left, 'fade-right': tagsFade.right }"
+            data-testid="note-tags"
           >
-            <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
-              <path
-                d="M10 3.5 5.5 8 10 12.5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
-          <span class="note-tags-hint">tags</span>
-          <div v-if="tags.length" class="note-tags-clip">
-            <div class="note-tags-list">
+            <div
+              ref="tagsListEl"
+              class="note-tags-list"
+              data-testid="note-tags-list"
+              @scroll="updateTagsFade"
+            >
               <button
                 v-for="tag in tags"
                 :key="tag"
                 type="button"
                 class="note-tag"
                 :data-testid="`note-tag-${tag}`"
+                :title="`#${tag}`"
                 @click="onTagClick(tag)"
               >
                 #{{ tag }}
               </button>
             </div>
           </div>
-        </div>
         </div>
       </div>
       <div ref="actionsEl" class="actions" :class="{ open: actionsOpen }">

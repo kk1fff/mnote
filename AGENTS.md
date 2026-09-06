@@ -66,7 +66,7 @@ For every new user-facing feature, add or update a corresponding visual-review s
    ```
 4. Read every PNG in `web/artifacts/visual/` with the image Read tool. Fix issues, then recapture the affected screens.
 
-Required shots: login light/dark, note desktop light/dark, title editing, history, park capture, parked list/detail, mobile note, mobile More menu, mobile nav, picker light/dark, picker recent light/dark, picker favorites light, picker mobile, picker recent mobile, images page light/dark, images page mobile.
+Required shots: login light/dark, note desktop light/dark, title editing, history, park capture, parked list/detail, mobile note, mobile More menu, mobile nav, picker light/dark, picker recent light/dark, picker favorites light, picker mobile, picker recent mobile, images page light/dark, images page mobile, tags row light/dark/mobile, tags overflow, tags long folder.
 
 Check all of the following:
 
@@ -76,4 +76,4 @@ Check all of the following:
 - The picker overlay stays put when Recent or Favorites opens. Input chrome must not jump; the page underneath must not move.
 - Light and dark both keep editor, sidebar, and dialog text readable against their backgrounds.
 - Empty or short content still looks designed: no raw unstyled boxes, clipped buttons, or overlapping chrome.
-- Folder-row tags stay right-aligned beside the header actions. Collapsed `(‹) tags` and expanded `(›) #…` share the same right edge; the arrow moves left. Tags must not overlap Saved or More. Header height must not change.
+- Folder-row tags are chips immediately after the folder. Hide the tags node when there are none, and while the title/folder are being edited (folder input takes the full row). A long folder ellipsizes (full path on hover) and is capped at ~50% width when chips are visible; extra chips scroll sideways with an edge fade. Tags must not overlap Preview or More. Header height must not change.

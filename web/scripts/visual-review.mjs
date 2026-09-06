@@ -113,41 +113,56 @@ function sameChrome(before, after, label) {
 }
 
 async function tagsChrome(root) {
-  return root.locator(".note-tags").first().evaluate((tags) => {
-    const bar = tags.closest(".bar");
-    const preview = bar?.querySelector(".preview-desktop");
-    const more = bar?.querySelector(".actions-more");
+  return root.locator(".bar").first().evaluate((bar) => {
+    const folder = bar.querySelector(".note-folder");
+    const tags = bar.querySelector(".note-tags");
+    const preview = bar.querySelector(".preview-desktop");
+    const more = bar.querySelector(".actions-more");
     const previewOn = preview && window.getComputedStyle(preview).display !== "none";
     const anchor = previewOn ? preview : more;
-    const toggle = tags.querySelector(".note-tags-toggle");
-    const box = tags.getBoundingClientRect();
+    const folderBox = folder?.getBoundingClientRect();
+    const tagsBox = tags?.getBoundingClientRect();
+    const rowBox = folder?.parentElement?.getBoundingClientRect();
     const anchorBox = anchor?.getBoundingClientRect();
-    const toggleBox = toggle?.getBoundingClientRect();
     return {
-      right: box.right,
-      left: box.left,
-      toggleX: toggleBox?.x ?? 0,
+      barH: bar.getBoundingClientRect().height,
+      folderRight: folderBox?.right ?? 0,
+      folderW: folderBox?.width ?? 0,
+      rowW: rowBox?.width ?? 0,
+      tagsLeft: tagsBox?.left ?? 0,
+      tagsRight: tagsBox?.right ?? 0,
       actionsLeft: anchorBox?.left ?? 0,
-      barH: bar?.getBoundingClientRect().height ?? 0,
-      empty: tags.classList.contains("is-empty"),
+      hasTags: Boolean(tags),
     };
   });
 }
 
-function checkTagsExpand(before, after, label) {
-  const gap = before.actionsLeft - before.right;
-  if (gap < -1 || gap > 16) {
-    console.warn(`tags not right-aligned on ${label}: gap ${gap}px`);
+async function ensureNoteTags(page) {
+  if (await page.locator('[data-testid="note-tags"]').count()) return;
+  await editor(page).click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type(" #work");
+  await page.keyboard.press("Escape");
+  await page.waitForSelector('[data-testid="note-tags"]', { timeout: 8000 });
+}
+
+function checkTagsRow(chrome, label) {
+  if (!chrome.hasTags) {
+    console.warn(`tags missing on ${label}`);
+    return;
   }
-  if (before.empty) return;
-  if (Math.abs(after.right - before.right) > 1) {
-    console.warn(`tags right edge moved on ${label}: ${before.right} -> ${after.right}`);
+  if (chrome.tagsLeft + 1 < chrome.folderRight) {
+    console.warn(`tags overlap folder on ${label}`);
   }
-  if (after.toggleX - before.toggleX >= 0) {
-    console.warn(`tags toggle did not slide left on ${label}: ${before.toggleX} -> ${after.toggleX}`);
+  if (chrome.tagsLeft - chrome.folderRight > 16) {
+    console.warn(`tags not after folder on ${label}: gap ${chrome.tagsLeft - chrome.folderRight}px`);
   }
-  if (Math.abs(after.barH - before.barH) > 1) {
-    console.warn(`tags expand shifted the header on ${label}: ${before.barH} -> ${after.barH}`);
+  if (chrome.tagsRight - chrome.actionsLeft > 1) {
+    console.warn(`tags overlap actions on ${label}`);
+  }
+  if (chrome.folderW > chrome.rowW * 0.52 + 1) {
+    console.warn(`folder wider than half with tags on ${label}`);
   }
 }
 
@@ -207,20 +222,30 @@ try {
 } catch {
   console.warn("tag suggest did not open");
 }
-await noteAction(page, "save");
-try {
-  await page.waitForSelector('[data-testid="note-tags"]', { timeout: 8000 });
-  const tagsLight = page.locator(".note-pane").first();
-  const tagsBefore = await tagsChrome(tagsLight);
-  await shot(page, "23-note-tags-row-light");
-  await page.getByTestId("note-tags-open").hover();
-  await page.waitForTimeout(200);
-  await shot(page, "23c-note-tags-expanded-light");
-  checkTagsExpand(tagsBefore, await tagsChrome(tagsLight), "light");
-  await page.mouse.move(0, 0);
-} catch {
-  console.warn("note tags row did not appear");
-}
+  await noteAction(page, "save");
+  try {
+    await page.waitForSelector('[data-testid="note-tags"]', { timeout: 8000 });
+    const tagsLight = page.locator(".note-pane").first();
+    checkTagsRow(await tagsChrome(tagsLight), "light");
+    await shot(page, "23-note-tags-row-light");
+    await editor(page).click();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type(" #home #inbox #ideas #planning #review #later");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    checkTagsRow(await tagsChrome(tagsLight), "light overflow");
+    await shot(page, "23c-note-tags-overflow-light");
+    await page.getByTestId("note-folder").click();
+    await page.waitForSelector('[data-testid="note-folder-input"]');
+    await page.getByTestId("note-folder-input").fill("projects/launch/planning/owners/and/more/nested/paths");
+    await page.getByTestId("note-title-input").press("Enter");
+    await page.waitForSelector('[data-testid="note-folder"]');
+    checkTagsRow(await tagsChrome(tagsLight), "light long folder");
+    await shot(page, "23f-note-tags-long-folder-light");
+  } catch {
+    console.warn("note tags row did not appear");
+  }
 await page.getByTestId("sidebar-cal-toggle").click();
 await shot(page, "02f-sidebar-calendar-folded-light");
 await page.getByTestId("sidebar-cal-toggle").click();
@@ -256,10 +281,13 @@ const barBefore = await page.locator(".bar").evaluate((el) => el.getBoundingClie
 await page.getByTestId("note-title").click();
 await page.waitForSelector('[data-testid="note-title-input"]');
 const barAfter = await page.locator(".bar").evaluate((el) => el.getBoundingClientRect().height);
-await shot(page, "03-title-editing");
-if (Math.abs(barAfter - barBefore) > 1) {
-  console.warn(`title edit shifted the header: ${barBefore}px -> ${barAfter}px`);
-}
+  await shot(page, "03-title-editing");
+  if (Math.abs(barAfter - barBefore) > 1) {
+    console.warn(`title edit shifted the header: ${barBefore}px -> ${barAfter}px`);
+  }
+  if (await page.locator('[data-testid="note-tags"]').count()) {
+    console.warn("tags still visible while editing title/folder");
+  }
 await page.getByTestId("note-title-input").press("Escape");
 
 const strip = page.getByTestId("tab-strip");
@@ -376,14 +404,10 @@ await page.getByTestId("sidebar-cal-toggle").click();
   await page.waitForSelector('[data-testid="picker-back"]');
   await shot(page, "19c-picker-tags-dark");
   await closePicker(page);
+  await ensureNoteTags(page);
   const tagsDark = page.getByTestId("pane-primary");
-  const tagsDarkBefore = await tagsChrome(tagsDark);
+  checkTagsRow(await tagsChrome(tagsDark), "dark");
   await shot(page, "23b-note-tags-row-dark");
-  await tagsDark.getByTestId("note-tags-open").hover();
-  await page.waitForTimeout(200);
-  await shot(page, "23d-note-tags-expanded-dark");
-  checkTagsExpand(tagsDarkBefore, await tagsChrome(tagsDark), "dark");
-  await page.mouse.move(0, 0);
 await page.locator(".tree-row").first().hover();
 await page.getByTestId("tree-more").first().click();
 await page.waitForSelector('[data-testid="tree-menu"]');
@@ -418,16 +442,12 @@ await m.waitForSelector('[data-testid="editor"]');
 await captureSaveStatus(m, "31c-unsaved-mobile", "32c-saved-toast-mobile");
 await shot(m, "10-note-mobile");
 try {
-  const tagsMobileBefore = await tagsChrome(m);
-  await m.getByTestId("note-tags-open").click();
-  await m.locator(".note-tag").first().waitFor({ state: "visible", timeout: 3000 });
-  await m.waitForTimeout(200);
-  await shot(m, "23e-note-tags-expanded-mobile");
-  checkTagsExpand(tagsMobileBefore, await tagsChrome(m), "mobile");
-  await m.getByTestId("note-tags-open").click();
-} catch {
-  console.warn("mobile tags toggle did not open");
-}
+    await ensureNoteTags(m);
+    checkTagsRow(await tagsChrome(m), "mobile");
+    await shot(m, "23e-note-tags-mobile");
+  } catch {
+    console.warn("mobile tags row did not appear");
+  }
 const wrapped = await m.evaluate(() => {
   const bar = document.querySelector(".bar");
   if (!bar) return true;
