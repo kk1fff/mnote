@@ -24,7 +24,7 @@ import {
 import { excerptAround } from "../lib/excerpt";
 import { live, type Live, type LiveEvent } from "../live";
 import { pendingExcerpt, setParkContext, showParkCapture } from "../parked";
-import { extractHashtags, pendingTagReveal } from "../lib/tags";
+import { extractHashtags, openTag, pendingTagReveal } from "../lib/tags";
 import { rememberTitle, setPinned } from "../workspace";
 
 const props = withDefaults(
@@ -47,6 +47,8 @@ const folder = ref("");
 const draftTitle = ref("");
 const draftFolder = ref("");
 const editingMeta = ref(false);
+const tagsOpen = ref(false);
+const tagsEl = ref<HTMLElement | null>(null);
 const content = ref("");
 const tags = computed(() => extractHashtags(content.value));
 const preview = ref(false);
@@ -101,6 +103,7 @@ async function load() {
   title.value = "";
   folder.value = "";
   editingMeta.value = false;
+  tagsOpen.value = false;
   try {
     const note = await api.getNote(id);
     applyRemote(note.content);
@@ -441,6 +444,14 @@ function closeActions() {
   actionsOpen.value = false;
 }
 
+function toggleTags() {
+  tagsOpen.value = !tagsOpen.value;
+}
+
+function closeTags() {
+  tagsOpen.value = false;
+}
+
 function showDelete() {
   if (!loadedId) return;
   deleteError.value = "";
@@ -482,9 +493,17 @@ function onDocClick(event: MouseEvent) {
   if (actionsOpen.value && actionsEl.value && !actionsEl.value.contains(target as Node)) {
     closeActions();
   }
+  if (tagsOpen.value && tagsEl.value && !tagsEl.value.contains(target as Node)) {
+    closeTags();
+  }
   if (selectedOrdinal.value == null || !(target instanceof Element)) return;
   if (target.closest("[data-testid='context-pop']") || target.closest(".cm-editor")) return;
   closeContextPop();
+}
+
+function onTagClick(tag: string) {
+  closeTags();
+  openTag(tag);
 }
 
 function onKey(event: KeyboardEvent) {
@@ -613,7 +632,11 @@ onBeforeUnmount(() => {
             @keydown.enter.prevent="saveMeta"
             @keydown.escape.prevent="cancelMeta"
           />
+        </form>
+        <h1 v-else data-testid="note-title" title="Rename note" @click="beginMeta">{{ title || "Note" }}</h1>
+        <div class="note-folder-row">
           <input
+            v-if="editingMeta"
             v-model="draftFolder"
             class="folder-input"
             data-testid="note-folder-input"
@@ -622,10 +645,8 @@ onBeforeUnmount(() => {
             @keydown.enter.prevent="saveMeta"
             @keydown.escape.prevent="cancelMeta"
           />
-        </form>
-        <template v-else>
-          <h1 data-testid="note-title" title="Rename note" @click="beginMeta">{{ title || "Note" }}</h1>
           <p
+            v-else
             class="muted note-folder"
             :class="{ 'is-empty': !folder }"
             data-testid="note-folder"
@@ -634,7 +655,48 @@ onBeforeUnmount(() => {
           >
             {{ folder }}
           </p>
-        </template>
+        <div
+          ref="tagsEl"
+          class="note-tags"
+          :class="{ open: tagsOpen, 'is-empty': !tags.length }"
+          data-testid="note-tags"
+        >
+          <button
+            type="button"
+            class="note-tags-toggle"
+            data-testid="note-tags-open"
+            aria-label="Tags"
+            :aria-expanded="tagsOpen"
+            @click.stop="toggleTags"
+          >
+            <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
+              <path
+                d="M10 3.5 5.5 8 10 12.5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <span class="note-tags-hint">tags</span>
+          <div v-if="tags.length" class="note-tags-clip">
+            <div class="note-tags-list">
+              <button
+                v-for="tag in tags"
+                :key="tag"
+                type="button"
+                class="note-tag"
+                :data-testid="`note-tag-${tag}`"
+                @click="onTagClick(tag)"
+              >
+                #{{ tag }}
+              </button>
+            </div>
+          </div>
+        </div>
+        </div>
       </div>
       <div ref="actionsEl" class="actions" :class="{ open: actionsOpen }">
         <span class="muted note-status" data-testid="note-status">{{ status }}</span>
@@ -691,11 +753,6 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </header>
-    <div v-if="tags.length" class="note-tags" data-testid="note-tags">
-      <p class="muted note-tags-line">
-        {{ tags.map((tag) => `#${tag}`).join(" ") }}
-      </p>
-    </div>
     <Preview v-if="preview" :source="content" />
     <Editor
       v-else

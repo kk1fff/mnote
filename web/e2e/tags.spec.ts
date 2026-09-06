@@ -12,7 +12,13 @@ test("hashtag tags a note and picker lists the line", async ({ page }) => {
   await page.keyboard.press("Enter");
   await noteAction(page, "save");
   await waitSaved(page);
-  await expect(page.getByTestId("note-tags")).toContainText("#work");
+  await page.getByTestId("note-tags-open").click();
+  await expect(page.getByTestId("note-tag-work")).toBeVisible();
+  await page.getByTestId("note-tag-work").click();
+  await expect(page.getByTestId("picker")).toBeVisible();
+  await page.getByTestId("picker-input").press("Escape");
+  await page.getByTestId("picker-input").press("Escape");
+  await expect(page.getByTestId("picker")).toHaveCount(0);
 
   await openPicker(page);
   await page.getByTestId("picker-tags").click();
@@ -35,7 +41,8 @@ test("removing the last hashtag drops the tag", async ({ page }) => {
   await createNote(page, title);
   await typeInEditor(page, ` see #${tag}`);
   await page.keyboard.press("Enter");
-  await expect(page.getByTestId("note-tags")).toContainText(`#${tag}`);
+  await page.getByTestId("note-tags-open").click();
+  await expect(page.getByTestId(`note-tag-${tag}`)).toBeVisible();
   await noteAction(page, "save");
   await waitSaved(page);
 
@@ -43,7 +50,7 @@ test("removing the last hashtag drops the tag", async ({ page }) => {
   await editor.click();
   await page.keyboard.press("ControlOrMeta+A");
   await page.keyboard.insertText("plain");
-  await expect(page.getByTestId("note-tags")).toHaveCount(0);
+  await expect(page.getByTestId("note-tags")).not.toContainText(`#${tag}`);
   await noteAction(page, "save");
   await waitSaved(page);
 

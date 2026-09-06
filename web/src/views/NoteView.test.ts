@@ -271,6 +271,29 @@ describe("NoteView", () => {
     expect(router.currentRoute.value.path).toBe("/today");
   });
 
+  it("keeps the tags hint when the note has no hashtags", async () => {
+    vi.mocked(api.getNote).mockResolvedValue({
+      id: "n1",
+      title: "One",
+      content: "plain",
+      tags: [],
+      modified_at: "",
+    });
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/n/:id", component: NoteView },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/n/n1");
+    await router.isReady();
+    const wrapper = mount(NoteView, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="note-tags"]').text()).toContain("tags");
+    expect(wrapper.get('[data-testid="note-tags-open"]').attributes("aria-label")).toBe("Tags");
+  });
+
   it("shows hashtags from the note body", async () => {
     vi.mocked(api.getNote).mockResolvedValue({
       id: "n1",
@@ -291,7 +314,8 @@ describe("NoteView", () => {
     const wrapper = mount(NoteView, { global: { plugins: [router] } });
     await flushPromises();
     expect(wrapper.get('[data-testid="note-tags"]').text()).toContain("#work");
-    expect(wrapper.find('[data-testid="note-tags-open"]').exists()).toBe(false);
+    await wrapper.get('[data-testid="note-tags-open"]').trigger("click");
+    expect(wrapper.get('[data-testid="note-tags"]').classes()).toContain("open");
   });
 });
 

@@ -76,3 +76,4 @@ Check all of the following:
 - The picker overlay stays put when Recent or Favorites opens. Input chrome must not jump; the page underneath must not move.
 - Light and dark both keep editor, sidebar, and dialog text readable against their backgrounds.
 - Empty or short content still looks designed: no raw unstyled boxes, clipped buttons, or overlapping chrome.
+- Folder-row tags stay right-aligned beside the header actions. Collapsed `(‹) tags` and expanded `(›) #…` share the same right edge; the arrow moves left. Tags must not overlap Saved or More. Header height must not change.
