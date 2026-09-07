@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { BOB_STATE } from "./env";
 import { createNote, uid } from "./helpers";
 
-test("sidebar links open images and picker collections", async ({ page }) => {
+test("sidebar library and organize destinations open", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);
   await page.getByTestId("sidebar-images").click();
@@ -13,13 +13,13 @@ test("sidebar links open images and picker collections", async ({ page }) => {
   await expect(page.getByTestId("picker-back")).toBeVisible();
   await page.getByRole("button", { name: "Close picker" }).click();
   await expect(page.getByTestId("picker")).toHaveCount(0);
-  await page.getByTestId("sidebar-recent").click();
-  await expect(page.getByTestId("picker-back")).toBeVisible();
+  await expect(page.getByTestId("sidebar")).toContainText("Recent");
 });
 
 test("calendar day creates a journal", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);
+  await page.getByTestId("sidebar-cal-toggle").click();
   await page.getByTestId("cal-next").click();
   await page.locator(".sidebar-cal-day").first().click();
   await expect(page.getByTestId("note-title")).toHaveText(/\d{4}-\d{2}-\d{2}/);

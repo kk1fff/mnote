@@ -7,7 +7,7 @@ export type SidebarPrefs = {
   calendarOpen: boolean;
 };
 
-const defaults: SidebarPrefs = { linksOpen: true, calendarOpen: true };
+const defaults: SidebarPrefs = { linksOpen: true, calendarOpen: false };
 const memory = new Map<string, string>();
 
 function storageGet(): string | null {
@@ -39,7 +39,7 @@ function parsePrefs(raw: string | null): SidebarPrefs {
     const parsed = JSON.parse(raw) as Partial<SidebarPrefs>;
     return {
       linksOpen: parsed.linksOpen !== false,
-      calendarOpen: parsed.calendarOpen !== false,
+      calendarOpen: parsed.calendarOpen === true,
     };
   } catch {
     return { ...defaults };

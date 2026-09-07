@@ -24,6 +24,7 @@ const router = createRouter({
       props: { title: "Favorites", load: api.favorites },
     },
     { path: "/today", name: "today", component: () => import("./views/TodayView.vue") },
+    { path: "/journal", name: "journal", component: () => import("./views/JournalView.vue") },
     { path: "/quick", component: () => import("./views/QuickView.vue") },
     { path: "/n/:id", name: "note", component: () => import("./views/NoteView.vue") },
     { path: "/", redirect: "/today" },

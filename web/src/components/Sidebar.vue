@@ -48,6 +48,11 @@ const themes: { id: ThemeMode; label: string }[] = [
 ];
 
 const tree = computed(() => noteTree(notes.value));
+const recentNotes = computed(() =>
+  [...notes.value]
+    .sort((a, b) => b.modified_at.localeCompare(a.modified_at))
+    .slice(0, 5),
+);
 const journalDates = computed(() => {
   const dates = new Set<string>();
   for (const note of notes.value) {
@@ -134,6 +139,10 @@ function openBesideNote() {
 
 function openImages() {
   void router.push("/images");
+}
+
+function openJournal() {
+  void router.push("/journal");
 }
 
 async function openDaily(date: string) {
@@ -277,10 +286,12 @@ defineExpose({ load });
       <span>Search notes</span><kbd aria-hidden="true">{{ searchShortcut }}</kbd>
     </button>
     <button class="ghost sidebar-create" type="button" data-testid="new-note" @click="emit('create-note')">＋ New note</button>
-    <div class="park-row">
-      <button class="parked-button" type="button" data-testid="sidebar-park" title="Capture a thought to organize later" @click="showParkCapture({})">
-        Park a thought
-      </button>
+    <div class="sidebar-group">
+      <p class="section-label">Inbox</p>
+      <div class="park-row">
+        <button class="parked-button" type="button" data-testid="sidebar-park" title="Capture a thought to organize later" @click="showParkCapture({})">
+          <span class="nav-icon inbox-icon" aria-hidden="true" />Park a thought
+        </button>
       <button
         v-if="parkedItems.length"
         class="parked-count"
@@ -291,40 +302,44 @@ defineExpose({ load });
       >
         {{ parkedItems.length }}
       </button>
+      </div>
     </div>
-    <div class="sidebar-section">
-      <button
-        type="button"
-        class="section-toggle"
-        data-testid="sidebar-links-toggle"
-        :aria-expanded="sidebarPrefs.linksOpen"
-        @click="toggleSidebarSection('linksOpen')"
-      >
-        <span>Links</span>
-        <span class="fold-chevron" :class="{ folded: !sidebarPrefs.linksOpen }" aria-hidden="true">▾</span>
+    <div class="sidebar-group library-group">
+      <p class="section-label">Library</p>
+      <button type="button" class="sidebar-link" :class="{ active: route.name === 'note' && !activeDaily }" @click="router.push('/today')">
+        <span class="nav-icon notes-icon" aria-hidden="true" />Notes
       </button>
-      <SidebarFold :open="sidebarPrefs.linksOpen">
-        <div class="sidebar-links">
-          <button type="button" class="sidebar-link" data-testid="sidebar-images" @click="openImages">Images</button>
-          <button
-            type="button"
-            class="sidebar-link"
-            data-testid="sidebar-favorites"
-            @click="emit('open-picker', 'favorites')"
-          >
-            Favorites
-          </button>
-          <button type="button" class="sidebar-link" data-testid="sidebar-recent" @click="emit('open-picker', 'recent')">
-            Recent
-          </button>
-          <button type="button" class="sidebar-link" data-testid="sidebar-tags" @click="emit('open-picker', 'tags')">
-            Tags
-          </button>
-        </div>
-      </SidebarFold>
+      <button type="button" class="sidebar-link" data-testid="sidebar-journal" :class="{ active: route.name === 'journal' || !!activeDaily }" @click="openJournal">
+        <span class="nav-icon journal-icon" aria-hidden="true" />Journal
+      </button>
+      <button type="button" class="sidebar-link" data-testid="sidebar-images" :class="{ active: route.path === '/images' }" @click="openImages">
+        <span class="nav-icon images-icon" aria-hidden="true" />Images
+      </button>
+    </div>
+    <div class="sidebar-group">
+      <p class="section-label">Organize</p>
+      <button type="button" class="sidebar-link" data-testid="sidebar-favorites" @click="emit('open-picker', 'favorites')">
+        <span class="nav-icon favorites-icon" aria-hidden="true" />Favorites
+      </button>
+      <button type="button" class="sidebar-link" data-testid="sidebar-tags" @click="emit('open-picker', 'tags')">
+        <span class="nav-icon tags-icon" aria-hidden="true" />Tags
+      </button>
     </div>
     <div class="note-library">
-      <p class="section-label">Notes</p>
+      <p class="section-label">Recent</p>
+      <div class="sidebar-recent">
+        <button
+          v-for="note in recentNotes"
+          :key="note.id"
+          type="button"
+          class="recent-note"
+          :class="{ active: note.id === activeId }"
+          @click="openNote(note.id, $event)"
+        >
+          <span class="nav-icon notes-icon" aria-hidden="true" /><span>{{ note.title }}</span>
+        </button>
+      </div>
+      <p class="section-label note-list-label">All notes</p>
       <div class="note-tree">
         <NoteTree
           :nodes="tree"

@@ -271,6 +271,11 @@ if ((await editor(page).innerText()).trim().length < 8) {
 }
 await captureSaveStatus(page, "31-unsaved-desktop-light", "32-saved-toast-desktop-light");
 await shot(page, "02-note-desktop-light");
+await page.goto(`${url}/journal`);
+await page.waitForSelector(".journal-browser");
+await shot(page, "02a-journal-desktop-light");
+await page.goto(`${url}/today`);
+await page.waitForSelector('[data-testid="editor"]');
 
 await editor(page).click();
 await page.keyboard.press("End");
@@ -308,10 +313,7 @@ try {
     console.warn("note tags row did not appear");
   }
   await leaveMeta(page);
-await shotFolding(page, page.getByTestId("sidebar-links-toggle"), "02g-sidebar-links-folding-light", "02h-sidebar-links-folded-light");
-await unfold(page, page.getByTestId("sidebar-links-toggle"));
 await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "02i-sidebar-calendar-folding-light", "02f-sidebar-calendar-folded-light");
-await unfold(page, page.getByTestId("sidebar-cal-toggle"));
 try {
   const folder = await ensureTreeFolder(page);
   await shotFolding(page, folder, "02j-sidebar-folder-folding-light", "02k-sidebar-folder-folded-light");
@@ -323,8 +325,8 @@ await page.getByTestId("sidebar-favorites").click();
 await page.waitForSelector('[data-testid="picker-back"]');
 await shot(page, "18d-picker-favorites-sidebar-light");
 await closePicker(page);
-await page.locator(".tree-row").first().hover();
-await page.getByTestId("tree-more").first().click();
+await page.locator(".tree-row").first().hover({ force: true });
+await page.getByTestId("tree-more").first().click({ force: true });
 await page.waitForSelector('[data-testid="tree-menu"]');
 await shot(page, "02d-sidebar-menu-light");
 await page.keyboard.press("Escape");
@@ -457,10 +459,7 @@ await page.evaluate(() => {
 await page.waitForTimeout(150);
 await captureSaveStatus(page, "31b-unsaved-desktop-dark", "32b-saved-toast-desktop-dark");
 await shot(page, "08-note-desktop-dark");
-await shotFolding(page, page.getByTestId("sidebar-links-toggle"), "08e-sidebar-links-folding-dark", "08f-sidebar-links-folded-dark");
-await unfold(page, page.getByTestId("sidebar-links-toggle"));
 await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "08g-sidebar-calendar-folding-dark", "08d-sidebar-calendar-folded-dark");
-await unfold(page, page.getByTestId("sidebar-cal-toggle"));
 try {
   const folder = await ensureTreeFolder(page);
   await shotFolding(page, folder, "08h-sidebar-folder-folding-dark", "08i-sidebar-folder-folded-dark");
@@ -487,12 +486,6 @@ try {
   const tagsDark = page.getByTestId("pane-primary");
   checkTagsRow(await tagsChrome(tagsDark), "dark");
   await shot(page, "23b-note-tags-row-dark");
-await page.locator(".tree-row").first().hover();
-await page.getByTestId("tree-more").first().click();
-await page.waitForSelector('[data-testid="tree-menu"]');
-await shot(page, "08c-sidebar-menu-dark");
-await page.keyboard.press("Escape");
-await page.waitForSelector('[data-testid="tree-menu"]', { state: "hidden" });
   await editor(page).click();
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
@@ -520,6 +513,11 @@ await login(m);
 await m.waitForSelector('[data-testid="editor"]');
 await captureSaveStatus(m, "31c-unsaved-mobile", "32c-saved-toast-mobile");
 await shot(m, "10-note-mobile");
+await m.goto(`${url}/journal`);
+await m.waitForSelector(".journal-browser");
+await shot(m, "10a-journal-mobile");
+await m.goto(`${url}/today`);
+await m.waitForSelector('[data-testid="editor"]');
 try {
     await ensureNoteTags(m);
     checkTagsRow(await tagsChrome(m), "mobile");
@@ -549,11 +547,6 @@ await m.getByTestId("sidebar-cal-toggle").click();
 await m.waitForTimeout(160);
 await m.getByTestId("sidebar").getByRole("button", { name: "Sign out", exact: true }).scrollIntoViewIfNeeded();
 await shot(m, "12c-mobile-nav-account");
-await m.getByTestId("tree-more").first().click();
-await m.waitForSelector('[data-testid="tree-menu"]');
-  await shot(m, "12b-sidebar-menu-mobile");
-  await m.keyboard.press("Escape");
-  await m.waitForSelector('[data-testid="tree-menu"]', { state: "hidden" });
   await openPicker(m);
   await shot(m, "20-picker-mobile");
   await m.getByTestId("picker-recent").click();

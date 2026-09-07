@@ -238,13 +238,14 @@ describe("Sidebar", () => {
     wrapper.unmount();
   });
 
-  it("opens images and picker collections from Links", async () => {
+  it("opens library and organize destinations", async () => {
     vi.mocked(api.listNotes).mockResolvedValue([]);
     const router = createRouter({
       history: createWebHistory(),
       routes: [
         { path: "/", component: { template: "<div />" } },
         { path: "/images", component: { template: "<div />" } },
+        { path: "/journal", component: { template: "<div />" } },
         { path: "/n/:id", component: { template: "<div />" } },
         { path: "/today", component: { template: "<div />" } },
       ],
@@ -253,29 +254,22 @@ describe("Sidebar", () => {
     await router.isReady();
     const wrapper = mount(Sidebar, { global: { plugins: [router] } });
     await flushPromises();
-    expect(wrapper.text()).toContain("Links");
+    expect(wrapper.text()).toContain("Library");
+    expect(wrapper.text()).toContain("Organize");
     expect(wrapper.text()).toContain("Images");
     expect(wrapper.text()).toContain("Favorites");
-    expect(wrapper.text()).toContain("Recent");
     expect(wrapper.text()).toContain("Tags");
     await wrapper.get('[data-testid="sidebar-images"]').trigger("click");
     await flushPromises();
     expect(router.currentRoute.value.path).toBe("/images");
+    await wrapper.get('[data-testid="sidebar-journal"]').trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/journal");
     await wrapper.get('[data-testid="sidebar-favorites"]').trigger("click");
     expect(wrapper.emitted("open-picker")?.at(-1)).toEqual(["favorites"]);
-    await wrapper.get('[data-testid="sidebar-recent"]').trigger("click");
-    expect(wrapper.emitted("open-picker")?.at(-1)).toEqual(["recent"]);
     await wrapper.get('[data-testid="sidebar-tags"]').trigger("click");
     expect(wrapper.emitted("open-picker")?.at(-1)).toEqual(["tags"]);
-    await wrapper.get('[data-testid="sidebar-links-toggle"]').trigger("click");
-    expect(wrapper.get('[data-testid="sidebar-links-toggle"]').attributes("aria-expanded")).toBe("false");
-    expect(wrapper.get('[data-testid="sidebar-images"]').element.closest("[inert]")).toBeTruthy();
     wrapper.unmount();
-    const again = mount(Sidebar, { global: { plugins: [router] } });
-    await flushPromises();
-    expect(again.get('[data-testid="sidebar-links-toggle"]').attributes("aria-expanded")).toBe("false");
-    expect(again.get('[data-testid="sidebar-images"]').element.closest("[inert]")).toBeTruthy();
-    again.unmount();
   });
 
   it("creates a journal from the calendar", async () => {

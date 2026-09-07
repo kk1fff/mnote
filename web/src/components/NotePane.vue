@@ -25,6 +25,7 @@ import { excerptAround } from "../lib/excerpt";
 import { live, type Live, type LiveEvent } from "../live";
 import { pendingExcerpt, setParkContext, showParkCapture } from "../parked";
 import { extractHashtags, openTag, pendingTagReveal } from "../lib/tags";
+import { isDailyNote } from "../lib/calendar";
 import { rememberTitle, setPinned } from "../workspace";
 
 const props = withDefaults(
@@ -51,6 +52,21 @@ const tagsListEl = ref<HTMLElement | null>(null);
 const tagsFade = ref({ left: false, right: false });
 const content = ref("");
 const tags = computed(() => extractHashtags(content.value));
+const journalDate = computed(() => (isDailyNote({ title: title.value, folder: folder.value }) ? title.value : ""));
+const wordCount = computed(() => content.value.trim().match(/\S+/g)?.length ?? 0);
+const journalBreadcrumb = computed(() => {
+  if (!journalDate.value) return "";
+  const date = new Date(`${journalDate.value}T12:00:00`);
+  return `Journal / ${date.getFullYear()} / ${date.toLocaleString(undefined, { month: "long" })}`;
+});
+const journalLabel = computed(() => {
+  if (!journalDate.value) return "";
+  return new Date(`${journalDate.value}T12:00:00`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+});
 const showTags = computed(() => tags.value.length > 0 && !editingMeta.value);
 let tagsResize: ResizeObserver | undefined;
 const hasConflictMarkers = computed(() => /^<<<<<<< this device$/m.test(content.value) && /^>>>>>>> other device$/m.test(content.value));
@@ -666,6 +682,7 @@ onBeforeUnmount(() => {
     <header class="bar">
       <button type="button" class="nav-toggle ghost" @click="toggle">Menu</button>
       <div class="note-heading">
+        <p v-if="journalBreadcrumb && !editingMeta" class="note-breadcrumb">{{ journalBreadcrumb }}</p>
         <form v-if="editingMeta" class="note-meta-form" @submit.prevent="saveMeta">
           <input
             v-model="draftTitle"
@@ -691,7 +708,7 @@ onBeforeUnmount(() => {
           <p
             v-else
             class="muted note-folder"
-            :class="{ 'is-empty': !folder }"
+            :class="{ 'is-empty': !folder, 'is-journal': !!journalDate }"
             data-testid="note-folder"
             :title="folder || 'Move note'"
             tabindex="0"
@@ -699,7 +716,8 @@ onBeforeUnmount(() => {
             @keydown.space.prevent="beginMeta"
             @click="beginMeta"
           >
-            {{ folder }}
+            <template v-if="journalDate">Journal · {{ journalLabel }}</template>
+            <template v-else>{{ folder }}</template>
           </p>
           <div
             v-if="showTags"
@@ -729,7 +747,10 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div ref="actionsEl" class="actions" :class="{ open: actionsOpen }">
-        <button type="button" class="ghost preview-desktop" :aria-pressed="preview" @click="preview = !preview">{{ preview ? 'Edit' : 'Preview' }}</button>
+        <div class="mode-toggle preview-desktop" aria-label="Document mode">
+          <button type="button" :class="{ active: !preview }" :aria-pressed="!preview" @click="preview = false">Edit</button>
+          <button type="button" :class="{ active: preview }" :aria-pressed="preview" @click="preview = true">Preview</button>
+        </div>
         <button
           type="button"
           class="actions-more"
@@ -804,23 +825,30 @@ onBeforeUnmount(() => {
       <span><strong>Conflict markers found.</strong> Review both versions in the note before removing the markers.</span>
       <button type="button" class="ghost" @click="history?.show()">Review history</button>
     </div>
-    <Preview v-if="preview" :source="content" />
-    <Editor
-      v-else
-      ref="editor"
-      v-model="content"
-      :note-id="noteId"
-      :title="title"
-      :folder="folder"
-      :remotes="remotes"
-      :show-context="showContext"
-      :context-ordinals="visibleContextOrdinals"
-      @live-change="onLiveChange"
-      @cursor="client.cursor($event.from, $event.to)"
-      @paragraph-commit="queueContext($event.ordinal, 'auto')"
-      @paragraph-leave="queueContext($event.ordinal, 'auto')"
-      @select-paragraph="onSelectParagraph"
-    />
+    <div class="document-scroll">
+      <div class="document-column">
+        <Preview v-if="preview" :source="content" />
+        <Editor
+          v-else
+          ref="editor"
+          v-model="content"
+          :note-id="noteId"
+          :title="title"
+          :folder="folder"
+          :remotes="remotes"
+          :show-context="showContext"
+          :context-ordinals="visibleContextOrdinals"
+          @live-change="onLiveChange"
+          @cursor="client.cursor($event.from, $event.to)"
+          @paragraph-commit="queueContext($event.ordinal, 'auto')"
+          @paragraph-leave="queueContext($event.ordinal, 'auto')"
+          @select-paragraph="onSelectParagraph"
+        />
+      </div>
+    </div>
+    <div class="document-status" aria-live="polite">
+      <span>{{ wordCount }} words</span><span>Markdown</span><span>{{ status || (savedToast ? "Saved just now" : "Saved") }}</span>
+    </div>
     <Teleport to="body">
       <div
         v-if="showContext && selectedEvents.length"

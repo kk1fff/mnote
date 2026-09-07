@@ -151,6 +151,38 @@ const lineFlashField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
+const markdownHierarchy = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = markdownDecorations(view.state);
+    }
+    update(update: ViewUpdate) {
+      if (update.docChanged) this.decorations = markdownDecorations(update.state);
+    }
+  },
+  { decorations: (v) => v.decorations },
+);
+
+function markdownDecorations(state: EditorState): DecorationSet {
+  const decos = [];
+  for (let number = 1; number <= state.doc.lines; number += 1) {
+    const line = state.doc.line(number);
+    const heading = /^(#{1,3})(\s+)/.exec(line.text);
+    if (heading) {
+      decos.push(Decoration.mark({ class: "cm-md-marker" }).range(line.from, line.from + heading[1].length));
+      decos.push(Decoration.line({ class: `cm-md-heading cm-md-h${heading[1].length}` }).range(line.from));
+      continue;
+    }
+    const list = /^(\s*)([-*+]\s+|\d+[.)]\s+)/.exec(line.text);
+    if (list) {
+      const from = line.from + list[1].length;
+      decos.push(Decoration.mark({ class: "cm-md-marker" }).range(from, from + list[2].length));
+    }
+  }
+  return Decoration.set(decos, true);
+}
+
 const remotesField = StateField.define<RemoteCaret[]>({
   create: () => [],
   update(value, tr) {
@@ -413,6 +445,7 @@ onMounted(() => {
         contextPlugin,
         flashField,
         lineFlashField,
+        markdownHierarchy,
         EditorView.updateListener.of((update) => {
           const remote = update.transactions.some((tr) => tr.annotation(remoteAnn));
           if (update.docChanged) {
