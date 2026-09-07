@@ -3,6 +3,7 @@ import { ref } from "vue";
 import { useRouter } from "vue-router";
 import type { NoteMeta } from "../api";
 import { openInWorkspace } from "../workspace";
+import NavIcon from "./NavIcon.vue";
 
 defineProps<{ links: NoteMeta[] }>();
 
@@ -23,9 +24,14 @@ function openLink(link: NoteMeta) {
       aria-controls="backlinks-content"
       @click="links.length && (open = !open)"
     >
-      <span>Backlinks</span>
+      <span class="backlinks-label">
+        <NavIcon name="link" />
+        Backlinks
+        <span class="fold-chevron" :class="{ folded: !(open && links.length) }" aria-hidden="true">▾</span>
+      </span>
       <span v-if="links.length" class="muted">{{ links.length }}</span>
     </button>
+    <p v-if="!links.length" class="backlinks-empty muted">No backlinks yet. Links to this note will appear here.</p>
     <div v-if="open && links.length" id="backlinks-content" class="backlinks-content">
       <ul>
         <li v-for="link in links" :key="link.id">

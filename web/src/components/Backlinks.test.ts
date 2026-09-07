@@ -16,7 +16,7 @@ describe("Backlinks", () => {
       global: { plugins: [router] },
     });
     expect(empty.text()).toContain("Backlinks");
-    expect(empty.text()).not.toContain("No backlinks");
+    expect(empty.text()).toContain("No backlinks yet");
     expect(empty.find("#backlinks-content").exists()).toBe(false);
     const filled = mount(Backlinks, {
       props: { links: [{ id: "a", title: "A", modified_at: "" }] },

@@ -15,7 +15,6 @@ test("header rename and move update the sidebar", async ({ page }) => {
   await expect(page.getByTestId("note-title")).toHaveText(renamed);
   await expect(page.getByTestId("note-folder")).toHaveText("work");
   await expect(page.getByTestId("sidebar")).toContainText(renamed);
-  await expect(page.getByTestId("sidebar")).toContainText("work");
 });
 
 test("invalid title first character is rejected", async ({ page }) => {

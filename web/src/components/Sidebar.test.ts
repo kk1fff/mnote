@@ -62,11 +62,10 @@ describe("Sidebar", () => {
     resetWorkspace(emptyWorkspace());
   });
 
-  it("hides notes in collapsed folders", async () => {
+  it("lists recent notes without the all-notes tree", async () => {
     vi.mocked(api.listNotes).mockResolvedValue([
       { id: "o1", title: "One", folder: "ideas", modified_at: "" },
     ]);
-    vi.mocked(api.collapsedFolders).mockResolvedValueOnce(["ideas"]);
     const router = createRouter({
       history: createWebHistory(),
       routes: [
@@ -79,9 +78,10 @@ describe("Sidebar", () => {
     await router.isReady();
     const wrapper = mount(Sidebar, { global: { plugins: [router] } });
     await flushPromises();
-    expect(wrapper.get('[data-testid="tree-folder"]').text()).toContain("ideas");
-    expect(wrapper.get('[data-testid="tree-folder"]').attributes("aria-expanded")).toBe("false");
-    expect(wrapper.get(".tree-link").element.closest("[inert]")).toBeTruthy();
+    expect(wrapper.text()).toContain("One");
+    expect(wrapper.text()).not.toContain("All notes");
+    expect(wrapper.find('[data-testid="tree-folder"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="new-note"]').text()).toContain("New note");
   });
 
   it("lists notes and signs out", async () => {
@@ -103,7 +103,6 @@ describe("Sidebar", () => {
     await router.isReady();
     const wrapper = mount(Sidebar, { global: { plugins: [router] } });
     await flushPromises();
-    expect(wrapper.text()).toContain("ideas");
     expect(wrapper.text()).toContain("One");
     expect(wrapper.get(".new-note-button").text()).toContain("Search notes");
     await wrapper.get('[data-testid="theme-toggle"]').trigger("click");

@@ -58,22 +58,6 @@ async function shotFolding(page, toggle, midName, restName) {
   await shot(page, restName);
 }
 
-async function unfold(page, toggle) {
-  await toggle.click();
-  await page.waitForTimeout(160);
-}
-
-async function ensureTreeFolder(page) {
-  const folder = page.getByTestId("tree-folder").first();
-  if (await folder.count()) return folder;
-  await page.getByTestId("note-folder").click();
-  await page.waitForSelector('[data-testid="note-folder-input"]');
-  await page.getByTestId("note-folder-input").fill("ideas");
-  await page.getByTestId("note-title-input").press("Enter");
-  await page.waitForSelector('[data-testid="tree-folder"]');
-  return page.getByTestId("tree-folder").first();
-}
-
 async function ready(page, pathName = "/login") {
   const res = await page.goto(`${url}${pathName}`, { waitUntil: "networkidle" });
   if (!res || res.status() >= 500) {
@@ -314,13 +298,6 @@ try {
   }
   await leaveMeta(page);
 await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "02i-sidebar-calendar-folding-light", "02f-sidebar-calendar-folded-light");
-try {
-  const folder = await ensureTreeFolder(page);
-  await shotFolding(page, folder, "02j-sidebar-folder-folding-light", "02k-sidebar-folder-folded-light");
-  await unfold(page, folder);
-} catch {
-  console.warn("sidebar folder fold did not appear");
-}
 await page.getByTestId("sidebar-favorites").click();
 await page.waitForSelector('[data-testid="picker-back"]');
 await shot(page, "18d-picker-favorites-sidebar-light");
@@ -460,13 +437,6 @@ await page.waitForTimeout(150);
 await captureSaveStatus(page, "31b-unsaved-desktop-dark", "32b-saved-toast-desktop-dark");
 await shot(page, "08-note-desktop-dark");
 await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "08g-sidebar-calendar-folding-dark", "08d-sidebar-calendar-folded-dark");
-try {
-  const folder = await ensureTreeFolder(page);
-  await shotFolding(page, folder, "08h-sidebar-folder-folding-dark", "08i-sidebar-folder-folded-dark");
-  await unfold(page, folder);
-} catch {
-  console.warn("sidebar folder fold did not appear (dark)");
-}
   await shot(page, "15-tabs-dark");
   await shot(page, "17-split-dark");
   await openPicker(page);

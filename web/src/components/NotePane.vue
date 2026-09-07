@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRouter } from "vue-router";
 import { api, ApiError, type ContextEvent, type Note, type NoteContext, type NoteMeta } from "../api";
 import Backlinks from "./Backlinks.vue";
+import NavIcon from "./NavIcon.vue";
 import AssetPicker from "./AssetPicker.vue";
 import DeleteNoteDialog from "./DeleteNoteDialog.vue";
 import Editor, { type RemoteCaret } from "./Editor.vue";
@@ -716,7 +717,7 @@ onBeforeUnmount(() => {
             @keydown.space.prevent="beginMeta"
             @click="beginMeta"
           >
-            <template v-if="journalDate">Journal · {{ journalLabel }}</template>
+            <template v-if="journalDate"><NavIcon name="calendar" /> Journal · {{ journalLabel }}</template>
             <template v-else>{{ folder }}</template>
           </p>
           <div
@@ -747,6 +748,14 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div ref="actionsEl" class="actions" :class="{ open: actionsOpen }">
+        <button
+          type="button"
+          class="icon-btn history-desktop preview-desktop"
+          aria-label="History"
+          @click="history?.show()"
+        >
+          <NavIcon name="history" />
+        </button>
         <div class="mode-toggle preview-desktop" aria-label="Document mode">
           <button type="button" :class="{ active: !preview }" :aria-pressed="!preview" @click="preview = false">Edit</button>
           <button type="button" :class="{ active: preview }" :aria-pressed="preview" @click="preview = true">Preview</button>
@@ -759,11 +768,7 @@ onBeforeUnmount(() => {
           @click="actionsOpen = !actionsOpen"
         >
           <span class="actions-more-label">More</span>
-          <svg class="actions-more-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-            <circle cx="3.5" cy="8" r="1.2" fill="currentColor" />
-            <circle cx="8" cy="8" r="1.2" fill="currentColor" />
-            <circle cx="12.5" cy="8" r="1.2" fill="currentColor" />
-          </svg>
+          <NavIcon name="more" class="actions-more-icon" />
         </button>
         <div class="actions-menu">
            <button type="button" class="ghost" data-testid="park" @click="runAction(() => showParkCapture())">
@@ -847,7 +852,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <div class="document-status" aria-live="polite">
-      <span>{{ wordCount }} words</span><span>Markdown</span><span>{{ status || (savedToast ? "Saved just now" : "Saved") }}</span>
+      <span>{{ wordCount }} words</span><span>Markdown</span>
     </div>
     <Teleport to="body">
       <div

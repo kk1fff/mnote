@@ -23,7 +23,7 @@ test("picker creates a note in a folder", async ({ page }) => {
   await createNote(page, `ideas/${title}`);
   await expect(page.getByTestId("note-title")).toHaveText(title);
   await expect(page.getByTestId("sidebar")).toContainText(title);
-  await expect(page.getByTestId("sidebar")).toContainText("ideas");
+  await expect(page.getByTestId("note-folder")).toHaveText("ideas");
 });
 
 test("picker opens an existing title without create", async ({ page }) => {
@@ -222,35 +222,15 @@ test("recent lists an opened note", async ({ page }) => {
   await expect(page.getByTestId("picker-recent")).toBeVisible();
 });
 
-test("tree collapse and open a note", async ({ page }) => {
+test("recent row opens a note", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);
   const title = uid("Tree");
   await createNote(page, `ideas/${title}`);
-  const folder = page.getByTestId("sidebar").getByRole("button", { name: /ideas/ });
-  await expect(page.getByTestId("sidebar")).toContainText(title);
-  await folder.click();
-  await expect(folder).toHaveAttribute("aria-expanded", "false");
-  await expect(folder.locator("xpath=following-sibling::*[1]").locator(".sidebar-fold-inner")).toHaveAttribute("inert", "");
-  await folder.click();
-  await page.getByTestId("sidebar").getByRole("link", { name: title }).click();
-  await expect(page.getByTestId("note-title")).toHaveText(title);
-});
-
-test("tree collapse persists across navigation and reload", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/today");
   await page.waitForURL(/\/n\//);
-  const title = uid("Keep");
-  await createNote(page, `ideas/${title}`);
-  const folder = () => page.getByTestId("sidebar").getByRole("button", { name: /ideas/ });
-  await folder().click();
-  await expect(folder()).toHaveAttribute("aria-expanded", "false");
-  await page.goto("/search");
-  await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
-  await expect(folder()).toHaveAttribute("aria-expanded", "false");
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
-  await expect(folder()).toHaveAttribute("aria-expanded", "false");
+  await page.getByTestId("sidebar").locator(".recent-note", { hasText: title }).click();
+  await expect(page.getByTestId("note-title")).toHaveText(title);
 });
 
 test("pasting a png inserts an asset", async ({ page }) => {

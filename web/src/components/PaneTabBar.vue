@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { showPicker, splitTabs, type Pane, type Tab } from "../workspace";
+import NavIcon from "./NavIcon.vue";
 
 const props = defineProps<{
   pane: Pane;
@@ -36,6 +37,7 @@ function label(tab: Tab) {
           :data-testid="`tab-${tab.id}`"
           @click="emit('select', tab.id)"
         >
+          <NavIcon name="note" />
           <span
             class="tab-star"
             title="Unfavorite"
@@ -68,6 +70,7 @@ function label(tab: Tab) {
         :data-testid="`tab-${tab.id}`"
         @click="emit('select', tab.id)"
       >
+        <NavIcon name="note" />
         <span
           class="tab-star"
           title="Favorite"
@@ -88,7 +91,7 @@ function label(tab: Tab) {
       </button>
     </div>
     <button type="button" class="tab-add" data-testid="tab-add" title="Open in new tab" aria-label="Open in new tab" @click="showPicker('add')">
-      +
+      <NavIcon name="plus" />
     </button>
   </div>
 </template>
