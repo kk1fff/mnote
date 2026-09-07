@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { uid } from "./env";
-import { createNote, noteAction, openPicker, typeInEditor } from "./helpers";
+import { createNote, noteAction, openPicker, typeInEditor, waitSaved } from "./helpers";
 
 test("today opens a dated note", async ({ page }) => {
   await page.goto("/");
@@ -136,7 +136,9 @@ test("delete warns about backlinks and leaves the link", async ({ page }) => {
   await createNote(page, target);
   await createNote(page, source);
   await typeInEditor(page, `[[${target}]]`);
+  await expect(page.getByTestId("note-status")).toHaveText("Unsaved");
   await noteAction(page, "save");
+  await waitSaved(page);
   await expect(page.getByTestId("note-saved-toast")).toHaveText("Saved");
   await openPicker(page);
   await page.getByTestId("picker-input").fill(target);
@@ -228,7 +230,8 @@ test("tree collapse and open a note", async ({ page }) => {
   const folder = page.getByTestId("sidebar").getByRole("button", { name: /ideas/ });
   await expect(page.getByTestId("sidebar")).toContainText(title);
   await folder.click();
-  await expect(page.getByTestId("sidebar").getByRole("link", { name: title })).toHaveCount(0);
+  await expect(folder).toHaveAttribute("aria-expanded", "false");
+  await expect(folder.locator("xpath=following-sibling::*[1]").locator(".sidebar-fold-inner")).toHaveAttribute("inert", "");
   await folder.click();
   await page.getByTestId("sidebar").getByRole("link", { name: title }).click();
   await expect(page.getByTestId("note-title")).toHaveText(title);
@@ -241,14 +244,13 @@ test("tree collapse persists across navigation and reload", async ({ page }) => 
   await createNote(page, `ideas/${title}`);
   const folder = () => page.getByTestId("sidebar").getByRole("button", { name: /ideas/ });
   await folder().click();
-  await expect(page.getByTestId("sidebar").getByRole("link", { name: title })).toHaveCount(0);
+  await expect(folder()).toHaveAttribute("aria-expanded", "false");
   await page.goto("/search");
   await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
-  await expect(page.getByTestId("sidebar").getByRole("link", { name: title })).toHaveCount(0);
   await expect(folder()).toHaveAttribute("aria-expanded", "false");
   await page.reload();
   await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
-  await expect(page.getByTestId("sidebar").getByRole("link", { name: title })).toHaveCount(0);
+  await expect(folder()).toHaveAttribute("aria-expanded", "false");
 });
 
 test("pasting a png inserts an asset", async ({ page }) => {

@@ -59,6 +59,7 @@ Forgot password: `cargo run -- --data data user reset-password alice` — same i
 
 - Rust 1.90+ (`cargo`)
 - Node 22+ (`npm`)
+- Docker with Compose, for the complete validation suite
 
 ## Development
 
@@ -88,19 +89,19 @@ Two apps share the Vue UI:
 - **mnote** — pick a local folder, set a password, notes stay on that machine.
 
 ```bash
-make desktop-test          # Mac Playwright against unpackaged Electron
 make desktop-mac           # unpacked .app (arm64/x64 dir target)
 make desktop-mac-smoke     # launch those .apps once
 ```
 
+The complete Electron E2E suite, including Linux packaged-app launch coverage, runs in the container suite below. The Mac commands remain for Mac release packaging and smoke testing.
+
 ## Tests
 
 ```bash
-cargo test
-cd web && npm test
-cd web && npm run test:coverage
-cd web && npm run typecheck
+make test
 ```
+
+This is the required full check. It runs Rust tests and Clippy; web unit tests, coverage, typecheck, and browser E2E; unpackaged and packaged Electron E2E under Xvfb; then the visual-review capture. E2E skips fail the command. `make container-test` runs the same Compose command directly. Screenshots are written to `web/artifacts/visual/`; inspect every image after a successful run.
 
 ## Production (single process)
 
@@ -121,6 +122,8 @@ docker compose exec mnote mnote user add alice
 ```
 
 Then open http://localhost:3000.
+
+The production `mnote` image intentionally contains only the shipped application. Use the separate `test` Compose service for tests and visual review.
 
 Login also returns a `token` for Electron. Send `Authorization: Bearer <token>` (or `/api/live?token=`). Cookies still work in the browser.
 

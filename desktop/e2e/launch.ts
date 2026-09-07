@@ -23,7 +23,7 @@ export async function launchApp(opts: {
   if (opts.data) env.MNOTE_E2E_DATA = opts.data;
   const app = await electron.launch({
     executablePath: require("electron") as string,
-    args: [desktopRoot(), "--disable-gpu"],
+    args: [desktopRoot(), "--disable-gpu", "--no-sandbox"],
     cwd: desktopRoot(),
     env,
   });

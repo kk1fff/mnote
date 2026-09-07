@@ -1,0 +1,13 @@
+FROM mcr.microsoft.com/playwright:v1.62.1-jammy
+
+ARG RUST_VERSION=1.90.0
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential curl pkg-config xvfb \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain "${RUST_VERSION}" \
+    && /root/.cargo/bin/rustup component add clippy
+
+ENV PATH=/root/.cargo/bin:${PATH}
+WORKDIR /workspace
+ENTRYPOINT ["bash", "/workspace/scripts/container-check.sh"]

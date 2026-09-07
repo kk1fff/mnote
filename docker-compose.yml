@@ -9,5 +9,15 @@ services:
     volumes:
       - mnote-data:/data
 
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    init: true
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    shm_size: 1gb
+
 volumes:
   mnote-data:

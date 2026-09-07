@@ -4,8 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import { launchApp } from "./launch";
 
-test.skip(process.platform !== "darwin", "mac only");
-
 test("creates a local vault and reopens it", async () => {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), "mnote-vault-"));
   const first = await launchApp({ flavor: "full", data });

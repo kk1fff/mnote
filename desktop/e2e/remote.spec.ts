@@ -3,8 +3,6 @@ import fs from "node:fs";
 import { ALICE_PASSWORD, E2E_URL } from "./env";
 import { launchApp } from "./launch";
 
-test.skip(process.platform !== "darwin", "mac only");
-
 test("connects to a server, logs in, and reopens with the saved session", async () => {
   const first = await launchApp({ flavor: "remote" });
   await expect(first.page.getByText("Connect to your server")).toBeVisible();

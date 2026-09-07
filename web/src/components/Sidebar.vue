@@ -286,7 +286,8 @@ defineExpose({ load });
       <span>Search notes</span><kbd aria-hidden="true">{{ searchShortcut }}</kbd>
     </button>
     <button class="ghost sidebar-create" type="button" data-testid="new-note" @click="emit('create-note')">＋ New note</button>
-    <div class="sidebar-group">
+    <div class="sidebar-scroll">
+      <div class="sidebar-group">
       <p class="section-label">Inbox</p>
       <div class="park-row">
         <button class="parked-button" type="button" data-testid="sidebar-park" title="Capture a thought to organize later" @click="showParkCapture({})">
@@ -303,8 +304,8 @@ defineExpose({ load });
         {{ parkedItems.length }}
       </button>
       </div>
-    </div>
-    <div class="sidebar-group library-group">
+      </div>
+      <div class="sidebar-group library-group">
       <p class="section-label">Library</p>
       <button type="button" class="sidebar-link" :class="{ active: route.name === 'note' && !activeDaily }" @click="router.push('/today')">
         <span class="nav-icon notes-icon" aria-hidden="true" />Notes
@@ -315,8 +316,8 @@ defineExpose({ load });
       <button type="button" class="sidebar-link" data-testid="sidebar-images" :class="{ active: route.path === '/images' }" @click="openImages">
         <span class="nav-icon images-icon" aria-hidden="true" />Images
       </button>
-    </div>
-    <div class="sidebar-group">
+      </div>
+      <div class="sidebar-group">
       <p class="section-label">Organize</p>
       <button type="button" class="sidebar-link" data-testid="sidebar-favorites" @click="emit('open-picker', 'favorites')">
         <span class="nav-icon favorites-icon" aria-hidden="true" />Favorites
@@ -324,8 +325,8 @@ defineExpose({ load });
       <button type="button" class="sidebar-link" data-testid="sidebar-tags" @click="emit('open-picker', 'tags')">
         <span class="nav-icon tags-icon" aria-hidden="true" />Tags
       </button>
-    </div>
-    <div class="note-library">
+      </div>
+      <div class="note-library">
       <p class="section-label">Recent</p>
       <div class="sidebar-recent">
         <button
@@ -350,6 +351,7 @@ defineExpose({ load });
           @menu="openMenu"
           @open="openNote"
         />
+      </div>
       </div>
     </div>
     <div class="sidebar-section sidebar-cal-section">

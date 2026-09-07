@@ -38,13 +38,10 @@ There is no self-signup.
 ```bash
 make dev
 
-cargo test
-cargo clippy --all-targets -- -D warnings
-cd web && npm test && npm run typecheck && npm run test:e2e
-make desktop-test
+make test
 ```
 
-API is Rust (`src/`). Web is Vue + Vite (`web/`). Vite proxies `/api` to `127.0.0.1:3000`.
+API is Rust (`src/`). Web is Vue + Vite (`web/`). Vite proxies `/api` to `127.0.0.1:3000`. The `test` service is the required full validation path: it runs Rust tests and Clippy; web unit, coverage, typecheck, and browser E2E; unpackaged and packaged Electron E2E under Xvfb; and visual review. It fails if an E2E test is skipped. Mac packaging commands remain release checks, not a substitute for the container suite.
 
 ## Visual review
 
@@ -54,17 +51,12 @@ After any visual, CSS, layout, or theme change, capture screenshots and inspect 
 
 For every new user-facing feature, add or update a corresponding visual-review scenario that opens its primary UI state. Every new page must have a visual-review scenario. Cover affected desktop and mobile states, plus light and dark themes when the feature has a surface, sheet, menu, or overlay. Add an interaction/e2e test when the feature submits data or changes persisted state.
 
-1. API on `:3000` and Vite on `:5173` must be running.
-2. Ensure a throwaway account exists:
+1. Run the container suite, which starts isolated API and Vite processes and creates a throwaway `visual` account:
    ```bash
-   cargo run -- --data data user add visual --password password1
+   make test
    ```
-   Skip if it already exists. First run sets password `visualpass1`.
-3. Capture:
-   ```bash
-   cd web && npm run visual:review
-   ```
-4. Read every PNG in `web/artifacts/visual/` with the image Read tool. Fix issues, then recapture the affected screens.
+   The first visual login sets its password from `password1` to `visualpass1`.
+2. Read every PNG in `web/artifacts/visual/` with the image Read tool. Fix issues, then rerun the container suite.
 
 Required shots: login light/dark, note desktop light/dark, title editing, history, park capture, parked list/detail, mobile note, mobile More menu, mobile nav, picker light/dark, picker recent light/dark, picker favorites light, picker mobile, picker recent mobile, images page light/dark, images page mobile, tags row light/dark/mobile, tags overflow, tags long folder, sidebar links folded light/dark, sidebar calendar folded light/dark/mobile, sidebar folder folded light/dark, sidebar links/calendar/folder mid-fold light/dark.
 

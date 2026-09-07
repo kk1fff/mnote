@@ -191,7 +191,7 @@ button.icon-btn,
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
   background: var(--bg-sidebar);
 }
 
@@ -492,10 +492,18 @@ button.icon-btn,
 
 .note-library {
   display: flex;
-  flex: 1;
+  flex: 0 0 auto;
   flex-direction: column;
   min-height: 8rem;
   margin-top: 0.85rem;
+}
+
+.sidebar-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .sidebar-section {
@@ -545,12 +553,16 @@ button.icon-btn,
 
 .sidebar-fold {
   display: grid;
-  grid-template-rows: 0fr;
+  min-height: 0;
+  height: 0;
+  overflow: hidden;
+  grid-template-rows: minmax(0, 0fr);
   transition: grid-template-rows 0.16s ease;
 }
 
 .sidebar-fold.is-open {
-  grid-template-rows: 1fr;
+  height: auto;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .sidebar-fold-inner {
@@ -2235,9 +2247,8 @@ button:disabled { cursor: default; opacity: 0.55; }
 .sidebar-link, .recent-note { gap: 0.55rem; min-height: 2.15rem; padding: 0.35rem 0.55rem; border-radius: 7px; }
 .sidebar-link.active, .recent-note.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .nav-icon { position: relative; display: inline-block; flex: 0 0 1rem; width: 1rem; height: 1rem; border: 1.5px solid currentColor; border-radius: 3px; opacity: 0.9; }.journal-icon { border-radius: 2px; border-color: var(--accent); }.journal-icon::before { content: ""; position: absolute; top: -3px; left: 2px; right: 2px; height: 3px; border: 1.5px solid currentColor; border-bottom: 0; border-radius: 2px 2px 0 0; }.inbox-icon { transform: rotate(45deg); border-radius: 3px; }.tags-icon { transform: rotate(45deg); border-radius: 2px; }.favorites-icon { border-radius: 50%; }.images-icon::after { content: ""; position: absolute; right: 1px; bottom: 1px; width: 5px; height: 4px; border-top: 1px solid currentColor; transform: rotate(-35deg); }
-.sidebar-recent { display: flex; flex-direction: column; gap: 0.08rem; }.recent-note { display: flex; width: 100%; align-items: center; border: 0; background: transparent; color: var(--text); font-size: 0.82rem; text-align: left; }.recent-note > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.recent-note:hover { background: var(--accent-soft); color: var(--accent); }.note-list-label { margin-top: 1rem; }
+.sidebar-recent { display: flex; flex-direction: column; gap: 0.08rem; }.recent-note { display: flex; width: 100%; align-items: center; border: 0; background: transparent; color: var(--text); font-size: 0.82rem; text-align: left; }.recent-note > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.recent-note:hover { background: var(--accent-soft); color: var(--accent); }.note-list-label { margin-top: 1rem; pointer-events: none; }
 .sidebar .note-library { min-height: 0; }
-.sidebar { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 
 .bar { height: auto; min-height: 9.6rem; align-items: flex-start; padding: 2rem max(2rem, env(safe-area-inset-right)) 1.25rem max(2.5rem, env(safe-area-inset-left)); border: 0; }
 .note-heading { --title-h: 2.8rem; --folder-h: 1.4rem; justify-content: flex-start; gap: 0.35rem; height: auto; overflow: visible; }
@@ -2289,9 +2300,9 @@ button:disabled { cursor: default; opacity: 0.55; }
   .backlinks-toggle, .backlinks-content { padding-left: 1rem; padding-right: 1rem; }
   .journal-header { min-height: 3.5rem; padding: env(safe-area-inset-top) 1rem 0.65rem; }.journal-header h1 { font-size: 1rem; }.journal-header p { display: none; }.journal-browser { grid-template-columns: 1fr; gap: 1.5rem; padding: 1rem 1rem 2rem; }
   .preview-desktop { display: none; }
-  .sidebar { overflow-y: auto; overscroll-behavior: contain; }
   .sidebar > * { flex-shrink: 0; }
-  .sidebar .note-library { flex: 1 1 8rem; min-height: 0; }
+  .sidebar .sidebar-scroll { flex: 1 1 auto; min-height: 0; }
+  .sidebar .note-library { min-height: 0; }
   .sidebar .sidebar-footer-text { padding-bottom: env(safe-area-inset-bottom); }
 
   .note-picker { max-height: 100dvh; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }

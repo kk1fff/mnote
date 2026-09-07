@@ -1,7 +1,12 @@
-.PHONY: dev desktop-test desktop-mac desktop-mac-smoke
+.PHONY: dev test container-test desktop-test desktop-mac desktop-mac-smoke
 
 dev:
 	./scripts/dev.sh
+
+test: container-test
+
+container-test:
+	docker compose run --rm test
 
 desktop-test:
 	cargo build
