@@ -34,6 +34,19 @@ cleanup_visual() {
   if [ -n "${visual_data:-}" ]; then rm -rf "$visual_data"; fi
 }
 
+restore_artifact_ownership() {
+  if [ -n "${HOST_UID:-}" ] && [ -n "${HOST_GID:-}" ] && [ -d /workspace/web/artifacts ]; then
+    chown -R "${HOST_UID}:${HOST_GID}" /workspace/web/artifacts || true
+  fi
+}
+
+cleanup() {
+  cleanup_visual
+  restore_artifact_ownership
+}
+
+trap cleanup EXIT INT TERM
+
 npm --prefix web ci
 npm --prefix desktop ci
 
@@ -52,7 +65,6 @@ run_e2e xvfb-run -a npm --prefix desktop test -- e2e/full.spec.ts e2e/remote.spe
 run_e2e env MNOTE_PACKAGED=1 xvfb-run -a npm --prefix desktop test -- e2e/packaged.spec.ts
 
 visual_data="$(mktemp -d)"
-trap cleanup_visual EXIT INT TERM
 cargo run -- --data "$visual_data" user add visual --password password1
 MNOTE_WEB_DIST=/workspace/web/dist cargo run -- --data "$visual_data" serve --bind 127.0.0.1:3000 &
 api_pid=$!

@@ -1,4 +1,4 @@
-.PHONY: dev test container-test desktop-test desktop-mac desktop-mac-smoke
+.PHONY: dev test container-test desktop-test desktop-mac desktop-mac-smoke fix-perms
 
 dev:
 	./scripts/dev.sh
@@ -6,7 +6,11 @@ dev:
 test: container-test
 
 container-test:
-	docker compose run --rm test
+	mkdir -p web/node_modules desktop/node_modules target web/dist desktop/dist desktop/release web/coverage web/test-results desktop/test-results web/playwright-report desktop/playwright-report web/artifacts
+	docker compose run --rm -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) test
+
+fix-perms:
+	docker compose run --rm --no-deps -v $$(pwd):/fix --entrypoint chown test -R --from=0:0 $$(id -u):$$(id -g) /fix
 
 desktop-test:
 	cargo build

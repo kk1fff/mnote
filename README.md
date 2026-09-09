@@ -103,6 +103,8 @@ make test
 
 This is the required full check. It runs Rust tests and Clippy; web unit tests, coverage, typecheck, and browser E2E; unpackaged and packaged Electron E2E under Xvfb; then the visual-review capture. E2E skips fail the command. `make container-test` runs the same Compose command directly. Screenshots are written to `web/artifacts/visual/`; inspect every image after a successful run.
 
+Generated dirs (`node_modules`, `target`, `dist`, …) live in Compose volumes, not the bind-mounted repo. Visual PNGs stay on the host and are chowned to you on exit. If leftover root-owned files block `make dev`, run `make fix-perms`.
+
 ## Production (single process)
 
 ```bash

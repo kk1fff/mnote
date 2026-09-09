@@ -17,7 +17,29 @@ services:
     working_dir: /workspace
     volumes:
       - .:/workspace
+      - test-web-node-modules:/workspace/web/node_modules
+      - test-desktop-node-modules:/workspace/desktop/node_modules
+      - test-cargo-target:/workspace/target
+      - test-web-dist:/workspace/web/dist
+      - test-desktop-dist:/workspace/desktop/dist
+      - test-desktop-release:/workspace/desktop/release
+      - test-web-coverage:/workspace/web/coverage
+      - test-web-test-results:/workspace/web/test-results
+      - test-desktop-test-results:/workspace/desktop/test-results
+      - test-web-playwright-report:/workspace/web/playwright-report
+      - test-desktop-playwright-report:/workspace/desktop/playwright-report
     shm_size: 1gb
 
 volumes:
   mnote-data:
+  test-web-node-modules:
+  test-desktop-node-modules:
+  test-cargo-target:
+  test-web-dist:
+  test-desktop-dist:
+  test-desktop-release:
+  test-web-coverage:
+  test-web-test-results:
+  test-desktop-test-results:
+  test-web-playwright-report:
+  test-desktop-playwright-report:
