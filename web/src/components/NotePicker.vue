@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { api, ApiError, type NoteMeta, type SearchHit } from "../api";
 import {
   buildPickerSections,
@@ -8,12 +8,13 @@ import {
   type PickerCollection,
   type PickerItem,
 } from "../lib/picker";
-import { noteFolderLabel } from "../lib/paths";
-import { normalizeTag, pendingTagReveal, tagsFromNotes } from "../lib/tags";
+import { noteFolderLabel, noteIdFromRoute } from "../lib/paths";
+import { formatTagQuery, parseTagQuery, pendingTagReveal, tagsFromNotes } from "../lib/tags";
 import { openInWorkspace, type OpenMode } from "../workspace";
 
 const emit = defineEmits<{ created: [] }>();
 const router = useRouter();
+const route = useRoute();
 const query = ref("");
 const creating = ref(false);
 const searching = ref(false);
@@ -37,9 +38,13 @@ let searchId = 0;
 
 const trimmed = computed(() => query.value.trim());
 const bang = computed(() => trimmed.value.startsWith("!"));
-const hash = computed(() => trimmed.value.startsWith("#"));
+const tagQuery = computed(() => parseTagQuery(trimmed.value));
+const hash = computed(() => !!tagQuery.value);
+const currentNoteId = computed(() =>
+  route.name === "note" || route.path.startsWith("/n/") ? noteIdFromRoute(route.params.id) : "",
+);
 const exactTag = computed(() => {
-  const name = normalizeTag(trimmed.value);
+  const name = tagQuery.value?.needle;
   if (!name || !tagIndex.value.some((tag) => tag.name === name)) return null;
   return name;
 });
@@ -85,7 +90,7 @@ function show(mode: OpenMode = "replace", collectionKind?: PickerCollection, ini
     void enterCollection(collectionKind);
     return;
   }
-  if (initialQuery?.startsWith("#")) void syncHash();
+  if (parseTagQuery(initialQuery ?? "")) void syncTagQuery();
   void nextTick(() => input.value?.focus());
 }
 
@@ -182,15 +187,28 @@ async function ensureTags() {
   }
 }
 
-async function syncHash() {
+async function syncTagQuery() {
   await ensureTags();
-  const name = normalizeTag(trimmed.value);
-  if (!name || !tagIndex.value.some((tag) => tag.name === name)) {
+  const tq = tagQuery.value;
+  if (!tq) {
     tagHits.value = [];
     return;
   }
-  const hits = await api.search(`#${name}`).catch(() => []);
-  tagHits.value = hits.filter((hit) => hit.kind !== "parked");
+  const noteId = tq.here ? currentNoteId.value : "";
+  try {
+    if (tq.here || tq.chain.length) {
+      tagIndex.value = await api.tagsQuery(trimmed.value, noteId || undefined);
+    }
+    const name = tq.needle;
+    if (!name || !tagIndex.value.some((tag) => tag.name === name)) {
+      tagHits.value = [];
+      return;
+    }
+    const hits = await api.search(trimmed.value, noteId ? { note_id: noteId } : {});
+    tagHits.value = hits.filter((hit) => hit.kind !== "parked");
+  } catch {
+    tagHits.value = [];
+  }
 }
 
 function leaveCollection() {
@@ -234,7 +252,8 @@ function pickFolder(folder: string) {
 
 function pickTag(name: string) {
   collection.value = null;
-  query.value = `#${name}`;
+  const tq = tagQuery.value;
+  query.value = tq && (tq.here || tq.chain.length) ? formatTagQuery(tq.here, tq.chain, name) : `#${name}`;
   selected.value = 0;
   void ensureTags();
   void nextTick(() => input.value?.focus());
@@ -314,7 +333,7 @@ watch(query, () => {
   if (hash.value) {
     collection.value = null;
     selected.value = 0;
-    void syncHash();
+    void syncTagQuery();
     clampSelected();
     return;
   }

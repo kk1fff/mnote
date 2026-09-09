@@ -1403,3 +1403,79 @@ async fn tags_patch_search_parked_and_suggest() {
     let tags = body["tags"].as_array().unwrap();
     assert!(tags.iter().any(|t| t == "work"));
 }
+
+#[tokio::test]
+async fn structured_tag_query_scopes_and_here() {
+    let h = Harness::new();
+    let cookie = h.login("alice", "password1").await;
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &cookie,
+            Some(json!({
+                "title": "Scoped",
+                "content": "- #work\n  - nested #meeting\n- sibling #meeting\n"
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let id = body["id"].as_str().unwrap().to_string();
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/notes",
+            &cookie,
+            Some(json!({ "title": "Other", "content": "loose #meeting\n" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::POST,
+            "/api/parked",
+            &cookie,
+            Some(json!({ "body": "parked #meeting" })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::GET,
+            "/api/search?q=%23work%20%3E%20%23meeting",
+            &cookie,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let hits = body.as_array().unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0]["line"], 2);
+    assert!(hits.iter().all(|hit| hit["kind"] != "parked"));
+
+    let (status, _, body) = h
+        .call(h.authed(
+            Method::GET,
+            &format!("/api/search?q=%3E%20%23meeting&note_id={id}"),
+            &cookie,
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body.as_array().unwrap().len(), 2);
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/search?q=%3E%20%23meeting", &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body.as_array().unwrap().is_empty());
+
+    let (status, _, body) = h
+        .call(h.authed(Method::GET, "/api/tags/query?q=%23work%20%3E", &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body.as_array().unwrap().iter().any(|tag| tag["name"] == "meeting"));
+    assert!(body.as_array().unwrap().iter().all(|tag| tag["name"] != "work"));
+}

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   extractHashtags,
   formatTagLabel,
+  formatTagQuery,
   normalizeTag,
+  parseTagQuery,
   parseTagsField,
   tagsFromNotes,
   uniqueTags,
@@ -29,6 +31,23 @@ describe("tags", () => {
       extractHashtags("# Title\n\nsee #work and #Meeting\n\n```\n#code\n```\n\n`#skip` and (#rust)\n"),
     ).toEqual(["work", "meeting", "rust"]);
     expect(extractHashtags("# 2026-08-31\n\n")).toEqual([]);
+  });
+
+  it("parses structured tag queries", () => {
+    expect(parseTagQuery("#work")).toEqual({ here: false, chain: [], needle: "work" });
+    expect(parseTagQuery("> #work")).toEqual({ here: true, chain: [], needle: "work" });
+    expect(parseTagQuery(">")).toEqual({ here: true, chain: [], needle: "" });
+    expect(parseTagQuery("#work > #meeting")).toEqual({
+      here: false,
+      chain: ["work"],
+      needle: "meeting",
+    });
+    expect(parseTagQuery("#work >")).toEqual({ here: false, chain: ["work"], needle: "" });
+    expect(parseTagQuery("#work extra")).toBeNull();
+    expect(parseTagQuery("> work")).toBeNull();
+    expect(formatTagQuery(true, [], "work")).toBe("> #work");
+    expect(formatTagQuery(false, ["work"], "meeting")).toBe("#work > #meeting");
+    expect(formatTagQuery(true, [])).toBe(">");
   });
 
   it("counts tags across notes", () => {

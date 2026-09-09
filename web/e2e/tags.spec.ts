@@ -73,6 +73,43 @@ test("removing the last hashtag drops the tag", async ({ page }) => {
   await expect(page.getByTestId(`picker-tag-${tag}`)).toHaveCount(0);
 });
 
+test("structured tag search uses lists and the open note", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  const title = uid("Scoped");
+  await createNote(page, title);
+  await page.locator(".cm-content").click();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.insertText("- #work\n  - nested #meeting\n- sibling #meeting\n");
+  await noteAction(page, "save");
+  await waitSaved(page);
+
+  const other = uid("Other");
+  await createNote(page, other);
+  await page.locator(".cm-content").click();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.insertText("loose #meeting\n");
+  await noteAction(page, "save");
+  await waitSaved(page);
+
+  await openPicker(page);
+  await page.getByTestId("picker-input").fill(">");
+  await expect(page.getByTestId("picker-tag-meeting")).toBeVisible();
+  await expect(page.getByTestId("picker-tag-work")).toHaveCount(0);
+  await page.getByTestId("picker-input").press("Escape");
+  await page.getByTestId("picker-input").press("Escape");
+
+  await openPicker(page);
+  await page.getByTestId("picker-input").fill("#work > #meeting");
+  const hit = page.getByTestId("picker-tag-hit");
+  await expect(hit).toHaveCount(1);
+  await expect(hit).toContainText(title);
+  await expect(hit).toContainText("nested #meeting");
+  await hit.click();
+  await expect(page.getByTestId("picker")).toHaveCount(0);
+  await expect(page.locator(".cm-tag-flash")).toBeVisible();
+});
+
 test("parked hashtags show in the list", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);

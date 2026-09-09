@@ -328,6 +328,11 @@ export const api = {
     }
     return request<SearchHit[]>(`/api/search?${params}`);
   },
+  tagsQuery: (q: string, noteId?: string) => {
+    const params = new URLSearchParams({ q });
+    if (noteId) params.set("note_id", noteId);
+    return request<TagSuggest[]>(`/api/tags/query?${params}`);
+  },
   noteContext: (id: string) => request<NoteContext>(`/api/notes/${encodeURIComponent(id)}/context`),
   postNoteContext: (
     id: string,

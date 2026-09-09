@@ -196,4 +196,35 @@ describe("buildPickerSections", () => {
       { type: "tag-hit", id: "o1", title: "One", snippet: "see #work", line: 2 },
     ]);
   });
+
+  it("lists scoped tags for > and chain queries", () => {
+    const here = buildPickerSections({
+      query: ">",
+      notes: [],
+      folders: [],
+      tags: [{ name: "work", count: 1 }],
+    });
+    expect(pickerItems(here)).toEqual([{ type: "tag", key: "tag:work", name: "work", count: 1 }]);
+
+    const chain = buildPickerSections({
+      query: "#work > #meeting",
+      notes: [],
+      folders: [],
+      tags: [{ name: "meeting", count: 2 }],
+      tagHits: [{ id: "o1", title: "One", snippet: "nested #meeting", line: 2, from: 10, to: 18 }],
+    });
+    expect(pickerItems(chain)).toMatchObject([
+      { type: "tag-hit", id: "o1", title: "One", snippet: "nested #meeting", line: 2 },
+    ]);
+
+    const partial = buildPickerSections({
+      query: "#work >",
+      notes: [],
+      folders: [],
+      tags: [{ name: "meeting", count: 2 }],
+    });
+    expect(pickerItems(partial)).toEqual([
+      { type: "tag", key: "tag:meeting", name: "meeting", count: 2 },
+    ]);
+  });
 });

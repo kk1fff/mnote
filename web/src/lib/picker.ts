@@ -1,6 +1,6 @@
 import type { NoteMeta, SearchHit } from "../api";
 import { parseCreateQuery } from "./paths";
-import { tagsFromNotes } from "./tags";
+import { parseTagQuery, tagsFromNotes } from "./tags";
 
 export type PickerCollection = "recent" | "favorites" | "tags";
 
@@ -69,7 +69,8 @@ export function buildPickerSections(input: {
 }): PickerSection[] {
   const trimmed = input.query.trim();
   const bang = trimmed.startsWith("!");
-  const hash = trimmed.startsWith("#");
+  const tagQuery = parseTagQuery(trimmed);
+  const hash = !!tagQuery;
   if (input.collection === "tags" && !trimmed) {
     const tags = input.tags ?? tagsFromNotes(input.notes);
     return section("tags", [
@@ -83,10 +84,10 @@ export function buildPickerSections(input: {
       ...input.notes.map((note) => ({ type: "note" as const, key: note.id, note })),
     ]);
   }
-  if (hash) {
-    const needle = trimmed.slice(1).trim().toLowerCase();
+  if (hash && tagQuery) {
+    const needle = tagQuery.needle;
     const tags = input.tags ?? tagsFromNotes(input.notes);
-    const exact = needle && tags.some((tag) => tag.name === needle);
+    const exact = !!needle && tags.some((tag) => tag.name === needle);
     if (exact) {
       return section(
         "note",

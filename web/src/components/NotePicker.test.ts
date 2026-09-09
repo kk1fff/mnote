@@ -16,6 +16,7 @@ vi.mock("../api", async () => {
       recentNotes: vi.fn(),
       favorites: vi.fn(),
       search: vi.fn(),
+      tagsQuery: vi.fn().mockResolvedValue([]),
     },
   };
 });
@@ -48,6 +49,7 @@ describe("NotePicker", () => {
     vi.mocked(api.recentNotes).mockReset();
     vi.mocked(api.favorites).mockReset();
     vi.mocked(api.search).mockReset();
+    vi.mocked(api.tagsQuery).mockReset();
     resetWorkspace(emptyWorkspace());
   });
 
@@ -246,5 +248,35 @@ describe("NotePicker", () => {
     expect(wrapper.get('[data-testid="picker-tag-hit"]').text()).toContain("One");
     expect(wrapper.get('[data-testid="picker-tag-hit"]').text()).toContain("L2");
     expect(wrapper.get('[data-testid="picker-tag-hit"]').text()).toContain("see #work");
+  });
+
+  it("scopes tag search to the open note and nested tags", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([
+      { id: "n1", title: "One", folder: "", modified_at: "", tags: ["work", "meeting"] },
+    ]);
+    vi.mocked(api.tagsQuery).mockResolvedValue([{ name: "work", count: 1 }]);
+    const { wrapper, router } = await openPicker();
+    await router.push("/n/n1");
+    await flushPromises();
+    await wrapper.get("input").setValue(">");
+    await flushPromises();
+    expect(api.tagsQuery).toHaveBeenCalledWith(">", "n1");
+    expect(wrapper.get('[data-testid="picker-tag-work"]').text()).toContain("#work");
+    await wrapper.get('[data-testid="picker-tag-work"]').trigger("click");
+    await flushPromises();
+    expect((wrapper.get("input").element as HTMLInputElement).value).toBe("> #work");
+
+    vi.mocked(api.tagsQuery).mockResolvedValue([{ name: "meeting", count: 1 }]);
+    vi.mocked(api.search).mockResolvedValue([
+      { id: "n1", title: "One", snippet: "nested #meeting", line: 2, from: 10, to: 18 },
+    ]);
+    await wrapper.get("input").setValue("#work >");
+    await flushPromises();
+    expect(api.tagsQuery).toHaveBeenCalledWith("#work >", undefined);
+    await wrapper.get('[data-testid="picker-tag-meeting"]').trigger("click");
+    await flushPromises();
+    expect((wrapper.get("input").element as HTMLInputElement).value).toBe("#work > #meeting");
+    expect(wrapper.get('[data-testid="picker-tag-hit"]').text()).toContain("nested #meeting");
+    expect(api.search).toHaveBeenCalledWith("#work > #meeting", {});
   });
 });

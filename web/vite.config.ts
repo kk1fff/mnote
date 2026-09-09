@@ -24,6 +24,7 @@ export default defineConfig({
       reporter: ["text", "html"],
       include: ["src/**/*.{ts,vue}"],
       exclude: ["src/main.ts"],
+      clean: false,
     },
   },
 });

@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 
 const STOP: &[&str] = &[
     "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "if", "in", "is", "it",
@@ -85,13 +86,318 @@ pub fn union_tags(existing: &[String], extra: &[String]) -> Vec<String> {
     out
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TagQuery {
+    pub here: bool,
+    pub chain: Vec<String>,
+    pub needle: String,
+}
+
+impl TagQuery {
+    pub fn last_tag(&self) -> Option<String> {
+        if self.needle.is_empty() {
+            return None;
+        }
+        normalize_tag(&self.needle)
+    }
+}
+
 pub fn parse_tag_query(q: &str) -> Option<String> {
-    let q = q.trim();
-    let rest = q.strip_prefix('#')?;
-    if rest.is_empty() || rest.contains(char::is_whitespace) {
+    let tq = parse_structured_tag_query(q)?;
+    if tq.here || !tq.chain.is_empty() {
         return None;
     }
-    normalize_tag(rest)
+    tq.last_tag()
+}
+
+pub fn parse_structured_tag_query(q: &str) -> Option<TagQuery> {
+    let q = q.trim();
+    let (here, rest) = if let Some(rest) = q.strip_prefix('>') {
+        (true, rest.trim_start())
+    } else {
+        (false, q)
+    };
+    if rest.is_empty() {
+        return if here {
+            Some(TagQuery {
+                here,
+                chain: Vec::new(),
+                needle: String::new(),
+            })
+        } else {
+            None
+        };
+    }
+    if !rest.starts_with('#') {
+        return None;
+    }
+    let parts: Vec<&str> = rest.split('>').map(str::trim).collect();
+    let mut chain = Vec::new();
+    for (i, part) in parts.iter().enumerate() {
+        let last = i + 1 == parts.len();
+        if part.is_empty() {
+            if last {
+                return Some(TagQuery {
+                    here,
+                    chain,
+                    needle: String::new(),
+                });
+            }
+            return None;
+        }
+        let name = part.strip_prefix('#')?;
+        if name.contains(char::is_whitespace) {
+            return None;
+        }
+        if last {
+            return Some(TagQuery {
+                here,
+                chain,
+                needle: name.to_ascii_lowercase(),
+            });
+        }
+        chain.push(normalize_tag(name)?);
+    }
+    None
+}
+
+#[derive(Debug, Clone, Copy)]
+enum LineKind {
+    Fence,
+    Heading { level: u8 },
+    List { indent: usize },
+    Blank,
+    Text,
+}
+
+struct LineInfo {
+    start: usize,
+    end: usize,
+    indent: usize,
+    kind: LineKind,
+}
+
+fn visual_indent(line: &str) -> usize {
+    let mut n = 0;
+    for c in line.chars() {
+        match c {
+            ' ' => n += 1,
+            '\t' => n += 4,
+            _ => break,
+        }
+    }
+    n
+}
+
+fn atx_heading_level(line: &str) -> Option<u8> {
+    skip_atx_heading(line)?;
+    let t = line.trim_start();
+    Some(t.chars().take_while(|c| *c == '#').count() as u8)
+}
+
+fn list_item_indent(line: &str) -> Option<usize> {
+    let indent = visual_indent(line);
+    let rest = line.trim_start();
+    let marked = if rest.starts_with("- ")
+        || rest.starts_with("-\t")
+        || rest.starts_with("* ")
+        || rest.starts_with("*\t")
+        || rest.starts_with("+ ")
+        || rest.starts_with("+\t")
+    {
+        true
+    } else {
+        let digits = rest.chars().take_while(|c| c.is_ascii_digit()).count();
+        if digits == 0 {
+            false
+        } else {
+            let after = &rest[digits..];
+            after.starts_with(". ") || after.starts_with(".\t")
+        }
+    };
+    marked.then_some(indent)
+}
+
+fn line_infos(content: &str) -> Vec<LineInfo> {
+    let mut lines = Vec::new();
+    let mut in_fence = false;
+    let mut offset = 0;
+    for line in content.split_inclusive('\n') {
+        let start = offset;
+        offset += line.len();
+        let body = line.strip_suffix('\n').unwrap_or(line);
+        let trimmed = body.trim_start();
+        if trimmed.starts_with("```") {
+            in_fence = !in_fence;
+            lines.push(LineInfo {
+                start,
+                end: offset,
+                indent: visual_indent(body),
+                kind: LineKind::Fence,
+            });
+            continue;
+        }
+        let kind = if in_fence {
+            LineKind::Fence
+        } else if trimmed.is_empty() {
+            LineKind::Blank
+        } else if let Some(level) = atx_heading_level(body) {
+            LineKind::Heading { level }
+        } else if let Some(indent) = list_item_indent(body) {
+            LineKind::List { indent }
+        } else {
+            LineKind::Text
+        };
+        lines.push(LineInfo {
+            start,
+            end: offset,
+            indent: visual_indent(body),
+            kind,
+        });
+    }
+    lines
+}
+
+fn container_end(lines: &[LineInfo], i: usize) -> usize {
+    match lines[i].kind {
+        LineKind::List { indent } => {
+            let mut end = lines[i].end;
+            for next in &lines[i + 1..] {
+                match next.kind {
+                    LineKind::Blank => {
+                        end = next.end;
+                    }
+                    LineKind::Heading { .. } => break,
+                    LineKind::List { indent: child } if child > indent => {
+                        end = next.end;
+                    }
+                    LineKind::Text | LineKind::Fence if next.indent > indent => {
+                        end = next.end;
+                    }
+                    _ => break,
+                }
+            }
+            end
+        }
+        LineKind::Heading { level } => {
+            let mut end = lines[i].end;
+            for next in &lines[i + 1..] {
+                if let LineKind::Heading { level: next_level } = next.kind {
+                    if next_level <= level {
+                        break;
+                    }
+                }
+                end = next.end;
+            }
+            end
+        }
+        _ => lines[i].end,
+    }
+}
+
+fn hashtag_scopes(content: &str) -> Vec<(HashtagSpan, Range<usize>)> {
+    let lines = line_infos(content);
+    extract_hashtag_spans(content)
+        .into_iter()
+        .map(|span| {
+            let i = lines
+                .iter()
+                .position(|line| span.start >= line.start && span.start < line.end)
+                .unwrap_or(0);
+            let end = if lines.is_empty() {
+                content.len()
+            } else {
+                container_end(&lines, i)
+            };
+            let start = lines.get(i).map(|line| line.start).unwrap_or(0);
+            (span, start..end)
+        })
+        .collect()
+}
+
+fn chain_containers(
+    scoped: &[(HashtagSpan, Range<usize>)],
+    chain: &[String],
+) -> Vec<(usize, usize, usize)> {
+    let mut ranges = vec![(0, usize::MAX, usize::MAX)];
+    for tag in chain {
+        let mut next = Vec::new();
+        for (rs, re, _) in &ranges {
+            for (span, container) in scoped {
+                if span.tag != *tag {
+                    continue;
+                }
+                if span.start < *rs || span.start >= *re {
+                    continue;
+                }
+                next.push((container.start, container.end, span.start));
+            }
+        }
+        ranges = next;
+        if ranges.is_empty() {
+            return Vec::new();
+        }
+    }
+    ranges
+}
+
+pub fn search_tag_chain(content: &str, chain: &[String]) -> Vec<HashtagSpan> {
+    let Some((last, parents)) = chain.split_last() else {
+        return Vec::new();
+    };
+    let scoped = hashtag_scopes(content);
+    let ranges: Vec<(usize, usize)> = if parents.is_empty() {
+        vec![(0, usize::MAX)]
+    } else {
+        chain_containers(&scoped, parents)
+            .into_iter()
+            .map(|(start, end, _)| (start, end))
+            .collect()
+    };
+    scoped
+        .into_iter()
+        .filter(|(span, _)| {
+            span.tag == *last && ranges.iter().any(|(s, e)| span.start >= *s && span.start < *e)
+        })
+        .map(|(span, _)| span)
+        .collect()
+}
+
+pub fn count_scoped_tags(
+    content: &str,
+    chain: &[String],
+    needle: &str,
+    counts: &mut HashMap<String, usize>,
+) {
+    let scoped = hashtag_scopes(content);
+    if chain.is_empty() {
+        for (span, _) in scoped {
+            if !needle.is_empty() && !span.tag.contains(needle) {
+                continue;
+            }
+            *counts.entry(span.tag).or_insert(0) += 1;
+        }
+        return;
+    }
+    let containers = chain_containers(&scoped, chain);
+    let mut seen = HashSet::new();
+    for (start, end, parent_start) in containers {
+        for (span, _) in &scoped {
+            if span.start < start || span.start >= end {
+                continue;
+            }
+            if span.start == parent_start {
+                continue;
+            }
+            if !needle.is_empty() && !span.tag.contains(needle) {
+                continue;
+            }
+            if !seen.insert(span.start) {
+                continue;
+            }
+            *counts.entry(span.tag.clone()).or_insert(0) += 1;
+        }
+    }
 }
 
 pub fn extract_hashtags(content: &str) -> Vec<String> {
@@ -383,6 +689,97 @@ mod tests {
         assert_eq!(parse_tag_query("#work").as_deref(), Some("work"));
         assert!(parse_tag_query("work").is_none());
         assert!(parse_tag_query("#").is_none());
+        assert!(parse_tag_query("> #work").is_none());
+        assert!(parse_tag_query("#work > #meeting").is_none());
+        assert_eq!(
+            parse_structured_tag_query("#work"),
+            Some(TagQuery {
+                here: false,
+                chain: vec![],
+                needle: "work".into(),
+            })
+        );
+        assert_eq!(
+            parse_structured_tag_query("> #work"),
+            Some(TagQuery {
+                here: true,
+                chain: vec![],
+                needle: "work".into(),
+            })
+        );
+        assert_eq!(
+            parse_structured_tag_query(">#work"),
+            Some(TagQuery {
+                here: true,
+                chain: vec![],
+                needle: "work".into(),
+            })
+        );
+        assert_eq!(
+            parse_structured_tag_query(">"),
+            Some(TagQuery {
+                here: true,
+                chain: vec![],
+                needle: String::new(),
+            })
+        );
+        assert_eq!(
+            parse_structured_tag_query("#work > #meeting"),
+            Some(TagQuery {
+                here: false,
+                chain: vec!["work".into()],
+                needle: "meeting".into(),
+            })
+        );
+        assert_eq!(
+            parse_structured_tag_query("#work>#meeting"),
+            Some(TagQuery {
+                here: false,
+                chain: vec!["work".into()],
+                needle: "meeting".into(),
+            })
+        );
+        assert_eq!(
+            parse_structured_tag_query("#work >"),
+            Some(TagQuery {
+                here: false,
+                chain: vec!["work".into()],
+                needle: String::new(),
+            })
+        );
+        assert_eq!(
+            parse_structured_tag_query("#a > #b > #c"),
+            Some(TagQuery {
+                here: false,
+                chain: vec!["a".into(), "b".into()],
+                needle: "c".into(),
+            })
+        );
+        assert!(parse_structured_tag_query("#work extra").is_none());
+        assert!(parse_structured_tag_query("> work").is_none());
+        assert!(parse_structured_tag_query("work").is_none());
+    }
+
+    #[test]
+    fn nested_list_and_heading_scopes() {
+        let content = "- #work\n  - standup #meeting\n- sibling #meeting\n\n## Planning #work\nsection #meeting\n\n## Other\noutside #meeting\n\nsame #work #inline\n";
+        let nested = search_tag_chain(content, &["work".into(), "meeting".into()]);
+        let lines: Vec<usize> = nested.iter().map(|span| line_at(content, span.start)).collect();
+        assert_eq!(lines, vec![2, 6]);
+        assert!(search_tag_chain(content, &["work".into()]).len() >= 2);
+
+        let mut counts = HashMap::new();
+        count_scoped_tags(content, &["work".into()], "", &mut counts);
+        assert!(counts.get("meeting").copied().unwrap_or(0) >= 2);
+        assert!(!counts.contains_key("work"));
+
+        let same = "- #work #meeting\n";
+        let hits = search_tag_chain(same, &["work".into(), "meeting".into()]);
+        assert_eq!(hits.len(), 1);
+
+        let three = "- #a\n  - #b\n    - #c\n  - other #c\n";
+        assert_eq!(search_tag_chain(three, &["a".into(), "b".into(), "c".into()]).len(), 1);
+        assert_eq!(search_tag_chain(three, &["a".into(), "c".into()]).len(), 2);
     }
 
     #[test]

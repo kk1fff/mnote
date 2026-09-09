@@ -1060,6 +1060,14 @@ pub fn backlinks(vault: &Path, id: &str) -> Result<Vec<NoteMeta>, AppError> {
 }
 
 pub fn search(vault: &Path, query: &str) -> Result<Vec<SearchHit>, AppError> {
+    search_in(vault, query, None)
+}
+
+pub fn search_in(
+    vault: &Path,
+    query: &str,
+    note_id: Option<&str>,
+) -> Result<Vec<SearchHit>, AppError> {
     let q = query.trim();
     if q.is_empty() {
         return Err(AppError::BadRequest("query is empty".into()));
@@ -1067,10 +1075,19 @@ pub fn search(vault: &Path, query: &str) -> Result<Vec<SearchHit>, AppError> {
     if q.len() > 200 {
         return Err(AppError::BadRequest("query is too long".into()));
     }
-    let needle = q.to_lowercase();
-    if let Some(tag) = crate::tags::parse_tag_query(q) {
-        return search_tag(vault, &tag);
+    if let Some(tq) = crate::tags::parse_structured_tag_query(q) {
+        if tq.here && note_id.is_none() {
+            return Ok(Vec::new());
+        }
+        let Some(last) = tq.last_tag() else {
+            return Ok(Vec::new());
+        };
+        let mut chain = tq.chain;
+        chain.push(last);
+        let scope = if tq.here { note_id } else { None };
+        return search_tag_chain(vault, &chain, scope);
     }
+    let needle = q.to_lowercase();
     let mut hits = Vec::new();
     for note in list_notes_internal(vault)? {
         let tags = crate::tags::format_tags(&note.tags);
@@ -1094,19 +1111,67 @@ pub fn search(vault: &Path, query: &str) -> Result<Vec<SearchHit>, AppError> {
     Ok(hits)
 }
 
-fn search_tag(vault: &Path, tag: &str) -> Result<Vec<SearchHit>, AppError> {
+pub fn tags_in_query(
+    vault: &Path,
+    query: &str,
+    note_id: Option<&str>,
+) -> Result<Vec<crate::tags::TagSuggest>, AppError> {
+    let q = query.trim();
+    let Some(tq) = crate::tags::parse_structured_tag_query(q) else {
+        return Ok(Vec::new());
+    };
+    if tq.here && note_id.is_none() {
+        return Ok(Vec::new());
+    }
+    let notes = if tq.here {
+        match get_note(vault, note_id.unwrap_or("")) {
+            Ok(note) => vec![note],
+            Err(AppError::NotFound) | Err(AppError::BadRequest(_)) => return Ok(Vec::new()),
+            Err(err) => return Err(err),
+        }
+    } else {
+        list_notes_internal(vault)?
+    };
+    let mut counts = HashMap::new();
+    for note in &notes {
+        crate::tags::count_scoped_tags(&note.content, &tq.chain, &tq.needle, &mut counts);
+    }
+    let mut out: Vec<crate::tags::TagSuggest> = counts
+        .into_iter()
+        .map(|(name, count)| crate::tags::TagSuggest {
+            name,
+            count,
+            create: false,
+        })
+        .collect();
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(out)
+}
+
+fn search_tag_chain(
+    vault: &Path,
+    chain: &[String],
+    note_id: Option<&str>,
+) -> Result<Vec<SearchHit>, AppError> {
+    let notes = if let Some(id) = note_id {
+        match get_note(vault, id) {
+            Ok(note) => vec![note],
+            Err(AppError::NotFound) | Err(AppError::BadRequest(_)) => return Ok(Vec::new()),
+            Err(err) => return Err(err),
+        }
+    } else {
+        list_notes_internal(vault)?
+    };
+    let last = chain.last().map(|s| s.as_str()).unwrap_or("");
     let mut hits = Vec::new();
-    for note in list_notes_internal(vault)? {
-        for span in crate::tags::extract_hashtag_spans(&note.content) {
-            if span.tag != tag {
-                continue;
-            }
+    for note in notes {
+        for span in crate::tags::search_tag_chain(&note.content, chain) {
             let from = crate::tags::char_index(&note.content, span.start);
             let to = crate::tags::char_index(&note.content, span.end);
             hits.push(SearchHit {
                 id: note.id.clone(),
                 title: note.title.clone(),
-                snippet: snippet(&note.content, from, tag.len() + 1),
+                snippet: snippet(&note.content, from, last.len() + 1),
                 kind: None,
                 parked_id: None,
                 context: None,
@@ -1779,5 +1844,41 @@ mod tests {
         assert_eq!(again.len(), 2);
         assert_eq!(again[0].line, Some(1));
         assert_eq!(again[1].line, Some(2));
+    }
+
+    #[test]
+    fn structured_tag_search_scopes_lists_and_here() {
+        let dir = tempdir().unwrap();
+        let vault = dir.path();
+        let note = create_note(
+            vault,
+            "Scoped",
+            "",
+            Some("- #work\n  - nested #meeting\n- sibling #meeting\n\n## Plan #work\ninside #meeting\n"),
+        )
+        .unwrap();
+        let other = create_note(vault, "Other", "", Some("#work\n#meeting\n")).unwrap();
+
+        let hits = search(vault, "#work > #meeting").unwrap();
+        assert_eq!(hits.len(), 2);
+        assert!(hits.iter().all(|hit| hit.id == note.id));
+        assert_eq!(hits[0].line, Some(2));
+        assert_eq!(hits[1].line, Some(6));
+
+        let here = search_in(vault, "> #meeting", Some(&note.id)).unwrap();
+        assert_eq!(here.len(), 3);
+        assert!(search_in(vault, "> #meeting", None).unwrap().is_empty());
+        assert_eq!(search_in(vault, "> #meeting", Some(&other.id)).unwrap().len(), 1);
+
+        let names = tags_in_query(vault, "#work >", None).unwrap();
+        assert!(names.iter().any(|tag| tag.name == "meeting"));
+        assert!(names.iter().all(|tag| tag.name != "work"));
+
+        let page = tags_in_query(vault, ">", Some(&other.id)).unwrap();
+        assert_eq!(
+            page.iter().map(|tag| tag.name.as_str()).collect::<Vec<_>>(),
+            vec!["meeting", "work"]
+        );
+        assert!(search(vault, "#work >").unwrap().is_empty());
     }
 }

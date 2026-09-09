@@ -55,6 +55,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/search", get(search_notes))
         .route("/tags/suggest", post(suggest_tags))
+        .route("/tags/query", get(query_tags))
         .route("/parked", get(list_parked).post(create_parked))
         .route("/parked/{id}", axum::routing::delete(delete_parked))
         .route("/parked/{id}/note", post(parked_to_note))
@@ -722,6 +723,26 @@ async fn search_notes(
         user.id,
         &state.vault_dir(&user.username),
         &query,
+    )?))
+}
+
+#[derive(Deserialize)]
+struct TagsQuery {
+    #[serde(default)]
+    q: String,
+    note_id: Option<String>,
+}
+
+async fn query_tags(
+    State(state): State<AppState>,
+    Auth(user): Auth,
+    Query(query): Query<TagsQuery>,
+) -> Result<Json<Vec<crate::tags::TagSuggest>>, AppError> {
+    require_ready(&user)?;
+    Ok(Json(notes::tags_in_query(
+        &state.vault_dir(&user.username),
+        &query.q,
+        query.note_id.as_deref(),
     )?))
 }
 

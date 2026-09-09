@@ -8,6 +8,55 @@ export function normalizeTag(raw: string): string | null {
   return s;
 }
 
+export type TagQuery = {
+  here: boolean;
+  chain: string[];
+  needle: string;
+};
+
+export function parseTagQuery(raw: string): TagQuery | null {
+  const q = raw.trim();
+  let here = false;
+  let rest = q;
+  if (rest.startsWith(">")) {
+    here = true;
+    rest = rest.slice(1).trimStart();
+  }
+  if (!rest) {
+    return here ? { here, chain: [], needle: "" } : null;
+  }
+  if (!rest.startsWith("#")) return null;
+  const parts = rest.split(">").map((part) => part.trim());
+  const chain: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const last = i === parts.length - 1;
+    const part = parts[i];
+    if (!part) {
+      if (last) return { here, chain, needle: "" };
+      return null;
+    }
+    if (!part.startsWith("#")) return null;
+    const name = part.slice(1);
+    if (/\s/.test(name)) return null;
+    if (last) return { here, chain, needle: name.toLowerCase() };
+    const tag = normalizeTag(name);
+    if (!tag) return null;
+    chain.push(tag);
+  }
+  return null;
+}
+
+export function formatTagQuery(here: boolean, chain: string[], last?: string): string {
+  const tags = last ? [...chain, last] : [...chain];
+  const body = tags.map((tag) => `#${tag}`).join(" > ");
+  if (here) return body ? `> ${body}` : ">";
+  return body;
+}
+
+export function isTagQueryInput(raw: string): boolean {
+  return parseTagQuery(raw) != null;
+}
+
 export function parseTagsField(raw: string): string[] {
   return uniqueTags(
     raw

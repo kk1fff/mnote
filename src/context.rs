@@ -121,6 +121,7 @@ pub struct SearchParams {
     pub weather: Option<String>,
     pub near: Option<String>,
     pub radius_m: Option<f64>,
+    pub note_id: Option<String>,
 }
 
 impl SearchParams {
@@ -915,7 +916,7 @@ pub fn search(
     let text_hits = if q.is_empty() {
         Vec::new()
     } else {
-        notes::search(vault, q)?
+        notes::search_in(vault, q, params.note_id.as_deref())?
     };
     if !params.has_filters() {
         if let Some(tag) = crate::tags::parse_tag_query(q) {
