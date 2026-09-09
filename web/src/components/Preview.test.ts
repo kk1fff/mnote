@@ -33,4 +33,18 @@ describe("Preview", () => {
     await wrapper.get("a[data-tag]").trigger("click");
     expect(openTag).toHaveBeenCalledWith("work");
   });
+
+  it("toggles a task checkbox when interactive", async () => {
+    const wrapper = mount(Preview, { props: { source: "- [ ] one\n- [x] two", interactive: true } });
+    const boxes = wrapper.findAll("input.task-checkbox");
+    expect(boxes).toHaveLength(2);
+    await boxes[0]!.trigger("click");
+    expect(wrapper.emitted("toggle")?.[0]?.[0]).toMatchObject({ content: "- [x] one\n- [x] two" });
+  });
+
+  it("does not toggle tasks when read-only", async () => {
+    const wrapper = mount(Preview, { props: { source: "- [ ] one" } });
+    await wrapper.get("input.task-checkbox").trigger("click");
+    expect(wrapper.emitted("toggle")).toBeUndefined();
+  });
 });

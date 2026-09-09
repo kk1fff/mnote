@@ -23,4 +23,29 @@ describe("markdown", () => {
     expect(html).toContain('src="/api/assets/018f0a20-7d2b-7d75-a5d2-cb7b4fb6e57c"');
     expect(html).toContain('data-asset-id="018f0a20-7d2b-7d75-a5d2-cb7b4fb6e57c"');
   });
+
+  it("renders task list checkboxes", () => {
+    const html = renderMarkdown("- [ ] one\n- [x] two\n  - [ ] nested");
+    expect(html).toContain('class="task-list-item"');
+    expect(html).toContain('data-task-line="0"');
+    expect(html).toContain('data-task-line="1"');
+    expect(html).toContain('data-task-line="2"');
+    expect(html).toContain("checked");
+    expect(html).toContain("one");
+    expect(html).not.toContain("[ ]");
+    expect(html).not.toContain("[x]");
+  });
+
+  it("keeps wiki links inside task items", () => {
+    const html = renderMarkdown("- [ ] see [[page]]");
+    expect(html).toContain('data-task-line="0"');
+    expect(html).toContain('data-wiki="page"');
+  });
+
+  it("does not treat fenced tasks as checkboxes", () => {
+    const html = renderMarkdown("```\n- [ ] no\n```\n- [ ] yes");
+    expect(html).toContain("- [ ] no");
+    expect(html.match(/task-checkbox/g)?.length).toBe(1);
+    expect(html).toContain('data-task-line="3"');
+  });
 });

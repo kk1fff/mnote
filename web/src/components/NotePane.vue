@@ -26,6 +26,7 @@ import { excerptAround } from "../lib/excerpt";
 import { live, type Live, type LiveEvent } from "../live";
 import { pendingExcerpt, setParkContext, showParkCapture } from "../parked";
 import { extractHashtags, openTag, pendingTagReveal } from "../lib/tags";
+import type { TaskChange } from "../lib/tasks";
 import { isDailyNote } from "../lib/calendar";
 import { rememberTitle, setPinned } from "../workspace";
 
@@ -333,6 +334,11 @@ function markGone() {
   remotes.value = [];
   deleteOpen.value = false;
   setStatus("Note not found");
+}
+
+function onTaskToggle(change: TaskChange) {
+  content.value = change.content;
+  onLiveChange(change);
 }
 
 function onLiveChange(change: { from: number; to: number; insert: string; content: string }) {
@@ -892,7 +898,7 @@ onBeforeUnmount(() => {
     </div>
     <div class="document-scroll">
       <div class="document-column">
-        <Preview v-if="preview" :source="content" />
+        <Preview v-if="preview" interactive :source="content" @toggle="onTaskToggle" />
         <Editor
           v-else
           ref="editor"

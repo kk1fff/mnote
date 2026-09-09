@@ -30,6 +30,17 @@ describe("Editor", () => {
     wrapper.unmount();
   });
 
+  it("marks task checkboxes and lights them when the modifier is held", async () => {
+    const wrapper = mount(Editor, { props: { modelValue: "- [ ] one\n- [x] two" } });
+    await flushPromises();
+    expect(wrapper.find(".cm-task").exists()).toBe(true);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Control", ctrlKey: true, bubbles: true }));
+    await flushPromises();
+    expect(wrapper.find(".cm-mod-task").exists()).toBe(true);
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: "Control", ctrlKey: false, bubbles: true }));
+    wrapper.unmount();
+  });
+
   it("reveals an excerpt", async () => {
     const wrapper = mount(Editor, { props: { modelValue: "aaa retry budget bbb" } });
     await flushPromises();

@@ -8,6 +8,39 @@ const md = new MarkdownIt({
   breaks: true,
 });
 
+md.core.ruler.after("inline", "task_lists", (state) => {
+  for (let i = 0; i < state.tokens.length; i += 1) {
+    const token = state.tokens[i];
+    if (token.type !== "list_item_open") continue;
+    let j = i + 1;
+    if (state.tokens[j]?.type === "paragraph_open") j += 1;
+    const inline = state.tokens[j];
+    if (inline?.type !== "inline") continue;
+    const mark = /^\[([ xX])\](?:\s|$)/.exec(inline.content);
+    if (!mark) continue;
+    const prefix = mark[0];
+    token.attrJoin("class", "task-list-item");
+    if (token.map) token.attrSet("data-task-line", String(token.map[0]));
+    token.attrSet("data-checked", mark[1] === " " ? "false" : "true");
+    inline.content = inline.content.slice(prefix.length);
+    const first = inline.children?.[0];
+    if (first?.type === "text" && first.content.startsWith(prefix)) {
+      first.content = first.content.slice(prefix.length);
+      if (!first.content) inline.children?.splice(0, 1);
+    }
+  }
+});
+
+const listItemOpen = md.renderer.rules.list_item_open;
+md.renderer.rules.list_item_open = (tokens, idx, options, env, self) => {
+  const token = tokens[idx];
+  const html = listItemOpen ? listItemOpen(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+  const line = token.attrGet("data-task-line");
+  if (line == null) return html;
+  const checked = token.attrGet("data-checked") === "true" ? " checked" : "";
+  return `${html}<input type="checkbox" class="task-checkbox" data-task-line="${escapeHtml(line)}"${checked}>`;
+};
+
 const image = md.renderer.rules.image;
 md.renderer.rules.image = (tokens, idx, options, env, self) => {
   const token = tokens[idx];

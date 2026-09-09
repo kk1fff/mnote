@@ -245,6 +245,59 @@ function editor(page) {
   return page.locator("[data-testid='pane-primary'] .cm-content, [data-testid='editor'] .cm-content").first();
 }
 
+const TODO_SAMPLE = `- [ ] Ship invite flow
+- [x] Write the outline
+  - [ ] Nested owner check
+  - [x] Nested done
+- [ ] Park capture copy
+`;
+
+async function openTodoNote(page) {
+  await openPicker(page);
+  await page.getByTestId("picker-input").fill("Todo list sample");
+  const existing = page.getByTestId("picker").getByRole("button", { name: "Todo list sample", exact: true });
+  await page.waitForTimeout(250);
+  if (await existing.count()) await existing.click();
+  else await page.getByTestId("picker-create").click();
+  await page.waitForSelector('[data-testid="editor"]');
+  await editor(page).click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.insertText(TODO_SAMPLE);
+  await page.waitForTimeout(200);
+}
+
+async function leavePreview(page) {
+  const pane = page.getByTestId("pane-primary");
+  const toggle = pane.getByTestId("mode-toggle");
+  if (await toggle.isVisible()) {
+    await toggle.getByRole("button", { name: "Edit" }).click();
+  } else {
+    await noteAction(page, "preview-toggle");
+  }
+  await pane.getByTestId("editor").waitFor();
+}
+
+async function shotTodos(page, prefix, { mod = true } = {}) {
+  await openTodoNote(page);
+  await shot(page, `${prefix}-todo-edit`);
+  if (mod) {
+    const cm = page.getByTestId("pane-primary").locator(".cm-editor");
+    await cm.evaluate((el) => el.classList.add("cm-mod-task"));
+    await shot(page, `${prefix}-todo-edit-mod`);
+    await cm.evaluate((el) => el.classList.remove("cm-mod-task"));
+  }
+  const pane = page.getByTestId("pane-primary");
+  const toggle = pane.getByTestId("mode-toggle");
+  if (await toggle.isVisible()) {
+    await toggle.getByRole("button", { name: "Preview" }).click();
+  } else {
+    await noteAction(page, "preview-toggle");
+  }
+  await pane.locator(".preview").waitFor();
+  await shot(page, `${prefix}-todo-preview`);
+  await leavePreview(page);
+}
+
 async function openDateSuggest(page) {
   const ed = editor(page);
   await ed.click();
@@ -290,6 +343,7 @@ if ((await editor(page).innerText()).trim().length < 8) {
 await captureSaveStatus(page, "31-unsaved-desktop-light", "32-saved-toast-desktop-light");
 await shot(page, "02-note-desktop-light");
 await shotModeToggle(page, "34");
+await shotTodos(page, "35");
 await page.goto(`${url}/journal`);
 await page.waitForSelector(".journal-browser");
 await shot(page, "02a-journal-desktop-light");
@@ -486,6 +540,7 @@ await page.waitForTimeout(150);
 await captureSaveStatus(page, "31b-unsaved-desktop-dark", "32b-saved-toast-desktop-dark");
 await shot(page, "08-note-desktop-dark");
 await shotModeToggle(page, "34b");
+await shotTodos(page, "35b");
 await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "08g-sidebar-calendar-folding-dark", "08d-sidebar-calendar-folded-dark");
   await shot(page, "15-tabs-dark");
   await shot(page, "17-split-dark");
@@ -543,6 +598,7 @@ await login(m);
 await m.waitForSelector('[data-testid="editor"]');
 await captureSaveStatus(m, "31c-unsaved-mobile", "32c-saved-toast-mobile");
 await shot(m, "10-note-mobile");
+await shotTodos(m, "35c", { mod: false });
 await openDateSuggest(m);
 await shot(m, "33i-date-suggest-mobile");
 await m.getByTestId("date-suggest-input").fill("mon");
@@ -600,6 +656,14 @@ await shot(m, "12c-mobile-nav-account");
   await m.waitForSelector("h1");
   await shot(m, "21c-images-mobile");
   await mobile.close();
+
+const mobileDark = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const mdark = await mobileDark.newPage();
+await mdark.addInitScript(() => localStorage.setItem("mnote-theme", "dark"));
+await login(mdark);
+await mdark.waitForSelector('[data-testid="editor"]');
+await shotTodos(mdark, "35d", { mod: false });
+await mobileDark.close();
 
 const loginDark = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const ld = await loginDark.newPage();

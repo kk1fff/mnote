@@ -4,10 +4,12 @@ import { useRouter } from "vue-router";
 import { api, rewriteApiUrls } from "../api";
 import { renderMarkdown } from "../lib/markdown";
 import { noteIdFromRoute, parseWikiPath, sameWikiPath } from "../lib/paths";
+import { toggleTaskLine, type TaskChange } from "../lib/tasks";
 import { openInWorkspace } from "../workspace";
 import { openTag } from "../lib/tags";
 
-const props = defineProps<{ source: string }>();
+const props = withDefaults(defineProps<{ source: string; interactive?: boolean }>(), { interactive: false });
+const emit = defineEmits<{ toggle: [change: TaskChange] }>();
 const router = useRouter();
 const html = computed(() => rewriteApiUrls(renderMarkdown(props.source)));
 const lightbox = ref<{ src: string; alt: string } | null>(null);
@@ -27,6 +29,15 @@ async function openWiki(target: string) {
 
 function onClick(event: MouseEvent) {
   const target = event.target;
+  if (target instanceof HTMLInputElement && target.classList.contains("task-checkbox")) {
+    event.preventDefault();
+    if (!props.interactive) return;
+    const line = Number(target.dataset.taskLine);
+    if (!Number.isInteger(line)) return;
+    const change = toggleTaskLine(props.source, line);
+    if (change) emit("toggle", change);
+    return;
+  }
   if (target instanceof HTMLImageElement && target.dataset.assetId) {
     lightbox.value = { src: target.currentSrc || target.src, alt: target.alt };
     return;
@@ -54,7 +65,7 @@ function onClick(event: MouseEvent) {
 </script>
 
 <template>
-  <div class="preview" v-html="html" @click="onClick" />
+  <div class="preview" :class="{ interactive: props.interactive }" v-html="html" @click="onClick" />
   <Teleport to="body">
     <div v-if="lightbox" class="sheet-scrim asset-lightbox" @click.self="lightbox = null">
       <section class="sheet" role="dialog" aria-modal="true" :aria-label="lightbox.alt || 'Image'">

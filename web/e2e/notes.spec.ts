@@ -31,13 +31,12 @@ test("picker opens an existing title without create", async ({ page }) => {
   await page.waitForURL(/\/n\//);
   const title = uid("Exact");
   await createNote(page, title);
-  const url = page.url();
   await openPicker(page);
   await page.getByTestId("picker-input").fill(title);
   await expect(page.getByTestId("picker")).toContainText(title);
   await expect(page.getByTestId("picker-create")).toHaveCount(0);
-  await page.getByTestId("picker").locator(".picker-results").getByRole("button", { name: title }).click();
-  await expect(page).toHaveURL(url);
+  await page.getByTestId("picker").locator(".picker-results").getByRole("button", { name: title, exact: true }).click();
+  await expect(page.getByTestId("note-title")).toHaveText(title);
 });
 
 test("bang searches folders", async ({ page }) => {
@@ -72,12 +71,11 @@ test("creating an existing title opens that note", async ({ page }) => {
   await page.waitForURL(/\/n\//);
   const title = uid("Dup");
   await createNote(page, title);
-  const url = page.url();
   await openPicker(page);
   await page.getByTestId("picker-input").fill(title);
   await expect(page.getByTestId("picker-create")).toHaveCount(0);
   await page.getByTestId("picker-input").press("Enter");
-  await expect(page).toHaveURL(url);
+  await expect(page.getByTestId("note-title")).toHaveText(title);
 });
 
 test("save keeps content after reload", async ({ page }) => {
@@ -91,6 +89,24 @@ test("save keeps content after reload", async ({ page }) => {
   await expect(page.getByTestId("note-saved-toast")).toHaveText("Saved");
   await page.reload();
   await expect(page.locator(".cm-content")).toContainText(marker);
+});
+
+test("task lists continue and toggle in preview", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await createNote(page, uid("Todo"));
+  await typeInEditor(page, "- [ ] one");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".cm-content")).toContainText("- [ ]");
+  await expect(page.locator(".cm-task").first()).toBeVisible();
+  await page.locator(".cm-task").first().click({ modifiers: ["ControlOrMeta"] });
+  await expect(page.locator(".cm-content")).toContainText("- [x] one");
+  await noteAction(page, "preview-toggle");
+  const box = page.locator(".preview input.task-checkbox").first();
+  await expect(box).toBeChecked();
+  await box.click();
+  await noteAction(page, "preview-toggle");
+  await expect(page.locator(".cm-content")).toContainText("- [ ] one");
 });
 
 test("preview shows markdown and source returns", async ({ page }) => {

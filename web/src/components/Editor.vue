@@ -19,6 +19,7 @@ import { api, type NoteMeta } from "../api";
 import { isDailyNote } from "../lib/calendar";
 import { extractHashtags } from "../lib/tags";
 import { matchSlashCommands, type SlashCommand } from "../lib/commands";
+import { taskBoxInLine } from "../lib/tasks";
 import { buildPageItems, completeTag, completeWiki, detectTrigger } from "../lib/suggest";
 import type { TagSuggest } from "../api";
 import DateSuggest from "./DateSuggest.vue";
@@ -183,10 +184,27 @@ function markdownDecorations(state: EditorState): DecorationSet {
     if (list) {
       const from = line.from + list[1].length;
       decos.push(Decoration.mark({ class: "cm-md-marker" }).range(from, from + list[2].length));
+      const task = taskBoxInLine(line.text);
+      if (task) {
+        const boxFrom = line.from + task.from;
+        decos.push(Decoration.mark({ class: "cm-task" }).range(boxFrom, boxFrom + 3));
+      }
     }
   }
   return Decoration.set(decos, true);
 }
+
+const setTaskMod = StateEffect.define<boolean>();
+const taskModField = StateField.define<boolean>({
+  create: () => false,
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setTaskMod)) return effect.value;
+    }
+    return value;
+  },
+  provide: (field) => EditorView.editorAttributes.from(field, (on) => ({ class: on ? "cm-mod-task" : "" })),
+});
 
 const remotesField = StateField.define<RemoteCaret[]>({
   create: () => [],
@@ -510,6 +528,7 @@ onMounted(() => {
         flashField,
         lineFlashField,
         markdownHierarchy,
+        taskModField,
         EditorView.updateListener.of((update) => {
           const remote = update.transactions.some((tr) => tr.annotation(remoteAnn));
           if (update.docChanged) {
@@ -552,6 +571,24 @@ onMounted(() => {
         }),
         EditorView.domEventHandlers({
           mousedown(event, vw) {
+            if ((event.metaKey || event.ctrlKey) && !props.disabled) {
+              const pos = vw.posAtCoords({ x: event.clientX, y: event.clientY });
+              if (pos != null) {
+                const line = vw.state.doc.lineAt(pos);
+                const task = taskBoxInLine(line.text);
+                if (task) {
+                  const from = line.from + task.from;
+                  if (pos >= from && pos <= from + 3) {
+                    event.preventDefault();
+                    const inner = from + 1;
+                    vw.dispatch({
+                      changes: { from: inner, to: inner + 1, insert: task.checked ? " " : "x" },
+                    });
+                    return true;
+                  }
+                }
+              }
+            }
             if (!props.showContext) return false;
             const pos = vw.posAtCoords({ x: event.clientX, y: event.clientY });
             if (pos == null) return false;
@@ -599,6 +636,9 @@ onMounted(() => {
   }
   syncContextLines();
   document.addEventListener("mousedown", onDocClick);
+  window.addEventListener("keydown", onTaskMod);
+  window.addEventListener("keyup", onTaskMod);
+  window.addEventListener("blur", onTaskModBlur);
 });
 
 watch(
@@ -693,8 +733,22 @@ function revealExcerpt(quote: string): boolean {
 
 defineExpose({ excerpt, revealExcerpt, revealRange, revealTag, currentOrdinal, lineCoords, insertMarkdown });
 
+function onTaskMod(event: KeyboardEvent) {
+  const on = event.metaKey || event.ctrlKey;
+  if (!view || view.state.field(taskModField) === on) return;
+  view.dispatch({ effects: setTaskMod.of(on) });
+}
+
+function onTaskModBlur() {
+  if (!view || !view.state.field(taskModField)) return;
+  view.dispatch({ effects: setTaskMod.of(false) });
+}
+
 onBeforeUnmount(() => {
   document.removeEventListener("mousedown", onDocClick);
+  window.removeEventListener("keydown", onTaskMod);
+  window.removeEventListener("keyup", onTaskMod);
+  window.removeEventListener("blur", onTaskModBlur);
   closeMenu();
   window.clearTimeout(lineFlashTimer);
   view?.destroy();
