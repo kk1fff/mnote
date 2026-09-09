@@ -244,10 +244,12 @@ function preloadScript(): string {
 }
 
 function createWindow() {
+  const icon = path.join(here, "../build/icon.png");
   win = new BrowserWindow({
     width: 1200,
     height: 800,
     title: flavor === "remote" ? "mnote Remote" : "mnote",
+    ...(fs.existsSync(icon) ? { icon } : {}),
     webPreferences: {
       preload: preloadScript(),
       additionalArguments: [`--mnote-flavor=${flavor}`],

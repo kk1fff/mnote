@@ -166,7 +166,9 @@ button.icon-btn,
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
+  position: relative;
   background: var(--bg);
+  transition: grid-template-columns 0.16s ease;
 }
 
 .nav-toggle,
@@ -195,12 +197,28 @@ button.icon-btn,
   background: var(--bg-sidebar);
 }
 
+.sidebar-fold-btn {
+  display: none;
+}
+
 .sidebar .brand {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 1rem;
+}
+
+.brand-id {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand-mark {
+  display: block;
+  flex-shrink: 0;
 }
 
 .brand-copy {
@@ -1641,6 +1659,17 @@ button.icon-btn,
   gap: 0.8rem;
 }
 
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0 0 0.4rem;
+}
+
+.auth-brand h1 {
+  margin: 0;
+}
+
 .card h1 {
   margin: 0 0 0.4rem;
 }
@@ -1923,6 +1952,10 @@ button.icon-btn,
     grid-template-columns: 1fr;
   }
 
+  .sidebar-fold-btn {
+    display: none;
+  }
+
   .nav-toggle,
   .nav-close {
     display: inline-flex;
@@ -2063,6 +2096,102 @@ button.icon-btn,
   :root {
     --bar-height: 2.75rem;
     --sidebar-width: 15rem;
+  }
+
+  .sidebar-fold-btn {
+    position: absolute;
+    z-index: 4;
+    top: 0.9rem;
+    left: calc(var(--sidebar-width) - 2.35rem);
+    display: grid;
+    place-items: center;
+    width: 1.7rem;
+    height: 1.7rem;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    transition: left 0.16s ease, width 0.16s ease, height 0.16s ease, background 0.16s ease, color 0.16s ease;
+  }
+
+  .sidebar-fold-btn .nav-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .sidebar-fold-btn:hover {
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+    color: var(--text);
+  }
+
+  .app-shell.sidebar-folded {
+    --sidebar-width: 3rem;
+  }
+
+  .app-shell.sidebar-folded .sidebar-fold-btn {
+    top: 0.95rem;
+    left: calc(var(--sidebar-width) - 0.75rem);
+    width: 1.55rem;
+    height: 1.55rem;
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: 0 0 0 1px var(--border), 0 1px 3px rgb(17 19 24 / 10%);
+    color: var(--text);
+  }
+
+  .app-shell.sidebar-folded .sidebar-fold-btn .nav-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .app-shell.sidebar-folded .sidebar-fold-btn:hover {
+    background: var(--accent-soft);
+    box-shadow: 0 0 0 1px transparent;
+  }
+
+  .app-shell.sidebar-folded .sidebar {
+    padding: 0.75rem 0.35rem;
+    align-items: stretch;
+  }
+
+  .app-shell.sidebar-folded .brand {
+    justify-content: center;
+    padding: 0;
+    margin-bottom: 0.6rem;
+  }
+
+  .app-shell.sidebar-folded .rail-label,
+  .app-shell.sidebar-folded .brand-copy,
+  .app-shell.sidebar-folded .section-label,
+  .app-shell.sidebar-folded .note-library,
+  .app-shell.sidebar-folded .sidebar-cal-section,
+  .app-shell.sidebar-folded .sidebar-search kbd,
+  .app-shell.sidebar-folded .parked-count {
+    display: none;
+  }
+
+  .app-shell.sidebar-folded .sidebar-search,
+  .app-shell.sidebar-folded .sidebar-create,
+  .app-shell.sidebar-folded .sidebar-link,
+  .app-shell.sidebar-folded .parked-button,
+  .app-shell.sidebar-folded .account-chip {
+    justify-content: center;
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+  }
+
+  .app-shell.sidebar-folded .sidebar-create {
+    background: transparent !important;
+    color: var(--text) !important;
+  }
+
+  .app-shell.sidebar-folded .sidebar-create:hover {
+    background: color-mix(in srgb, var(--text) 8%, transparent) !important;
+  }
+
+  .app-shell.sidebar-folded .park-row {
+    justify-content: center;
   }
 
   .tab-strip {
@@ -2334,13 +2463,16 @@ button:disabled { cursor: default; opacity: 0.55; }
 
 .bar { height: auto; min-height: 9.6rem; align-items: flex-start; padding: 2rem max(2rem, env(safe-area-inset-right)) 1.25rem max(2.5rem, env(safe-area-inset-left)); border: 0; }
 .note-heading { --title-h: 2.8rem; --folder-h: 1.4rem; justify-content: flex-start; gap: 0.35rem; height: auto; overflow: visible; }
-.note-breadcrumb { margin: 0 0 0.15rem; color: var(--text-muted); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em; }
+.note-breadcrumb { display: flex; align-items: center; margin: 0 0 0.15rem; color: var(--text-muted); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em; }
+.crumb-link { margin: 0; padding: 0; min-height: 0; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; }
+.crumb-link:hover { color: var(--text); }
+.crumb-sep { opacity: 0.55; padding: 0 0.2rem; }
 .bar > h1, .note-heading h1, .note-meta-form .title-input { height: var(--title-h); min-height: var(--title-h); max-height: var(--title-h); padding: 0; border-radius: 0; font-size: 2rem; font-weight: 720; line-height: 1.15; letter-spacing: -0.045em; }
 .note-folder-row { height: var(--folder-h); gap: 0.4rem; }
 .note-folder, .note-folder-row .folder-input { height: var(--folder-h); min-height: var(--folder-h); max-height: var(--folder-h); padding: 0; color: var(--text-muted); font-size: 0.8rem; line-height: var(--folder-h); }
 .note-folder.is-empty::after { content: "Add folder"; }
 .note-folder.is-journal::after { content: none; }
-.note-tag { height: 1.35rem; max-height: 1.35rem; padding: 0 0.45rem; border: 0; border-radius: 999px; background: #edf1f8; color: #5e6b85; font-size: 0.72rem; line-height: 1.35rem; }
+.note-tag { height: 1.35rem; max-height: 1.35rem; padding: 0 0.45rem; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--text) 8%, var(--surface)); color: var(--text-muted); font-size: 0.72rem; line-height: 1.35rem; }
 .actions { padding-top: 0.05rem; }
 .mode-toggle { --mode-x: 0; position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; padding: 0.15rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); touch-action: none; user-select: none; }
 .mode-toggle.is-preview { --mode-x: 1; }

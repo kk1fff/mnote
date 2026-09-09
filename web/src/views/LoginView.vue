@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ApiError } from "../api";
+import BrandMark from "../components/BrandMark.vue";
 import { login } from "../session";
 
 const username = ref("");
@@ -32,7 +33,10 @@ async function submit() {
 <template>
   <main class="auth">
     <form class="card" @submit.prevent="submit">
-      <h1>mnote</h1>
+      <div class="auth-brand">
+        <BrandMark />
+        <h1>mnote</h1>
+      </div>
       <p class="muted">Use the username and temporary password your admin sent you.</p>
       <label>
         Username

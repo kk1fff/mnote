@@ -1,5 +1,6 @@
 appId: app.mnote.desktop
 productName: mnote
+icon: build/icon.png
 directories:
   output: release/full
 files:

@@ -4,7 +4,9 @@ import { useRoute } from "vue-router";
 import { refreshParked, registerParkedList, showParkCapture } from "../parked";
 import type { PickerCollection } from "../lib/picker";
 import { registerTagOpen } from "../lib/tags";
+import { sidebarPrefs, toggleSidebarSection } from "../sidebar";
 import { registerPicker, type OpenMode } from "../workspace";
+import NavIcon from "./NavIcon.vue";
 import NotePicker from "./NotePicker.vue";
 import ParkCapture from "./ParkCapture.vue";
 import ParkedPanel from "./ParkedPanel.vue";
@@ -64,7 +66,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'nav-open': open }">
+  <div class="app-shell" :class="{ 'nav-open': open, 'sidebar-folded': sidebarPrefs.sidebarFolded }">
     <button class="nav-scrim" type="button" aria-label="Close menu" @click="open = false" />
     <Sidebar
       ref="sidebar"
@@ -73,6 +75,17 @@ onBeforeUnmount(() => {
       @create-note="picker?.showCreate()"
       @close="open = false"
     />
+    <button
+      type="button"
+      class="sidebar-fold-btn"
+      data-testid="sidebar-fold"
+      :title="sidebarPrefs.sidebarFolded ? 'Open sidebar' : 'Fold sidebar'"
+      :aria-label="sidebarPrefs.sidebarFolded ? 'Open sidebar' : 'Fold sidebar'"
+      :aria-expanded="!sidebarPrefs.sidebarFolded"
+      @click="toggleSidebarSection('sidebarFolded')"
+    >
+      <NavIcon :name="sidebarPrefs.sidebarFolded ? 'chevronRight' : 'panelClose'" />
+    </button>
     <slot :toggle="() => (open = !open)" />
     <NotePicker ref="picker" @created="sidebar?.load()" />
     <ParkCapture />

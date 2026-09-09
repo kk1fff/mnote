@@ -89,9 +89,9 @@ function label(tab: Tab) {
           ×
         </span>
       </button>
+      <button type="button" class="tab-add" data-testid="tab-add" title="Open in new tab" aria-label="Open in new tab" @click="showPicker('add')">
+        <NavIcon name="plus" />
+      </button>
     </div>
-    <button type="button" class="tab-add" data-testid="tab-add" title="Open in new tab" aria-label="Open in new tab" @click="showPicker('add')">
-      <NavIcon name="plus" />
-    </button>
   </div>
 </template>
