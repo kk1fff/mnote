@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { uid } from "./env";
-import { createNote, noteAction, openPicker, typeInEditor, waitSaved } from "./helpers";
+import { createNote, noteAction, openPicker, pasteInEditor, typeInEditor, waitSaved } from "./helpers";
 
 test("today opens a dated note", async ({ page }) => {
   await page.goto("/");
@@ -247,6 +247,32 @@ test("recent row opens a note", async ({ page }) => {
   await page.waitForURL(/\/n\//);
   await page.getByTestId("sidebar").locator(".recent-note", { hasText: title }).click();
   await expect(page.getByTestId("note-title")).toHaveText(title);
+});
+
+test("paste strips duplicate list markers and keeps pasted checkboxes", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await createNote(page, uid("Paste list"));
+  await typeInEditor(page, "- [ ] one");
+  await page.keyboard.press("Enter");
+  await pasteInEditor(page, "- [ ] two\n- [x] three");
+  await expect(page.locator(".cm-content")).toContainText("- [ ] two");
+  await expect(page.locator(".cm-content")).toContainText("- [x] three");
+  await expect(page.locator(".cm-content")).not.toContainText("- [ ] - [ ]");
+  await page.keyboard.press("Enter");
+  await pasteInEditor(page, "- [x] done");
+  await expect(page.locator(".cm-content")).toContainText("- [x] done");
+  await expect(page.locator(".cm-content")).not.toContainText("- [ ] done");
+});
+
+test("shift+ctrl+v pastes list markers raw", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await createNote(page, uid("Raw paste"));
+  await typeInEditor(page, "- [ ] one");
+  await page.keyboard.press("Enter");
+  await pasteInEditor(page, "- [ ] two", true);
+  await expect(page.locator(".cm-content")).toContainText("- [ ] - [ ] two");
 });
 
 test("pasting a png inserts an asset", async ({ page }) => {

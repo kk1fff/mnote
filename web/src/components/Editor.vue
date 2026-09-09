@@ -15,6 +15,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { excerptAround, findExcerpt } from "../lib/excerpt";
 import { imageFileFromList, insertAt, isAllowedImage } from "../lib/images";
+import { preprocessPaste } from "../lib/paste";
 import { api, type NoteMeta } from "../api";
 import { isDailyNote } from "../lib/calendar";
 import { extractHashtags } from "../lib/tags";
@@ -70,6 +71,8 @@ let searchTimer: number | undefined;
 let searchId = 0;
 let dirtyLine = -1;
 let lineFlashTimer: number | undefined;
+let rawPaste = false;
+let rawPasteTimer: number | undefined;
 
 const remoteAnn = Annotation.define<boolean>();
 const setRemotes = StateEffect.define<RemoteCaret[]>();
@@ -595,11 +598,43 @@ onMounted(() => {
             emit("select-paragraph", vw.state.doc.lineAt(pos).number - 1);
             return false;
           },
-          paste(event) {
+          paste(event, vw) {
             const file = imageFileFromList(event.clipboardData?.items ?? []);
-            if (!file) return false;
+            if (file) {
+              event.preventDefault();
+              void handleImage(file);
+              return true;
+            }
+            const raw = rawPaste;
+            rawPaste = false;
+            window.clearTimeout(rawPasteTimer);
+            if (raw) return false;
+            const text = event.clipboardData?.getData("text/plain");
+            if (!text) return false;
+            const sel = vw.state.selection.main;
+            const line = vw.state.doc.lineAt(sel.from);
+            if (sel.to > line.to) return false;
+            const result = preprocessPaste(text, {
+              beforeCursor: line.text.slice(0, sel.from - line.from),
+              afterCursor: line.text.slice(sel.to - line.from),
+            });
+            const box = result.checkbox;
+            const task = box !== undefined ? taskBoxInLine(line.text) : null;
+            const flip = Boolean(task && box !== undefined && task.checked !== box);
+            if (result.text === text && !flip) return false;
             event.preventDefault();
-            void handleImage(file);
+            const changes = [];
+            if (flip && task && box !== undefined) {
+              const inner = line.from + task.from + 1;
+              changes.push({ from: inner, to: inner + 1, insert: box ? "x" : " " });
+            }
+            if (result.text !== text || sel.from !== sel.to) {
+              changes.push({ from: sel.from, to: sel.to, insert: result.text });
+            }
+            vw.dispatch({
+              changes,
+              selection: { anchor: sel.from + result.text.length },
+            });
             return true;
           },
           drop(event) {
@@ -637,6 +672,7 @@ onMounted(() => {
   syncContextLines();
   document.addEventListener("mousedown", onDocClick);
   window.addEventListener("keydown", onTaskMod);
+  window.addEventListener("keydown", onRawPasteKey);
   window.addEventListener("keyup", onTaskMod);
   window.addEventListener("blur", onTaskModBlur);
 });
@@ -733,6 +769,16 @@ function revealExcerpt(quote: string): boolean {
 
 defineExpose({ excerpt, revealExcerpt, revealRange, revealTag, currentOrdinal, lineCoords, insertMarkdown });
 
+function onRawPasteKey(event: KeyboardEvent) {
+  if (event.shiftKey && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
+    rawPaste = true;
+    window.clearTimeout(rawPasteTimer);
+    rawPasteTimer = window.setTimeout(() => {
+      rawPaste = false;
+    }, 1000);
+  }
+}
+
 function onTaskMod(event: KeyboardEvent) {
   const on = event.metaKey || event.ctrlKey;
   if (!view || view.state.field(taskModField) === on) return;
@@ -747,8 +793,10 @@ function onTaskModBlur() {
 onBeforeUnmount(() => {
   document.removeEventListener("mousedown", onDocClick);
   window.removeEventListener("keydown", onTaskMod);
+  window.removeEventListener("keydown", onRawPasteKey);
   window.removeEventListener("keyup", onTaskMod);
   window.removeEventListener("blur", onTaskModBlur);
+  window.clearTimeout(rawPasteTimer);
   closeMenu();
   window.clearTimeout(lineFlashTimer);
   view?.destroy();
