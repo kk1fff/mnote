@@ -2243,7 +2243,7 @@ button:disabled { cursor: default; opacity: 0.55; }
   --radius-lg: 12px;
 }
 .sidebar { border-right-color: rgb(214 220 230 / 70%); }
-.sidebar-search { min-height: 2.25rem; border: 0 !important; background: rgb(255 255 255 / 72%) !important; }
+.sidebar-search { min-height: 2.25rem; border: 0 !important; background: color-mix(in srgb, var(--surface) 82%, transparent) !important; }
 .sidebar-create { min-height: 2.4rem; margin-top: 0.6rem; border: 0 !important; background: var(--accent) !important; color: var(--accent-fg) !important; font-weight: 600; }
 .sidebar-create:hover { background: color-mix(in srgb, var(--accent), #000 10%) !important; }
 .parked-button, .sidebar-link { min-height: 2.2rem; padding: 0.35rem 0.55rem; border-radius: 7px; font-size: 0.84rem; }
