@@ -244,6 +244,7 @@ describe("Sidebar", () => {
       routes: [
         { path: "/", component: { template: "<div />" } },
         { path: "/images", component: { template: "<div />" } },
+        { path: "/notes", component: { template: "<div />" } },
         { path: "/journal", component: { template: "<div />" } },
         { path: "/n/:id", component: { template: "<div />" } },
         { path: "/today", component: { template: "<div />" } },
@@ -258,6 +259,9 @@ describe("Sidebar", () => {
     expect(wrapper.text()).toContain("Images");
     expect(wrapper.text()).toContain("Favorites");
     expect(wrapper.text()).toContain("Tags");
+    await wrapper.get('[data-testid="sidebar-notes"]').trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/notes");
     await wrapper.get('[data-testid="sidebar-images"]').trigger("click");
     await flushPromises();
     expect(router.currentRoute.value.path).toBe("/images");

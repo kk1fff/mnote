@@ -258,6 +258,9 @@ await shot(page, "02-note-desktop-light");
 await page.goto(`${url}/journal`);
 await page.waitForSelector(".journal-browser");
 await shot(page, "02a-journal-desktop-light");
+await page.goto(`${url}/notes`);
+await page.waitForSelector(".notes-browser");
+await shot(page, "02b-notes-desktop-light");
 await page.goto(`${url}/today`);
 await page.waitForSelector('[data-testid="editor"]');
 
@@ -474,6 +477,9 @@ await closeSheet(page);
 await page.goto(`${url}/images`);
 await page.waitForSelector("h1");
 await shot(page, "21b-images-dark");
+await page.getByTestId("sidebar-notes").click();
+await page.waitForSelector(".notes-browser");
+await shot(page, "02c-notes-desktop-dark");
 await desktop.close();
 
 const mobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -486,6 +492,9 @@ await shot(m, "10-note-mobile");
 await m.goto(`${url}/journal`);
 await m.waitForSelector(".journal-browser");
 await shot(m, "10a-journal-mobile");
+await m.goto(`${url}/notes`);
+await m.waitForSelector(".notes-browser");
+await shot(m, "10b-notes-mobile");
 await m.goto(`${url}/today`);
 await m.waitForSelector('[data-testid="editor"]');
 try {

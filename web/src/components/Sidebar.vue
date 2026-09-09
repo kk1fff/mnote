@@ -145,6 +145,10 @@ function openImages() {
   void router.push("/images");
 }
 
+function openNotes() {
+  void router.push("/notes");
+}
+
 function openJournal() {
   void router.push("/journal");
 }
@@ -313,7 +317,7 @@ defineExpose({ load });
       </div>
       <div class="sidebar-group library-group">
       <p class="section-label">Library</p>
-      <button type="button" class="sidebar-link" :class="{ active: route.name === 'note' && !activeDaily }" @click="router.push('/today')">
+      <button type="button" class="sidebar-link" data-testid="sidebar-notes" :class="{ active: route.name === 'notes' || (route.name === 'note' && !activeDaily) }" @click="openNotes">
         <NavIcon name="note" />Notes
       </button>
       <button type="button" class="sidebar-link" data-testid="sidebar-journal" :class="{ active: route.name === 'journal' || !!activeDaily }" @click="openJournal">

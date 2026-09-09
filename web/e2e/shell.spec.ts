@@ -5,9 +5,12 @@ import { createNote, uid } from "./helpers";
 test("sidebar library and organize destinations open", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);
+  await page.getByTestId("sidebar-notes").click();
+  await expect(page.getByRole("heading", { name: "Notes" })).toBeVisible();
+  await expect(page).toHaveURL(/\/notes/);
   await page.getByTestId("sidebar-images").click();
   await expect(page.getByRole("heading", { name: "Images" })).toBeVisible();
-  await page.goBack();
+  await page.goto("/");
   await page.waitForURL(/\/n\//);
   await page.getByTestId("sidebar-favorites").click();
   await expect(page.getByTestId("picker-back")).toBeVisible();
