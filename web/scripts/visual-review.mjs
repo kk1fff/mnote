@@ -224,6 +224,19 @@ function editor(page) {
   return page.locator("[data-testid='pane-primary'] .cm-content, [data-testid='editor'] .cm-content").first();
 }
 
+async function openDateSuggest(page) {
+  const ed = editor(page);
+  await ed.click();
+  await page.keyboard.press("Escape").catch(() => undefined);
+  await page.waitForSelector('[data-testid="suggest"]', { state: "hidden", timeout: 2000 }).catch(() => undefined);
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Escape").catch(() => undefined);
+  await page.waitForSelector('[data-testid="suggest"]', { state: "hidden", timeout: 2000 }).catch(() => undefined);
+  await page.keyboard.type("@");
+  await page.waitForSelector('[data-testid="date-suggest"]');
+}
+
 async function barHeight(page) {
   return page.locator(".bar").first().evaluate((el) => el.getBoundingClientRect().height);
 }
@@ -321,6 +334,17 @@ await page.keyboard.press("Escape");
 await page.keyboard.type("[[");
 await page.waitForSelector('[data-testid="suggest"]');
 await shot(page, "02c-wiki-light");
+await page.keyboard.press("Escape");
+await openDateSuggest(page);
+await shot(page, "33-date-suggest-light");
+await page.getByTestId("date-suggest-input").fill("mon");
+await shot(page, "33b-date-suggest-mon-light");
+await page.getByTestId("date-suggest-input").fill("14");
+await shot(page, "33c-date-suggest-14-light");
+await page.getByTestId("date-suggest-input").fill("9/14");
+await shot(page, "33d-date-suggest-slash-light");
+await page.getByTestId("date-suggest-input").fill("xyz");
+await shot(page, "33e-date-suggest-unmatched-light");
 await page.keyboard.press("Escape");
 
 await page.getByRole("button", { name: "More actions" }).click();
@@ -466,6 +490,13 @@ await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "08g-sidebar-cal
   await page.waitForSelector('[data-testid="suggest"]');
   await shot(page, "08b-slash-dark");
 await page.keyboard.press("Escape");
+await openDateSuggest(page);
+await shot(page, "33f-date-suggest-dark");
+await page.getByTestId("date-suggest-input").fill("mon");
+await shot(page, "33g-date-suggest-mon-dark");
+await page.getByTestId("date-suggest-input").fill("xyz");
+await shot(page, "33h-date-suggest-unmatched-dark");
+await page.keyboard.press("Escape");
 await noteAction(page, "history");
 await page.waitForSelector('[data-testid="history-panel"]');
 await shot(page, "09-history-dark");
@@ -489,6 +520,11 @@ await login(m);
 await m.waitForSelector('[data-testid="editor"]');
 await captureSaveStatus(m, "31c-unsaved-mobile", "32c-saved-toast-mobile");
 await shot(m, "10-note-mobile");
+await openDateSuggest(m);
+await shot(m, "33i-date-suggest-mobile");
+await m.getByTestId("date-suggest-input").fill("mon");
+await shot(m, "33j-date-suggest-mon-mobile");
+await m.keyboard.press("Escape");
 await m.goto(`${url}/journal`);
 await m.waitForSelector(".journal-browser");
 await shot(m, "10a-journal-mobile");
@@ -584,6 +620,9 @@ for (const mobile of [false, true]) {
     else await p.getByTestId("picker-create").click();
     await p.waitForSelector('[data-testid="editor"]');
     await p.waitForLoadState("networkidle");
+    await openDateSuggest(p);
+    await shot(p, `33k-date-suggest-${label}`);
+    await p.keyboard.press("Escape");
     await editor(p).click();
     await p.keyboard.press("ControlOrMeta+a");
     await p.keyboard.insertText("<<<<<<< this device\nFirst idea\n=======\nSecond idea\n>>>>>>> other device");

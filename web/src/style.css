@@ -1499,6 +1499,63 @@ button.icon-btn,
   font-weight: 600;
 }
 
+.date-suggest {
+  position: fixed;
+  z-index: 20;
+  width: 17.5rem;
+  max-width: calc(100vw - 16px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+
+.date-suggest-field input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.9rem;
+  outline: 0;
+}
+
+.date-suggest-field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: 6px;
+}
+
+.date-suggest-candidate {
+  margin: 0;
+  padding: 0.35rem 0.75rem 0.15rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.date-suggest-cal {
+  padding: 0.2rem 0.5rem 0.55rem;
+}
+
+.date-suggest .sidebar-cal-grid {
+  grid-template-rows: auto repeat(6, 2rem);
+}
+
+.date-suggest .sidebar-cal-day {
+  height: 2rem;
+  font-size: 0.8rem;
+}
+
 .cm-remote-sel {
   background: var(--selection);
 }
@@ -2135,6 +2192,10 @@ button.icon-btn,
   .suggest-menu button {
     min-height: 1.85rem;
     padding: 0.28rem 0.5rem;
+  }
+
+  .date-suggest-field input {
+    padding: 0.5rem 0.65rem;
   }
 
   .park-capture {

@@ -16,10 +16,12 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { excerptAround, findExcerpt } from "../lib/excerpt";
 import { imageFileFromList, insertAt, isAllowedImage } from "../lib/images";
 import { api, type NoteMeta } from "../api";
+import { isDailyNote } from "../lib/calendar";
 import { extractHashtags } from "../lib/tags";
 import { matchSlashCommands, type SlashCommand } from "../lib/commands";
 import { buildPageItems, completeTag, completeWiki, detectTrigger } from "../lib/suggest";
 import type { TagSuggest } from "../api";
+import DateSuggest from "./DateSuggest.vue";
 
 export type RemoteCaret = { id: string; from: number; to: number };
 
@@ -58,6 +60,9 @@ const menu = ref<{
 } | null>(null);
 const selected = ref(0);
 const menuEl = ref<HTMLDivElement | null>(null);
+const dateSuggest = ref<{ focus: () => void; root: HTMLElement | null } | null>(null);
+const dateMenu = ref<{ from: number } | null>(null);
+const journalDates = ref(new Set<string>());
 const menuPos = ref({ top: 0, left: 0 });
 let view: EditorView | null = null;
 let searchTimer: number | undefined;
@@ -225,26 +230,63 @@ const remotesPlugin = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 );
 
-function placeMenu(from: number, measured = false) {
+function placePopover(from: number, el: HTMLElement | null, fallbackWidth: number, measured = false) {
   if (!view) return;
   const coords = view.coordsAtPos(from);
   if (!coords) return;
   const pad = 8;
   const gap = 6;
-  const width = menuEl.value?.offsetWidth || 240;
-  const height = menuEl.value?.offsetHeight || 0;
+  const width = el?.offsetWidth || fallbackWidth;
+  const height = el?.offsetHeight || 0;
   const left = Math.min(Math.max(pad, coords.left), window.innerWidth - width - pad);
   let top = coords.bottom + gap;
   if (height && top + height + pad > window.innerHeight) {
     top = Math.max(pad, coords.top - height - gap);
   }
   menuPos.value = { top, left };
-  if (!height && !measured) void nextTick(() => placeMenu(from, true));
+  if (!height && !measured) void nextTick(() => placePopover(from, el, fallbackWidth, true));
+}
+
+function placeMenu(from: number, measured = false) {
+  placePopover(from, menuEl.value, 240, measured);
+}
+
+function placeDateMenu(from: number, measured = false) {
+  placePopover(from, dateSuggest.value?.root ?? null, 280, measured);
 }
 
 function closeMenu() {
   menu.value = null;
   window.clearTimeout(searchTimer);
+}
+
+function cancelDateMenu() {
+  const from = dateMenu.value?.from;
+  dateMenu.value = null;
+  if (from == null || !view) return;
+  if (view.state.doc.sliceString(from, from + 1) === "@") replaceRange(from, "");
+  else view.focus();
+}
+
+function acceptDate(date: string) {
+  const from = dateMenu.value?.from;
+  dateMenu.value = null;
+  if (from == null) return;
+  replaceRange(from, completeWiki(date));
+}
+
+async function openDateMenu(from: number) {
+  dateMenu.value = { from };
+  menu.value = null;
+  const notes = await api.listNotes().catch(() => []);
+  if (!dateMenu.value) return;
+  journalDates.value = new Set(notes.filter((note) => isDailyNote(note)).map((note) => note.title));
+  await nextTick();
+  if (!dateMenu.value) return;
+  placeDateMenu(from);
+  dateSuggest.value?.focus();
+  await nextTick();
+  if (dateMenu.value) placeDateMenu(from, true);
 }
 
 function setCommandMenu(from: number, query: string) {
@@ -325,8 +367,18 @@ function accept(index = selected.value) {
 async function syncMenu() {
   if (!view) return;
   const trigger = detectTrigger(view.state.doc.toString(), view.state.selection.main.head);
+  if (dateMenu.value) {
+    if (!trigger || trigger.mode !== "date") dateMenu.value = null;
+    return;
+  }
   if (!trigger) {
     closeMenu();
+    return;
+  }
+  if (trigger.mode === "date") {
+    window.clearTimeout(searchTimer);
+    closeMenu();
+    void openDateMenu(trigger.from);
     return;
   }
   if (trigger.mode === "command") {
@@ -370,6 +422,13 @@ async function syncMenu() {
 }
 
 function onMenuKey(key: string): boolean {
+  if (dateMenu.value) {
+    if (key === "Escape") {
+      cancelDateMenu();
+      return true;
+    }
+    return false;
+  }
   if (!menu.value?.items.length) return false;
   if (key === "ArrowDown") {
     selected.value = (selected.value + 1) % menu.value.items.length;
@@ -393,6 +452,11 @@ function onMenuKey(key: string): boolean {
 function onDocClick(event: MouseEvent) {
   const el = event.target;
   if (!(el instanceof Node)) return;
+  if (dateMenu.value) {
+    if (el instanceof Element && el.closest("[data-testid='date-suggest']")) return;
+    cancelDateMenu();
+    return;
+  }
   if (host.value?.contains(el)) return;
   if (el instanceof Element && el.closest(".suggest-menu")) return;
   closeMenu();
@@ -641,6 +705,14 @@ onBeforeUnmount(() => {
 <template>
   <div ref="host" class="editor" data-testid="editor" />
   <Teleport to="body">
+    <DateSuggest
+      v-if="dateMenu"
+      ref="dateSuggest"
+      :journal-dates="journalDates"
+      :style="{ top: `${menuPos.top}px`, left: `${menuPos.left}px` }"
+      @insert="acceptDate"
+      @cancel="cancelDateMenu"
+    />
     <div
       v-if="menu"
       ref="menuEl"

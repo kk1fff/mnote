@@ -17,6 +17,14 @@ describe("suggest", () => {
     expect(detectTrigger("[[a\nb", 5)).toBeNull();
   });
 
+  it("opens date mode on a spaced @ with nothing after it", () => {
+    expect(detectTrigger("@", 1)).toMatchObject({ mode: "date", from: 0, query: "" });
+    expect(detectTrigger("see @", 5)).toMatchObject({ mode: "date", from: 4 });
+    expect(detectTrigger("alice@", 6)).toBeNull();
+    expect(detectTrigger("@mon", 4)).toBeNull();
+    expect(detectTrigger("[[@", 3)).toMatchObject({ mode: "page" });
+  });
+
   it("opens tag mode on a hashtag, not headings", () => {
     expect(detectTrigger("#wo", 3)).toMatchObject({ mode: "tag", from: 0, query: "wo" });
     expect(detectTrigger("see #wo", 7)).toMatchObject({ mode: "tag", query: "wo" });

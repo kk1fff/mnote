@@ -2,7 +2,7 @@ import type { NoteMeta } from "../api";
 import { parseCreateQuery, wikiPath } from "./paths";
 
 export type SuggestTrigger = {
-  mode: "command" | "page" | "tag";
+  mode: "command" | "page" | "tag" | "date";
   from: number;
   queryFrom: number;
   query: string;
@@ -26,6 +26,9 @@ export function detectTrigger(doc: string, cursor: number): SuggestTrigger | nul
 
   const tag = detectHashtag(doc, at);
   if (tag) return tag;
+
+  const date = detectAtDate(doc, at);
+  if (date) return date;
 
   const lineStart = before.lastIndexOf("\n") + 1;
   const line = before.slice(lineStart);
@@ -68,6 +71,19 @@ export function completeWiki(path: string): string {
 
 export function completeTag(name: string): string {
   return `#${name}`;
+}
+
+function detectAtDate(doc: string, cursor: number): SuggestTrigger | null {
+  const before = doc.slice(0, cursor);
+  const lineStart = before.lastIndexOf("\n") + 1;
+  const line = before.slice(lineStart);
+  const atSign = line.lastIndexOf("@");
+  if (atSign < 0) return null;
+  const from = lineStart + atSign;
+  const prev = from === 0 ? "" : (doc[from - 1] ?? "");
+  if (from !== lineStart && !/\s/.test(prev)) return null;
+  if (line.slice(atSign + 1) !== "" || cursor !== from + 1) return null;
+  return { mode: "date", from, queryFrom: from + 1, query: "" };
 }
 
 function detectHashtag(doc: string, cursor: number): SuggestTrigger | null {

@@ -6,22 +6,30 @@ import { todayDate } from "../lib/paths";
 const props = defineProps<{
   journalDates: Set<string>;
   activeDate?: string;
+  year?: number;
+  month?: number;
 }>();
 
-const emit = defineEmits<{ select: [date: string] }>();
+const emit = defineEmits<{ select: [date: string]; browse: [delta: number] }>();
 
 const now = new Date();
-const year = ref(now.getFullYear());
-const month = ref(now.getMonth());
+const innerYear = ref(now.getFullYear());
+const innerMonth = ref(now.getMonth());
+const year = computed(() => props.year ?? innerYear.value);
+const month = computed(() => props.month ?? innerMonth.value);
 
 const label = computed(() => monthLabel(year.value, month.value));
 const cells = computed(() => monthCells(year.value, month.value));
 const today = computed(() => todayDate());
 
 function move(delta: number) {
-  const next = shiftMonth(year.value, month.value, delta);
-  year.value = next.year;
-  month.value = next.month;
+  if (props.year != null && props.month != null) {
+    emit("browse", delta);
+    return;
+  }
+  const next = shiftMonth(innerYear.value, innerMonth.value, delta);
+  innerYear.value = next.year;
+  innerMonth.value = next.month;
 }
 
 function classes(date: string) {
