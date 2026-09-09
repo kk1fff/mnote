@@ -298,7 +298,7 @@ pub fn suggest(
 
     let mut scored: Vec<(f64, String)> = Vec::new();
     for (tag, count) in &counts {
-        if current_tags.iter().any(|t| t == tag) {
+        if qn.is_empty() && current_tags.iter().any(|t| t == tag) {
             continue;
         }
         if !qn.is_empty() && !tag.contains(&qn) {
@@ -430,5 +430,7 @@ mod tests {
         assert!(created.last().is_some_and(|h| h.create && h.name == "newtag"));
         let excluded = suggest(&corpus, "", &rust_tags, "ownership", "dev", "lifetimes");
         assert!(excluded.iter().all(|h| h.name != "rust"));
+        let reuse = suggest(&corpus, "ru", &rust_tags, "lifetime notes", "dev", "ownership");
+        assert!(reuse.iter().any(|h| h.name == "rust" && !h.create));
     }
 }

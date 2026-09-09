@@ -2,6 +2,22 @@ import { expect, test } from "@playwright/test";
 import { uid } from "./env";
 import { createNote, noteAction, openPicker, typeInEditor, waitSaved } from "./helpers";
 
+test("hashtag suggest reuses a tag already on the note", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await createNote(page, uid("Retag"));
+  await typeInEditor(page, " see #feature");
+  await expect(page.getByTestId("suggest")).toBeVisible();
+  await page.keyboard.press("Enter");
+  await noteAction(page, "save");
+  await waitSaved(page);
+  await page.locator(".cm-content").click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type(" #fe");
+  await expect(page.getByTestId("suggest")).toContainText("#feature");
+});
+
 test("hashtag tags a note and picker lists the line", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);

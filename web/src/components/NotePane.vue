@@ -54,7 +54,6 @@ const tagsFade = ref({ left: false, right: false });
 const content = ref("");
 const tags = computed(() => extractHashtags(content.value));
 const journalDate = computed(() => (isDailyNote({ title: title.value, folder: folder.value }) ? title.value : ""));
-const wordCount = computed(() => content.value.trim().match(/\S+/g)?.length ?? 0);
 const journalBreadcrumb = computed(() => {
   if (!journalDate.value) return "";
   const date = new Date(`${journalDate.value}T12:00:00`);
@@ -72,6 +71,57 @@ const showTags = computed(() => tags.value.length > 0 && !editingMeta.value);
 let tagsResize: ResizeObserver | undefined;
 const hasConflictMarkers = computed(() => /^<<<<<<< this device$/m.test(content.value) && /^>>>>>>> other device$/m.test(content.value));
 const preview = ref(false);
+const modeToggleEl = ref<HTMLElement | null>(null);
+const modeDragging = ref(false);
+let modeDidDrag = false;
+let stopModeDrag: (() => void) | undefined;
+
+function onModePointerDown(event: PointerEvent) {
+  if (event.button !== 0) return;
+  const el = modeToggleEl.value;
+  if (!el) return;
+  stopModeDrag?.();
+  modeDidDrag = false;
+  const rect = el.getBoundingClientRect();
+  const onMove = (e: PointerEvent) => {
+    if (e.pointerId !== event.pointerId) return;
+    if (!modeDidDrag && Math.abs(e.clientX - event.clientX) < 4) return;
+    if (!modeDidDrag) {
+      modeDidDrag = true;
+      el.setPointerCapture(event.pointerId);
+    }
+    modeDragging.value = true;
+    const progress = (e.clientX - rect.left) / Math.max(rect.width, 1);
+    el.style.setProperty("--mode-x", String(Math.min(1, Math.max(0, progress))));
+  };
+  const onUp = (e: PointerEvent) => {
+    if (e.pointerId !== event.pointerId) return;
+    stopModeDrag?.();
+    if (modeDidDrag) {
+      const progress = (e.clientX - rect.left) / Math.max(rect.width, 1);
+      preview.value = progress >= 0.5;
+    }
+    modeDragging.value = false;
+    el.style.removeProperty("--mode-x");
+  };
+  stopModeDrag = () => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+    if (el.hasPointerCapture(event.pointerId)) el.releasePointerCapture(event.pointerId);
+    stopModeDrag = undefined;
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+}
+
+function onModeClickCapture(event: MouseEvent) {
+  if (!modeDidDrag) return;
+  event.preventDefault();
+  event.stopPropagation();
+  modeDidDrag = false;
+}
 const status = ref("");
 const savedToast = ref(false);
 const links = ref<NoteMeta[]>([]);
@@ -671,6 +721,7 @@ onBeforeUnmount(() => {
   window.clearTimeout(saveTimer);
   clearSavedToast();
   tagsResize?.disconnect();
+  stopModeDrag?.();
   void flushContext();
   document.removeEventListener("click", onDocClick);
   window.removeEventListener("visibilitychange", onFlushNow);
@@ -756,7 +807,16 @@ onBeforeUnmount(() => {
         >
           <NavIcon name="history" />
         </button>
-        <div class="mode-toggle preview-desktop" aria-label="Document mode">
+        <div
+          ref="modeToggleEl"
+          class="mode-toggle preview-desktop"
+          :class="{ 'is-preview': preview, 'is-dragging': modeDragging }"
+          data-testid="mode-toggle"
+          aria-label="Document mode"
+          @pointerdown="onModePointerDown"
+          @click.capture="onModeClickCapture"
+        >
+          <span class="mode-toggle-thumb" aria-hidden="true" />
           <button type="button" :class="{ active: !preview }" :aria-pressed="!preview" @click="preview = false">Edit</button>
           <button type="button" :class="{ active: preview }" :aria-pressed="preview" @click="preview = true">Preview</button>
         </div>
@@ -850,9 +910,6 @@ onBeforeUnmount(() => {
           @select-paragraph="onSelectParagraph"
         />
       </div>
-    </div>
-    <div class="document-status" aria-live="polite">
-      <span>{{ wordCount }} words</span><span>Markdown</span>
     </div>
     <Teleport to="body">
       <div

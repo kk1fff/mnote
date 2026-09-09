@@ -518,7 +518,9 @@ button.icon-btn,
 }
 
 .sidebar-cal-section {
-  margin-top: 0.5rem;
+  margin-top: 0;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
 }
 
 .section-label,
@@ -560,15 +562,13 @@ button.icon-btn,
 .sidebar-fold {
   display: grid;
   min-height: 0;
-  height: 0;
   overflow: hidden;
-  grid-template-rows: minmax(0, 0fr);
+  grid-template-rows: 0fr;
   transition: grid-template-rows 0.16s ease;
 }
 
 .sidebar-fold.is-open {
-  height: auto;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: 1fr;
 }
 
 .sidebar-fold-inner {
@@ -2309,6 +2309,7 @@ button:disabled { cursor: default; opacity: 0.55; }
 .sidebar-create:hover { background: color-mix(in srgb, var(--accent), #000 10%) !important; }
 .parked-button, .sidebar-link { min-height: 2.2rem; padding: 0.35rem 0.55rem; border-radius: 7px; font-size: 0.84rem; }
 .sidebar-section { margin-top: 1.15rem; }
+.sidebar-cal-section { margin-top: 0; }
 .section-label, .section-toggle { font-size: 0.68rem; letter-spacing: 0.1em; opacity: 0.78; }
 .note-library { flex: 1 1 auto; min-height: 0; margin-top: 1.15rem; overflow: hidden; }
 .sidebar .tree-row { min-height: 2rem; }
@@ -2341,13 +2342,16 @@ button:disabled { cursor: default; opacity: 0.55; }
 .note-folder.is-journal::after { content: none; }
 .note-tag { height: 1.35rem; max-height: 1.35rem; padding: 0 0.45rem; border: 0; border-radius: 999px; background: #edf1f8; color: #5e6b85; font-size: 0.72rem; line-height: 1.35rem; }
 .actions { padding-top: 0.05rem; }
-.mode-toggle { display: inline-flex; padding: 0.15rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
-.mode-toggle button { min-height: 1.9rem; padding: 0 0.7rem; border-radius: 6px; background: transparent; color: var(--text-muted); font-size: 0.8rem; font-weight: 600; }
-.mode-toggle button.active { background: var(--accent-soft); color: var(--text); }
+.mode-toggle { --mode-x: 0; position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; padding: 0.15rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); touch-action: none; user-select: none; }
+.mode-toggle.is-preview { --mode-x: 1; }
+.mode-toggle-thumb { position: absolute; top: 0.15rem; bottom: 0.15rem; left: 0.15rem; width: calc(50% - 0.15rem); border-radius: 6px; background: var(--accent-soft); pointer-events: none; transform: translateX(calc(var(--mode-x) * 100%)); transition: transform 0.16s ease; }
+.mode-toggle.is-dragging .mode-toggle-thumb { transition: none; }
+.mode-toggle button { position: relative; z-index: 1; min-height: 1.9rem; padding: 0 0.7rem; border-radius: 6px; background: transparent; color: var(--text-muted); font-size: 0.8rem; font-weight: 600; }
+.mode-toggle button.active { background: transparent; color: var(--text); }
 
 .document-scroll { display: flex; flex: 1; min-height: 0; overflow: auto; background: var(--surface); }
 .document-column { width: min(900px, 100%); min-height: 100%; margin: 0 auto; padding: 0 2.5rem 4rem; }
-.document-column .editor, .document-column .preview { height: 100%; min-height: 100%; overflow: visible; }
+.document-column .editor, .document-column .preview { min-height: 100%; overflow: visible; }
 .cm-editor { font-size: 15px; }
 .cm-editor .cm-content { padding: 1.15rem 0 2rem; line-height: 1.72; letter-spacing: 0.005em; }
 .cm-editor .cm-line { padding: 0; }
@@ -2358,7 +2362,6 @@ button:disabled { cursor: default; opacity: 0.55; }
 .cm-editor .cm-line.cm-md-h3 { font-size: 1.08em; padding-top: 1.25em; }
 .preview { padding: 1.15rem 0 2rem; font-family: var(--font-mono); font-size: 0.94rem; line-height: 1.72; }
 .preview h1 { font-size: 1.55rem; margin: 1.3em 0 0.42em; }.preview h2 { font-size: 1.25rem; margin: 1.5em 0 0.38em; }.preview h3 { font-size: 1.08rem; margin: 1.25em 0 0.3em; }.preview p { margin: 0 0 1em; }.preview li { margin: 0.18em 0; }
-.document-status { display: flex; justify-content: flex-end; gap: 0.75rem; flex: 0 0 auto; padding: 0.5rem max(2rem, env(safe-area-inset-right)) 0.65rem; background: var(--surface); color: var(--text-muted); font-size: 0.72rem; }.document-status span + span { padding-left: 0.75rem; border-left: 1px solid var(--border); }
 .note-status-float { opacity: 0; }
 .backlinks { background: var(--surface-muted); border-top-color: var(--border); }.backlinks-toggle { max-width: min(900px, 100%); margin: 0 auto; padding: 0.6rem 2.5rem; background: transparent !important; font-weight: 600; }.backlinks-content { max-width: min(900px, 100%); margin: 0 auto; padding: 0 2.5rem 0.8rem; }
 .journal-view { overflow: auto; background: var(--surface); }.journal-header { display: flex; justify-content: space-between; align-items: center; max-width: 900px; width: 100%; margin: 0 auto; padding: 3rem 2.5rem 1.5rem; }.journal-header p { margin: 0 0 0.35rem; color: var(--text-muted); font-size: 0.78rem; font-weight: 600; }.journal-header h1 { margin: 0; font-size: 2rem; letter-spacing: -0.045em; }.journal-today { min-height: 2.2rem; font-weight: 600; }.journal-browser { display: grid; grid-template-columns: minmax(16rem, 0.8fr) minmax(18rem, 1.2fr); gap: 3rem; max-width: 900px; width: 100%; margin: 0 auto; padding: 1rem 2.5rem 4rem; }.journal-calendar-card { padding: 1rem; border-radius: var(--radius-lg); background: var(--surface-muted); }.journal-calendar-card .sidebar-cal-grid { grid-template-rows: auto repeat(6, 2rem); }.journal-calendar-card .sidebar-cal-day { height: 2rem; font-size: 0.8rem; }.notes-header { justify-content: flex-start; gap: 0.75rem; }.notes-browser { grid-template-columns: minmax(18rem, 1fr); }.journal-entries { display: flex; flex-direction: column; gap: 0.25rem; }.journal-entry { display: flex; flex-direction: column; gap: 0.18rem; width: 100%; padding: 0.75rem; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; }.journal-entry:hover { background: var(--accent-soft); }.journal-entry strong { font-size: 0.9rem; }.journal-entry span { color: var(--text-muted); font-size: 0.78rem; }.journal-empty { margin: 0.5rem 0; }
@@ -2377,7 +2380,6 @@ button:disabled { cursor: default; opacity: 0.55; }
   .document-column { padding: 0 1rem 2rem; }
   .cm-editor { font-size: 14px; }
   .cm-editor .cm-content, .preview { padding-top: 0.85rem; }
-  .document-status { padding: 0.45rem 1rem calc(0.5rem + env(safe-area-inset-bottom)); font-size: 0.67rem; }
   .backlinks-toggle, .backlinks-content, .backlinks-empty { padding-left: 1rem; padding-right: 1rem; }
   .journal-header { min-height: 3.5rem; padding: env(safe-area-inset-top) 1rem 0.65rem; }.journal-header h1 { font-size: 1rem; }.journal-header p { display: none; }.journal-browser { grid-template-columns: 1fr; gap: 1.5rem; padding: 1rem 1rem 2rem; }
   .preview-desktop { display: none; }

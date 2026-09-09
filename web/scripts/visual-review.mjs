@@ -26,6 +26,27 @@ async function shotMotion(page, name) {
   console.log(file);
 }
 
+async function shotModeToggle(page, prefix) {
+  const pane = page.getByTestId("pane-primary");
+  const toggle = pane.getByTestId("mode-toggle");
+  await toggle.waitFor();
+  await shot(page, `${prefix}-mode-toggle-edit`);
+  await toggle.evaluate((el) => {
+    el.style.setProperty("--mode-x", "0.45");
+    el.classList.add("is-dragging");
+  });
+  await shotMotion(page, `${prefix}-mode-toggle-dragging`);
+  await toggle.evaluate((el) => {
+    el.style.removeProperty("--mode-x");
+    el.classList.remove("is-dragging");
+  });
+  await toggle.getByRole("button", { name: "Preview" }).click();
+  await pane.locator(".preview").waitFor();
+  await shot(page, `${prefix}-mode-toggle-preview`);
+  await toggle.getByRole("button", { name: "Edit" }).click();
+  await pane.getByTestId("editor").waitFor();
+}
+
 async function shotFolding(page, toggle, midName, restName) {
   await toggle.click();
   await toggle.evaluate((btn) => {
@@ -268,6 +289,7 @@ if ((await editor(page).innerText()).trim().length < 8) {
 }
 await captureSaveStatus(page, "31-unsaved-desktop-light", "32-saved-toast-desktop-light");
 await shot(page, "02-note-desktop-light");
+await shotModeToggle(page, "34");
 await page.goto(`${url}/journal`);
 await page.waitForSelector(".journal-browser");
 await shot(page, "02a-journal-desktop-light");
@@ -463,6 +485,7 @@ await page.evaluate(() => {
 await page.waitForTimeout(150);
 await captureSaveStatus(page, "31b-unsaved-desktop-dark", "32b-saved-toast-desktop-dark");
 await shot(page, "08-note-desktop-dark");
+await shotModeToggle(page, "34b");
 await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "08g-sidebar-calendar-folding-dark", "08d-sidebar-calendar-folded-dark");
   await shot(page, "15-tabs-dark");
   await shot(page, "17-split-dark");
