@@ -19,6 +19,19 @@ test("sidebar library and organize destinations open", async ({ page }) => {
   await expect(page.getByTestId("sidebar")).toContainText("Recent");
 });
 
+test("desktop sidebar folds to an icon rail", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  const sidebar = page.getByTestId("sidebar");
+  await expect(sidebar).toContainText("Recent");
+  await page.getByTestId("sidebar-fold").click();
+  await expect(page.locator(".app-shell")).toHaveClass(/sidebar-folded/);
+  await expect(sidebar.getByText("Recent")).toBeHidden();
+  await page.getByTestId("sidebar-fold").click();
+  await expect(sidebar).toContainText("Recent");
+});
+
 test("calendar day creates a journal", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);
@@ -26,6 +39,10 @@ test("calendar day creates a journal", async ({ page }) => {
   await page.getByTestId("cal-next").click();
   await page.locator(".sidebar-cal-day").first().click();
   await expect(page.getByTestId("note-title")).toHaveText(/\d{4}-\d{2}-\d{2}/);
+  await expect(page.getByTestId("journal-crumb-month")).toBeVisible();
+  await page.getByTestId("journal-crumb-month").click();
+  await expect(page).toHaveURL(/\/journal\?year=\d+&month=\d+/);
+  await expect(page.getByRole("heading", { name: "Journal" })).toBeVisible();
 });
 
 test("mobile menu opens and closes", async ({ page }) => {

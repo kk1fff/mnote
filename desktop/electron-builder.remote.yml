@@ -1,5 +1,6 @@
 appId: app.mnote.remote
 productName: mnote Remote
+icon: build/icon.png
 directories:
   output: release/remote
 files:

@@ -193,6 +193,40 @@ describe("NoteView", () => {
     expect(wrapper.get('[data-testid="note-folder"]').text()).toBe("work");
   });
 
+  it("commits a rename on title blur", async () => {
+    vi.mocked(api.getNote).mockResolvedValue({
+      id: "n1",
+      title: "Old",
+      folder: "ideas",
+      content: "hi",
+      modified_at: "",
+    });
+    vi.mocked(api.patchNote).mockResolvedValue({
+      id: "n1",
+      title: "New",
+      folder: "ideas",
+      content: "hi",
+      modified_at: "",
+    });
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/n/:id", component: NoteView },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/n/n1");
+    await router.isReady();
+    const wrapper = mount(NoteView, { global: { plugins: [router] } });
+    await flushPromises();
+    await wrapper.get('[data-testid="note-title"]').trigger("click");
+    await wrapper.get('[data-testid="note-title-input"]').setValue("New");
+    await wrapper.get(".note-meta-form").trigger("focusout");
+    await flushPromises();
+    expect(api.patchNote).toHaveBeenCalledWith("n1", { title: "New", folder: "ideas" });
+    expect(wrapper.get('[data-testid="note-title"]').text()).toBe("New");
+  });
+
   it("restores a history snapshot into the editor", async () => {
     vi.mocked(api.getNote).mockResolvedValue({
       id: "n1",

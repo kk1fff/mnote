@@ -12,7 +12,9 @@ export type IconName =
   | "link"
   | "history"
   | "more"
-  | "gear";
+  | "gear"
+  | "panelClose"
+  | "chevronRight";
 
 defineProps<{ name: IconName }>();
 </script>
@@ -80,6 +82,14 @@ defineProps<{ name: IconName }>();
       <path
         d="M8 2.4v1.3M8 12.3v1.3M2.4 8h1.3M12.3 8h1.3M4.05 4.05l.92.92M11.03 11.03l.92.92M11.95 4.05l-.92.92M4.97 11.03l-.92.92"
       />
+    </template>
+    <template v-else-if="name === 'panelClose'">
+      <rect x="2.75" y="3.25" width="10.5" height="9.5" rx="1.5" />
+      <path d="M6.75 3.25v9.5" />
+      <path d="M10.6 6.2 8.75 8l1.85 1.8" />
+    </template>
+    <template v-else-if="name === 'chevronRight'">
+      <path d="M6.25 3.75 10 8l-3.75 4.25" />
     </template>
   </svg>
 </template>

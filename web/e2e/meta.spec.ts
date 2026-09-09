@@ -17,6 +17,19 @@ test("header rename and move update the sidebar", async ({ page }) => {
   await expect(page.getByTestId("sidebar")).toContainText(renamed);
 });
 
+test("title blur commits the rename", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  const title = uid("Blur");
+  const renamed = uid("BlurN");
+  await createNote(page, title);
+  await page.getByTestId("note-title").click();
+  await page.getByTestId("note-title-input").fill(renamed);
+  await page.locator(".cm-content").click();
+  await expect(page.getByTestId("note-title")).toHaveText(renamed);
+  await expect(page.getByTestId("sidebar")).toContainText(renamed);
+});
+
 test("invalid title first character is rejected", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);

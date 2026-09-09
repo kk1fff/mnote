@@ -390,6 +390,11 @@ try {
   }
   await leaveMeta(page);
 await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "02i-sidebar-calendar-folding-light", "02f-sidebar-calendar-folded-light");
+await page.getByTestId("sidebar-fold").click();
+await page.waitForTimeout(200);
+await shot(page, "02g-sidebar-rail-light");
+await page.getByTestId("sidebar-fold").click();
+await page.waitForTimeout(200);
 await page.getByTestId("sidebar-favorites").click();
 await page.waitForSelector('[data-testid="picker-back"]');
 await shot(page, "18d-picker-favorites-sidebar-light");
@@ -566,6 +571,11 @@ await shot(page, "08-note-desktop-dark");
 await shotModeToggle(page, "34b");
 await shotTodos(page, "35b");
 await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "08g-sidebar-calendar-folding-dark", "08d-sidebar-calendar-folded-dark");
+await page.getByTestId("sidebar-fold").click();
+await page.waitForTimeout(200);
+await shot(page, "08e-sidebar-rail-dark");
+await page.getByTestId("sidebar-fold").click();
+await page.waitForTimeout(200);
   await shot(page, "15-tabs-dark");
   await shot(page, "17-split-dark");
   await openPicker(page);

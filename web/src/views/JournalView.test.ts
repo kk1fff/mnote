@@ -11,7 +11,7 @@ vi.mock("../components/AppShell.vue", () => ({
   default: { template: '<div><slot :toggle="() => {}" /></div>' },
 }));
 vi.mock("../components/SidebarCalendar.vue", () => ({
-  default: { props: ["journalDates", "activeDate"], template: '<button data-testid="calendar-day" @click="$emit(\'select\', \'2026-09-06\')">calendar</button>' },
+  default: { props: ["journalDates", "activeDate", "year", "month"], template: '<div><span data-testid="cal-label">{{ year }}-{{ month }}</span><button data-testid="calendar-day" @click="$emit(\'select\', \'2026-09-06\')">calendar</button></div>' },
 }));
 
 describe("JournalView", () => {
@@ -35,5 +35,20 @@ describe("JournalView", () => {
     await flushPromises();
     expect(api.daily).toHaveBeenCalledWith("2026-09-06");
     expect(router.currentRoute.value.path).toBe("/n/daily");
+    wrapper.unmount();
+  });
+
+  it("opens the queried calendar month", async () => {
+    vi.mocked(api.listNotes).mockResolvedValue([]);
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [{ path: "/journal", component: JournalView }],
+    });
+    await router.push("/journal?year=2026&month=9");
+    await router.isReady();
+    const wrapper = mount(JournalView, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="cal-label"]').text()).toBe("2026-8");
+    wrapper.unmount();
   });
 });

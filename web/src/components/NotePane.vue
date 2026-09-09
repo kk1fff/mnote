@@ -55,10 +55,14 @@ const tagsFade = ref({ left: false, right: false });
 const content = ref("");
 const tags = computed(() => extractHashtags(content.value));
 const journalDate = computed(() => (isDailyNote({ title: title.value, folder: folder.value }) ? title.value : ""));
-const journalBreadcrumb = computed(() => {
-  if (!journalDate.value) return "";
+const journalParts = computed(() => {
+  if (!journalDate.value) return null;
   const date = new Date(`${journalDate.value}T12:00:00`);
-  return `Journal / ${date.getFullYear()} / ${date.toLocaleString(undefined, { month: "long" })}`;
+  return {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    monthName: date.toLocaleString(undefined, { month: "long" }),
+  };
 });
 const journalLabel = computed(() => {
   if (!journalDate.value) return "";
@@ -379,6 +383,25 @@ function beginMeta() {
 
 function cancelMeta() {
   editingMeta.value = false;
+}
+
+function onMetaFocusOut(event: FocusEvent) {
+  const form = event.currentTarget as HTMLElement;
+  const next = event.relatedTarget as Node | null;
+  if (next && form.contains(next)) return;
+  void saveMeta();
+}
+
+function openJournal(query?: { year: number; month?: number }) {
+  void router.push({
+    name: "journal",
+    query: query
+      ? {
+          year: String(query.year),
+          ...(query.month ? { month: String(query.month) } : {}),
+        }
+      : {},
+  });
 }
 
 async function saveMeta() {
@@ -740,8 +763,14 @@ onBeforeUnmount(() => {
     <header class="bar">
       <button type="button" class="nav-toggle ghost" @click="toggle">Menu</button>
       <div class="note-heading">
-        <p v-if="journalBreadcrumb && !editingMeta" class="note-breadcrumb">{{ journalBreadcrumb }}</p>
-        <form v-if="editingMeta" class="note-meta-form" @submit.prevent="saveMeta">
+        <p v-if="journalParts && !editingMeta" class="note-breadcrumb">
+          <button type="button" class="crumb-link" data-testid="journal-crumb-journal" @click="openJournal()">Journal</button>
+          <span class="crumb-sep">/</span>
+          <button type="button" class="crumb-link" data-testid="journal-crumb-year" @click="openJournal({ year: journalParts.year })">{{ journalParts.year }}</button>
+          <span class="crumb-sep">/</span>
+          <button type="button" class="crumb-link" data-testid="journal-crumb-month" @click="openJournal({ year: journalParts.year, month: journalParts.month })">{{ journalParts.monthName }}</button>
+        </p>
+        <form v-if="editingMeta" class="note-meta-form" @submit.prevent="saveMeta" @focusout="onMetaFocusOut">
           <input
             v-model="draftTitle"
             class="title-input"
@@ -750,21 +779,22 @@ onBeforeUnmount(() => {
             @keydown.enter.prevent="saveMeta"
             @keydown.escape.prevent="cancelMeta"
           />
+          <div class="note-folder-row">
+            <input
+              v-model="draftFolder"
+              class="folder-input"
+              data-testid="note-folder-input"
+              aria-label="Note folder"
+              placeholder="Folder"
+              @keydown.enter.prevent="saveMeta"
+              @keydown.escape.prevent="cancelMeta"
+            />
+          </div>
         </form>
-        <h1 v-else data-testid="note-title" title="Rename note" tabindex="0" @keydown.enter.prevent="beginMeta" @keydown.space.prevent="beginMeta" @click="beginMeta">{{ title || "Note" }}</h1>
+        <template v-else>
+        <h1 data-testid="note-title" title="Rename note" tabindex="0" @keydown.enter.prevent="beginMeta" @keydown.space.prevent="beginMeta" @click="beginMeta">{{ title || "Note" }}</h1>
         <div class="note-folder-row" :class="{ 'has-tags': showTags }">
-          <input
-            v-if="editingMeta"
-            v-model="draftFolder"
-            class="folder-input"
-            data-testid="note-folder-input"
-            aria-label="Note folder"
-            placeholder="Folder"
-            @keydown.enter.prevent="saveMeta"
-            @keydown.escape.prevent="cancelMeta"
-          />
           <p
-            v-else
             class="muted note-folder"
             :class="{ 'is-empty': !folder, 'is-journal': !!journalDate }"
             data-testid="note-folder"
@@ -803,6 +833,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
+        </template>
       </div>
       <div ref="actionsEl" class="actions" :class="{ open: actionsOpen }">
         <button

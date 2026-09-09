@@ -1,19 +1,35 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { api, type NoteMeta } from "../api";
 import AppShell from "../components/AppShell.vue";
 import SidebarCalendar from "../components/SidebarCalendar.vue";
-import { isDailyNote } from "../lib/calendar";
+import { isDailyNote, shiftMonth } from "../lib/calendar";
 import { todayDate } from "../lib/paths";
 import { openInWorkspace } from "../workspace";
 
+const route = useRoute();
 const router = useRouter();
 const notes = ref<NoteMeta[]>([]);
 const error = ref("");
 const entries = computed(() => notes.value.filter(isDailyNote).sort((a, b) => b.title.localeCompare(a.title)));
 const dates = computed(() => new Set(entries.value.map((entry) => entry.title)));
 const selected = ref("");
+const calYear = computed(() => {
+  const year = Number(route.query.year);
+  return Number.isFinite(year) ? year : undefined;
+});
+const calMonth = computed(() => {
+  const month = Number(route.query.month);
+  if (Number.isFinite(month) && month >= 1 && month <= 12) return month - 1;
+  return calYear.value != null ? 0 : undefined;
+});
+
+function onBrowse(delta: number) {
+  const now = new Date();
+  const next = shiftMonth(calYear.value ?? now.getFullYear(), calMonth.value ?? now.getMonth(), delta);
+  void router.replace({ path: "/journal", query: { year: String(next.year), month: String(next.month + 1) } });
+}
 
 async function openDate(date: string) {
   try {
@@ -56,7 +72,14 @@ onMounted(async () => {
       </header>
       <div class="journal-browser">
         <section class="journal-calendar-card">
-          <SidebarCalendar :journal-dates="dates" :active-date="selected" @select="void openDate($event)" />
+          <SidebarCalendar
+            :journal-dates="dates"
+            :active-date="selected"
+            :year="calYear"
+            :month="calMonth"
+            @select="void openDate($event)"
+            @browse="onBrowse"
+          />
         </section>
         <section class="journal-entries">
           <p class="section-label">Recent entries</p>

@@ -13,6 +13,7 @@ import { applyOpen, forgetNote, layoutHref, openBeside, visibleIds } from "../wo
 import { currentUser, logout } from "../session";
 import { cycleTheme, setThemeMode, themeMode, type ThemeMode } from "../theme";
 import DeleteNoteDialog from "./DeleteNoteDialog.vue";
+import BrandMark from "./BrandMark.vue";
 import NavIcon from "./NavIcon.vue";
 import SidebarCalendar from "./SidebarCalendar.vue";
 import SidebarFold from "./SidebarFold.vue";
@@ -281,27 +282,30 @@ defineExpose({ load });
 <template>
   <aside class="sidebar" data-testid="sidebar">
     <div class="brand">
-      <div class="brand-copy">
-        <strong>mnote</strong>
-        <span>{{ currentUser?.username }}</span>
+      <div class="brand-id">
+        <BrandMark :size="25" />
+        <div class="brand-copy">
+          <strong>mnote</strong>
+          <span>{{ currentUser?.username }}</span>
+        </div>
       </div>
       <button type="button" class="nav-close" aria-label="Close sidebar" @click="emit('close')">
         Close
       </button>
     </div>
-    <button class="new-note-button ghost sidebar-search" type="button" aria-label="Search notes" @click="emit('open-picker')">
-      <span class="sidebar-search-copy"><NavIcon name="search" /><span>Search notes</span></span>
+    <button class="new-note-button ghost sidebar-search" type="button" aria-label="Search notes" title="Search notes" @click="emit('open-picker')">
+      <span class="sidebar-search-copy"><NavIcon name="search" /><span class="rail-label">Search notes</span></span>
       <kbd aria-hidden="true">{{ searchShortcut }}</kbd>
     </button>
-    <button class="sidebar-create" type="button" data-testid="new-note" @click="emit('create-note')">
-      <NavIcon name="plus" /> New note
+    <button class="sidebar-create" type="button" data-testid="new-note" title="New note" @click="emit('create-note')">
+      <NavIcon name="plus" /><span class="rail-label">New note</span>
     </button>
     <div class="sidebar-scroll">
       <div class="sidebar-group">
       <p class="section-label">Inbox</p>
       <div class="park-row">
-        <button class="parked-button" type="button" data-testid="sidebar-park" title="Capture a thought to organize later" @click="showParkCapture({})">
-          <NavIcon name="inbox" />Park a thought
+        <button class="parked-button" type="button" data-testid="sidebar-park" title="Park a thought" @click="showParkCapture({})">
+          <NavIcon name="inbox" /><span class="rail-label">Park a thought</span>
         </button>
       <button
         v-if="parkedItems.length"
@@ -317,23 +321,23 @@ defineExpose({ load });
       </div>
       <div class="sidebar-group library-group">
       <p class="section-label">Library</p>
-      <button type="button" class="sidebar-link" data-testid="sidebar-notes" :class="{ active: route.name === 'notes' || (route.name === 'note' && !activeDaily) }" @click="openNotes">
-        <NavIcon name="note" />Notes
+      <button type="button" class="sidebar-link" data-testid="sidebar-notes" title="Notes" :class="{ active: route.name === 'notes' || (route.name === 'note' && !activeDaily) }" @click="openNotes">
+        <NavIcon name="note" /><span class="rail-label">Notes</span>
       </button>
-      <button type="button" class="sidebar-link" data-testid="sidebar-journal" :class="{ active: route.name === 'journal' || !!activeDaily }" @click="openJournal">
-        <NavIcon name="journal" />Journal
+      <button type="button" class="sidebar-link" data-testid="sidebar-journal" title="Journal" :class="{ active: route.name === 'journal' || !!activeDaily }" @click="openJournal">
+        <NavIcon name="journal" /><span class="rail-label">Journal</span>
       </button>
-      <button type="button" class="sidebar-link" data-testid="sidebar-images" :class="{ active: route.path === '/images' }" @click="openImages">
-        <NavIcon name="image" />Images
+      <button type="button" class="sidebar-link" data-testid="sidebar-images" title="Images" :class="{ active: route.path === '/images' }" @click="openImages">
+        <NavIcon name="image" /><span class="rail-label">Images</span>
       </button>
       </div>
       <div class="sidebar-group">
       <p class="section-label">Organize</p>
-      <button type="button" class="sidebar-link" data-testid="sidebar-favorites" @click="emit('open-picker', 'favorites')">
-        <NavIcon name="star" />Favorites
+      <button type="button" class="sidebar-link" data-testid="sidebar-favorites" title="Favorites" @click="emit('open-picker', 'favorites')">
+        <NavIcon name="star" /><span class="rail-label">Favorites</span>
       </button>
-      <button type="button" class="sidebar-link" data-testid="sidebar-tags" @click="emit('open-picker', 'tags')">
-        <NavIcon name="tag" />Tags
+      <button type="button" class="sidebar-link" data-testid="sidebar-tags" title="Tags" @click="emit('open-picker', 'tags')">
+        <NavIcon name="tag" /><span class="rail-label">Tags</span>
       </button>
       </div>
       <div class="note-library">
@@ -423,7 +427,7 @@ defineExpose({ load });
           @click="toggleFooter('account')"
         >
           <span class="user-avatar" :style="{ background: avatarBg }">{{ avatarLetter }}</span>
-          <span>{{ currentUser?.username }}</span>
+          <span class="rail-label">{{ currentUser?.username }}</span>
         </button>
         <div class="sidebar-popover sidebar-popover-account" role="menu">
           <p class="sidebar-popover-user">{{ currentUser?.username }}</p>

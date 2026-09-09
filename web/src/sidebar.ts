@@ -5,9 +5,10 @@ export const SIDEBAR_KEY = "mnote:sidebar";
 export type SidebarPrefs = {
   linksOpen: boolean;
   calendarOpen: boolean;
+  sidebarFolded: boolean;
 };
 
-const defaults: SidebarPrefs = { linksOpen: true, calendarOpen: false };
+const defaults: SidebarPrefs = { linksOpen: true, calendarOpen: false, sidebarFolded: false };
 const memory = new Map<string, string>();
 
 function storageGet(): string | null {
@@ -40,6 +41,7 @@ function parsePrefs(raw: string | null): SidebarPrefs {
     return {
       linksOpen: parsed.linksOpen !== false,
       calendarOpen: parsed.calendarOpen === true,
+      sidebarFolded: parsed.sidebarFolded === true,
     };
   } catch {
     return { ...defaults };

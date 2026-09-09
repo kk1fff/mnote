@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    .ink { fill: #17191e; }
+    .page { stroke: #fdfdfc; }
+    @media (prefers-color-scheme: dark) {
+      .ink { fill: #eceff4; }
+      .page { stroke: #111318; }
+    }
+  </style>
+  <rect class="ink" width="32" height="32" rx="8"/>
+  <path class="page" d="M10 8h8.2L22 12.2V24H10V8z" fill="none" stroke-width="1.7" stroke-linejoin="round"/>
+  <path class="page" d="M18 8v4.2H22" fill="none" stroke-width="1.7" stroke-linejoin="round"/>
+</svg>
