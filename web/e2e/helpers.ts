@@ -54,6 +54,26 @@ export async function typeInEditor(page: Page, text: string) {
   await page.keyboard.type(text);
 }
 
+export async function pasteInEditor(page: Page, text: string, raw = false) {
+  await page.locator(".cm-content").click();
+  await page.evaluate(
+    ({ value, rawPaste }) => {
+      const target = document.querySelector(".cm-content");
+      if (rawPaste) {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "v", ctrlKey: true, shiftKey: true, bubbles: true }),
+        );
+      }
+      const dt = new DataTransfer();
+      dt.setData("text/plain", value);
+      target?.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: dt }),
+      );
+    },
+    { value: text, rawPaste: raw },
+  );
+}
+
 export async function editorText(page: Page): Promise<string> {
   return page.locator(".cm-content").innerText();
 }
