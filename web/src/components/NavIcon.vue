@@ -1,95 +1,123 @@
 <script setup lang="ts">
+import { computed } from "vue";
+
 export type IconName =
   | "search"
   | "plus"
   | "inbox"
   | "note"
+  | "notes"
   | "journal"
   | "image"
+  | "images"
   | "star"
+  | "favorites"
   | "tag"
+  | "tags"
   | "calendar"
   | "link"
+  | "backlinks"
   | "history"
   | "more"
   | "gear"
+  | "settings"
   | "panelClose"
-  | "chevronRight";
+  | "panelOpen"
+  | "chevronRight"
+  | "chevronLeft"
+  | "chevronDown"
+  | "menu"
+  | "trash"
+  | "edit"
+  | "preview"
+  | "splitView"
+  | "lightMode"
+  | "darkMode"
+  | "user"
+  | "tab"
+  | "addTab"
+  | "attachment"
+  | "duplicate"
+  | "move"
+  | "rename"
+  | "collapse";
 
-defineProps<{ name: IconName }>();
+const FILES: Partial<Record<IconName, string>> = {
+  search: "search",
+  plus: "new-note",
+  inbox: "inbox",
+  note: "note",
+  notes: "notes",
+  journal: "journal",
+  image: "image",
+  images: "images",
+  star: "favorites",
+  favorites: "favorites",
+  tag: "tags",
+  tags: "tags",
+  calendar: "calendar",
+  link: "link",
+  backlinks: "backlinks",
+  more: "more",
+  gear: "settings",
+  settings: "settings",
+  panelClose: "sidebar-close",
+  panelOpen: "sidebar-open",
+  chevronRight: "chevron-right",
+  chevronLeft: "chevron-right",
+  chevronDown: "chevron-down",
+  menu: "menu",
+  trash: "trash",
+  edit: "edit",
+  preview: "preview",
+  splitView: "split-view",
+  lightMode: "light-mode",
+  darkMode: "dark-mode",
+  user: "user",
+  tab: "tab",
+  addTab: "add-tab",
+  attachment: "attachment",
+  duplicate: "duplicate",
+  move: "move",
+  rename: "rename",
+  collapse: "collapse",
+};
+
+const modules = import.meta.glob("../icons/*.svg", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+const HISTORY =
+  '<path d="M3.25 3.5h4.1c1.2 0 2.15.95 2.15 2.15v6.6c0-.83-.67-1.5-1.5-1.5H3.25V3.5z" /><path d="M12.75 3.5H8.65c-1.2 0-2.15.95-2.15 2.15v6.6c0-.83.67-1.5 1.5-1.5h4.75V3.5z" />';
+
+const props = defineProps<{ name: IconName }>();
+
+const inner = computed(() => {
+  if (props.name === "history") return HISTORY;
+  const file = FILES[props.name];
+  if (!file) return "";
+  const needle = `/icons/${file}.svg`;
+  const raw = Object.entries(modules).find(([key]) => key.replaceAll("\\", "/").endsWith(needle))?.[1];
+  if (!raw) return "";
+  return raw.replace(/^[\s\S]*?<svg[^>]*>/i, "").replace(/<\/svg>\s*$/i, "").trim();
+});
 </script>
 
 <template>
   <svg
     class="nav-icon"
-    viewBox="0 0 16 16"
+    :class="{ 'is-flip': name === 'chevronLeft' }"
+    :viewBox="name === 'history' ? '0 0 16 16' : '0 0 24 24'"
     width="16"
     height="16"
     fill="none"
     stroke="currentColor"
-    stroke-width="1.5"
+    :stroke-width="name === 'history' ? 1.5 : 1.8"
     stroke-linecap="round"
     stroke-linejoin="round"
     aria-hidden="true"
-  >
-    <template v-if="name === 'search'">
-      <circle cx="7" cy="7" r="4.25" />
-      <path d="m10.2 10.2 3.1 3.1" />
-    </template>
-    <template v-else-if="name === 'plus'">
-      <path d="M8 3.25v9.5M3.25 8h9.5" />
-    </template>
-    <template v-else-if="name === 'inbox'">
-      <path d="M2.5 9.25 4.1 4.75h7.8l1.6 4.5v3.5H2.5v-3.5z" />
-      <path d="M2.5 9.25h3.05l.7 1.5h3.5l.7-1.5H13.5" />
-    </template>
-    <template v-else-if="name === 'note'">
-      <path d="M4.25 2.75h5.1L12.75 6v7.25h-8.5V2.75z" />
-      <path d="M9.25 2.75V6h2.85" />
-    </template>
-    <template v-else-if="name === 'journal' || name === 'calendar'">
-      <path d="M3.25 5.25h9.5v8H3.25z" />
-      <path d="M5.5 3.25v2.5M10.5 3.25v2.5M3.25 7.5h9.5" />
-    </template>
-    <template v-else-if="name === 'image'">
-      <path d="M2.75 3.75h10.5v8.5H2.75z" />
-      <circle cx="5.75" cy="6.5" r="1" />
-      <path d="m2.75 10.5 2.6-2.4 2.1 1.9 2.15-2.7 3.65 3.2" />
-    </template>
-    <template v-else-if="name === 'star'">
-      <path d="m8 2.6 1.45 2.95 3.25.47-2.35 2.3.56 3.23L8 10.02l-2.91 1.53.56-3.23-2.35-2.3 3.25-.47z" />
-    </template>
-    <template v-else-if="name === 'tag'">
-      <path d="m2.75 8.35 5.7-5.7H13.25v4.8l-5.7 5.7z" />
-      <circle cx="10.6" cy="5.15" r="0.85" />
-    </template>
-    <template v-else-if="name === 'link'">
-      <path d="M6.35 9.65 4.9 11.1a2.15 2.15 0 1 1-3.04-3.04l1.45-1.45" />
-      <path d="m9.65 6.35 1.45-1.45a2.15 2.15 0 1 1 3.04 3.04L12.7 9.4" />
-      <path d="m6.4 9.6 3.2-3.2" />
-    </template>
-    <template v-else-if="name === 'history'">
-      <path d="M3.25 3.5h4.1c1.2 0 2.15.95 2.15 2.15v6.6c0-.83-.67-1.5-1.5-1.5H3.25V3.5z" />
-      <path d="M12.75 3.5H8.65c-1.2 0-2.15.95-2.15 2.15v6.6c0-.83.67-1.5 1.5-1.5h4.75V3.5z" />
-    </template>
-    <template v-else-if="name === 'more'">
-      <circle cx="3.5" cy="8" r="1.05" fill="currentColor" stroke="none" />
-      <circle cx="8" cy="8" r="1.05" fill="currentColor" stroke="none" />
-      <circle cx="12.5" cy="8" r="1.05" fill="currentColor" stroke="none" />
-    </template>
-    <template v-else-if="name === 'gear'">
-      <circle cx="8" cy="8" r="2.05" />
-      <path
-        d="M8 2.4v1.3M8 12.3v1.3M2.4 8h1.3M12.3 8h1.3M4.05 4.05l.92.92M11.03 11.03l.92.92M11.95 4.05l-.92.92M4.97 11.03l-.92.92"
-      />
-    </template>
-    <template v-else-if="name === 'panelClose'">
-      <rect x="2.75" y="3.25" width="10.5" height="9.5" rx="1.5" />
-      <path d="M6.75 3.25v9.5" />
-      <path d="M10.6 6.2 8.75 8l1.85 1.8" />
-    </template>
-    <template v-else-if="name === 'chevronRight'">
-      <path d="M6.25 3.75 10 8l-3.75 4.25" />
-    </template>
-  </svg>
+    v-html="inner"
+  />
 </template>

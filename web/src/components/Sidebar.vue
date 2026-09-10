@@ -16,7 +16,7 @@ import { currentUser, logout } from "../session";
 import { cycleTheme, setThemeMode, themeMode, type ThemeMode } from "../theme";
 import DeleteNoteDialog from "./DeleteNoteDialog.vue";
 import BrandMark from "./BrandMark.vue";
-import NavIcon from "./NavIcon.vue";
+import NavIcon, { type IconName } from "./NavIcon.vue";
 import NoteTree from "./NoteTree.vue";
 import SidebarCalendar from "./SidebarCalendar.vue";
 import SidebarFold from "./SidebarFold.vue";
@@ -43,11 +43,15 @@ const deleteError = ref("");
 const deleteBusy = ref(false);
 const narrow = ref(typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches);
 let footerMq: MediaQueryList | undefined;
-const themes: { id: ThemeMode; label: string }[] = [
-  { id: "system", label: "System" },
-  { id: "light", label: "Light" },
-  { id: "dark", label: "Dark" },
+const themes: { id: ThemeMode; label: string; icon: IconName }[] = [
+  { id: "system", label: "System", icon: "settings" },
+  { id: "light", label: "Light", icon: "lightMode" },
+  { id: "dark", label: "Dark", icon: "darkMode" },
 ];
+
+function themeIcon(mode: ThemeMode): IconName {
+  return themes.find((theme) => theme.id === mode)?.icon ?? "settings";
+}
 
 const recentNotes = computed(() =>
   [...notes.value]
@@ -288,7 +292,7 @@ defineExpose({ load });
   <aside class="sidebar" data-testid="sidebar">
     <div class="brand">
       <div class="brand-id">
-        <BrandMark :size="25" />
+         <BrandMark :size="28" />
         <div class="brand-copy">
           <strong>mnote</strong>
           <span>{{ currentUser?.username }}</span>
@@ -428,10 +432,10 @@ defineExpose({ load });
         :style="{ top: `${menuTop}px`, left: `${menuLeft}px` }"
       >
         <button type="button" role="menuitem" data-testid="tree-open-beside" @click="openBesideNote">
-          Open beside
+          <NavIcon name="splitView" />Open beside
         </button>
         <button type="button" role="menuitem" data-testid="tree-delete" @click="void showDelete()">
-          Delete
+          <NavIcon name="trash" />Delete
         </button>
       </div>
     </Teleport>
@@ -459,7 +463,7 @@ defineExpose({ load });
         </button>
         <div class="sidebar-popover sidebar-popover-account" role="menu">
           <p class="sidebar-popover-user">{{ currentUser?.username }}</p>
-          <RouterLink to="/password" role="menuitem" @click="closeFooter">Account</RouterLink>
+          <RouterLink to="/password" role="menuitem" @click="closeFooter"><NavIcon name="user" />Account</RouterLink>
           <button type="button" data-testid="sign-out" role="menuitem" @click="signOut">Sign out</button>
         </div>
       </div>
@@ -484,17 +488,17 @@ defineExpose({ load });
             :data-testid="`theme-option-${theme.id}`"
             @click="chooseTheme(theme.id)"
           >
-            {{ theme.label }}
+            <NavIcon :name="theme.icon" />{{ theme.label }}
           </button>
         </div>
       </div>
     </div>
     <div v-else class="sidebar-footer sidebar-footer-text">
       <button type="button" class="theme-toggle" @click="cycleTheme">
-        <span>Appearance</span>
+        <span class="menu-row"><NavIcon :name="themeIcon(themeMode)" /><span>Appearance</span></span>
         <span class="muted">{{ themeLabel }}</span>
       </button>
-      <RouterLink to="/password">Account</RouterLink>
+      <RouterLink to="/password" class="menu-row"><NavIcon name="user" />Account</RouterLink>
       <button type="button" class="linkish" @click="signOut">Sign out</button>
     </div>
   </aside>

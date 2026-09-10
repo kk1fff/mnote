@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, type SearchHit } from "../api";
 import AppShell from "../components/AppShell.vue";
+import NavIcon from "../components/NavIcon.vue";
 import { currentFix, startGeoWatch } from "../lib/context";
 import { openInWorkspace } from "../workspace";
 import { showParkedList } from "../parked";
@@ -72,7 +73,9 @@ watch(() => route.query, run, { deep: true });
   <AppShell v-slot="{ toggle }">
     <main class="main">
       <header class="bar">
-        <button type="button" class="nav-toggle ghost" @click="toggle">Menu</button>
+        <button type="button" class="nav-toggle ghost" aria-label="Menu" @click="toggle">
+          <NavIcon name="menu" />
+        </button>
         <h1>Search</h1>
       </header>
       <form class="context-filters" @submit.prevent="applyWeather">

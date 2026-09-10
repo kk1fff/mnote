@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, type NoteMeta } from "../api";
 import AppShell from "../components/AppShell.vue";
+import NavIcon from "../components/NavIcon.vue";
 import { isDailyNote } from "../lib/calendar";
 import { noteFolderLabel } from "../lib/paths";
 import { openInWorkspace } from "../workspace";
@@ -33,7 +34,9 @@ onMounted(async () => {
   <AppShell v-slot="{ toggle }">
     <main class="main journal-view">
       <header class="journal-header notes-header">
-        <button type="button" class="nav-toggle ghost" @click="toggle">Menu</button>
+        <button type="button" class="nav-toggle ghost" aria-label="Menu" @click="toggle">
+          <NavIcon name="menu" />
+        </button>
         <div>
           <p>Library</p>
           <h1>Notes</h1>

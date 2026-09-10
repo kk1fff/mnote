@@ -486,6 +486,7 @@ button.icon-btn,
   width: 100%;
   justify-content: flex-start;
   align-items: center;
+  gap: 0.5rem;
   min-height: 1.85rem;
   padding: 0.3rem 0.65rem;
   border: 0;
@@ -512,6 +513,16 @@ button.icon-btn,
 .sidebar-footer-icons .theme-toggle {
   width: auto;
   margin-bottom: 0;
+}
+
+.sidebar-footer-text .menu-row {
+  min-width: 0;
+}
+
+.sidebar-popover .nav-icon,
+.actions-menu .nav-icon,
+.tree-menu .nav-icon {
+  opacity: 0.78;
 }
 
 .note-library {
@@ -1333,6 +1344,7 @@ button.notes-heading.active {
 
 .actions-menu button {
   justify-content: flex-start;
+  gap: 0.55rem;
 }
 
 
@@ -2507,6 +2519,8 @@ button:disabled { cursor: default; opacity: 0.55; }
 .sidebar-link, .recent-note { gap: 0.55rem; min-height: 2.15rem; padding: 0.35rem 0.55rem; border-radius: 7px; }
 .sidebar-link.active, .sidebar .tree-row.active, .sidebar .tree-row.active .recent-note, .sidebar .tree-row.active .tree-link { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); font-weight: 600; }
 .nav-icon { display: block; flex: 0 0 16px; width: 16px; height: 16px; opacity: 0.88; }
+.nav-icon.is-flip { transform: scaleX(-1); }
+.menu-row { display: inline-flex; align-items: center; gap: 0.5rem; }
 .sidebar-recent { display: flex; flex-direction: column; gap: 0.08rem; }.recent-note { display: flex; width: 100%; min-width: 0; flex: 1; align-items: center; border: 0; background: transparent; color: var(--text); font-size: 0.82rem; text-align: left; }.recent-note > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.recent-note:hover { background: transparent; color: inherit; }.note-list-label { margin-top: 1rem; pointer-events: none; }
 .account-chip { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.15rem; padding: 0.15rem 0.45rem 0.15rem 0.15rem; border: 0; border-radius: 999px; background: transparent; color: var(--text); font-weight: 600; }
 .account-chip:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
@@ -2517,6 +2531,7 @@ button:disabled { cursor: default; opacity: 0.55; }
 .backlinks-label { display: inline-flex; align-items: center; gap: 0.4rem; }
 .backlinks-empty { margin: 0 auto; max-width: min(900px, 100%); padding: 0 2.5rem 0.75rem; font-size: 0.8rem; }
 .tab-chip .nav-icon { flex: 0 0 14px; width: 14px; height: 14px; opacity: 0.7; }
+.tab-star .nav-icon { flex: 0 0 12px; width: 12px; height: 12px; opacity: 1; }
 .history-desktop { color: var(--text-muted); }
 .sidebar .note-library { min-height: 0; }
 

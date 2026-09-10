@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from "vue";
 import type { NoteMeta } from "../api";
 import AppShell from "../components/AppShell.vue";
+import NavIcon from "../components/NavIcon.vue";
 import { noteHref } from "../lib/paths";
 
 const props = defineProps<{
@@ -29,7 +30,9 @@ watch(() => props.load, refresh);
   <AppShell v-slot="{ toggle }">
     <main class="main">
       <header class="bar">
-        <button type="button" class="nav-toggle ghost" @click="toggle">Menu</button>
+        <button type="button" class="nav-toggle ghost" aria-label="Menu" @click="toggle">
+          <NavIcon name="menu" />
+        </button>
         <h1>{{ title }}</h1>
       </header>
       <p v-if="error" class="error results">{{ error }}</p>

@@ -54,9 +54,9 @@ test("mobile menu opens and closes", async ({ page }) => {
   await page.waitForURL(/\/n\//);
   const shell = page.locator(".app-shell");
   await expect(shell).not.toHaveClass(/nav-open/);
-  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
   await expect(shell).toHaveClass(/nav-open/);
-  await page.getByRole("button", { name: "Close menu" }).click();
+  await page.getByRole("button", { name: "Close sidebar", exact: true }).click();
   await expect(shell).not.toHaveClass(/nav-open/);
 });
 

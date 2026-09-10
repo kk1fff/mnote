@@ -781,7 +781,9 @@ onBeforeUnmount(() => {
 <template>
   <div class="note-pane" @keydown="onKey">
     <header class="bar" :class="{ 'is-compact': compactBar }">
-      <button type="button" class="nav-toggle ghost" @click="toggle">Menu</button>
+      <button type="button" class="nav-toggle ghost" aria-label="Menu" @click="toggle">
+        <NavIcon name="menu" />
+      </button>
       <div class="note-heading">
         <nav v-if="journalParts" class="note-breadcrumb">
           <button type="button" class="crumb-link" data-testid="journal-crumb-journal" @click.stop="openJournal()">Journal</button>
@@ -895,13 +897,13 @@ onBeforeUnmount(() => {
           <NavIcon name="more" class="actions-more-icon" />
         </button>
         <div class="actions-menu">
-           <button type="button" class="ghost" data-testid="park" @click="runAction(() => showParkCapture())">
-             Park {{ parkShortcut }}
+            <button type="button" class="ghost" data-testid="park" @click="runAction(() => showParkCapture())">
+             <NavIcon name="inbox" />Park {{ parkShortcut }}
            </button>
            <button type="button" class="ghost" data-testid="insert-image" @click="openAssetPicker">
-             Insert image
+             <NavIcon name="image" />Insert image
            </button>
-           <button type="button" class="ghost" @click="openImageManager">Manage images</button>
+           <button type="button" class="ghost" @click="openImageManager"><NavIcon name="images" />Manage images</button>
            <button
             type="button"
             class="ghost"
@@ -909,13 +911,13 @@ onBeforeUnmount(() => {
             :aria-pressed="isFavorite"
             @click="runAction(() => void toggleFavorite())"
           >
-            {{ isFavorite ? "Unfavorite" : "Favorite" }}
+            <NavIcon name="favorites" />{{ isFavorite ? "Unfavorite" : "Favorite" }}
           </button>
           <button type="button" class="ghost" data-testid="preview-toggle" @click="runAction(() => (preview = !preview))">
-            {{ preview ? "Source" : "Preview" }}
+            <NavIcon :name="preview ? 'edit' : 'preview'" />{{ preview ? "Source" : "Preview" }}
           </button>
           <button type="button" class="ghost" data-testid="history" @click="runAction(() => history?.show())">
-            History
+            <NavIcon name="history" />History
           </button>
           <button
             type="button"
@@ -927,7 +929,7 @@ onBeforeUnmount(() => {
             {{ showContext ? "Hide context" : "Context" }}
           </button>
           <button type="button" class="ghost danger-action" data-testid="delete-note-open" @click="runAction(showDelete)">
-            Delete
+            <NavIcon name="trash" />Delete
           </button>
           <button type="button" data-testid="save" @click="runAction(() => void save())">Save</button>
         </div>

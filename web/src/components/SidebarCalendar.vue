@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { monthCells, monthLabel, shiftMonth, WEEKDAYS } from "../lib/calendar";
 import { todayDate } from "../lib/paths";
+import NavIcon from "./NavIcon.vue";
 
 const props = defineProps<{
   journalDates: Set<string>;
@@ -45,11 +46,11 @@ function classes(date: string) {
   <div class="sidebar-cal" data-testid="sidebar-cal">
     <div class="sidebar-cal-nav">
       <button type="button" class="icon-btn" data-testid="cal-prev" aria-label="Previous month" @click="move(-1)">
-        ‹
+        <NavIcon name="chevronLeft" />
       </button>
       <strong>{{ label }}</strong>
       <button type="button" class="icon-btn" data-testid="cal-next" aria-label="Next month" @click="move(1)">
-        ›
+        <NavIcon name="chevronRight" />
       </button>
     </div>
     <div class="sidebar-cal-grid">
