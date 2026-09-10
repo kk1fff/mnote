@@ -6,7 +6,7 @@ dev:
 test: container-test
 
 container-test:
-	mkdir -p web/node_modules desktop/node_modules target web/dist desktop/dist desktop/release web/coverage web/test-results desktop/test-results web/playwright-report desktop/playwright-report web/artifacts desktop/artifacts
+	mkdir -p web/node_modules desktop/node_modules target web/dist desktop/dist desktop/release web/coverage web/test-results desktop/test-results web/playwright-report desktop/playwright-report web/artifacts desktop/artifacts web/e2e/.auth desktop/e2e/.auth
 	docker compose run --rm -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) test
 
 fix-perms:

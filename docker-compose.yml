@@ -28,6 +28,8 @@ services:
       - test-desktop-test-results:/workspace/desktop/test-results
       - test-web-playwright-report:/workspace/web/playwright-report
       - test-desktop-playwright-report:/workspace/desktop/playwright-report
+      - test-web-e2e-auth:/workspace/web/e2e/.auth
+      - test-desktop-e2e-auth:/workspace/desktop/e2e/.auth
     shm_size: 1gb
 
 volumes:
@@ -43,3 +45,5 @@ volumes:
   test-desktop-test-results:
   test-web-playwright-report:
   test-desktop-playwright-report:
+  test-web-e2e-auth:
+  test-desktop-e2e-auth:
