@@ -898,7 +898,7 @@ onBeforeUnmount(() => {
         </button>
         <div class="actions-menu">
             <button type="button" class="ghost" data-testid="park" @click="runAction(() => showParkCapture())">
-             <NavIcon name="inbox" />Park {{ parkShortcut }}
+             <NavIcon name="park" />Park {{ parkShortcut }}
            </button>
            <button type="button" class="ghost" data-testid="insert-image" @click="openAssetPicker">
              <NavIcon name="image" />Insert image

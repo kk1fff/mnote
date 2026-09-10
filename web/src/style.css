@@ -2518,7 +2518,8 @@ button:disabled { cursor: default; opacity: 0.55; }
 .sidebar-group .section-label { margin-bottom: 0.28rem; }
 .sidebar-link, .recent-note { gap: 0.55rem; min-height: 2.15rem; padding: 0.35rem 0.55rem; border-radius: 7px; }
 .sidebar-link.active, .sidebar .tree-row.active, .sidebar .tree-row.active .recent-note, .sidebar .tree-row.active .tree-link { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); font-weight: 600; }
-.nav-icon { display: block; flex: 0 0 16px; width: 16px; height: 16px; opacity: 0.88; }
+.nav-icon { display: block; flex: 0 0 16px; width: 16px; height: 16px; opacity: 0.88; --icon-accent: var(--accent); --icon-accent-soft: var(--accent-soft); }
+.sidebar-create .nav-icon { --icon-accent: currentColor; --icon-accent-soft: color-mix(in srgb, currentColor 22%, transparent); }
 .nav-icon.is-flip { transform: scaleX(-1); }
 .menu-row { display: inline-flex; align-items: center; gap: 0.5rem; }
 .sidebar-recent { display: flex; flex-direction: column; gap: 0.08rem; }.recent-note { display: flex; width: 100%; min-width: 0; flex: 1; align-items: center; border: 0; background: transparent; color: var(--text); font-size: 0.82rem; text-align: left; }.recent-note > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.recent-note:hover { background: transparent; color: inherit; }.note-list-label { margin-top: 1rem; pointer-events: none; }

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" role="img" aria-hidden="true">
+
+<path d="M13.5 15.5h14M13.5 24h10M13.5 32.5h6" stroke="currentColor" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M32.5 16.5v15.5" stroke="currentColor" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M29 28.5l3.5 3.5 3.5-3.5" stroke="var(--icon-accent, var(--accent))" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+</svg>

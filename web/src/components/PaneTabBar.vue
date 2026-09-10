@@ -37,7 +37,7 @@ function label(tab: Tab) {
           :data-testid="`tab-${tab.id}`"
           @click="emit('select', tab.id)"
         >
-          <NavIcon name="note" />
+          <NavIcon name="tab" />
           <span
             class="tab-star"
             title="Unfavorite"
@@ -70,7 +70,7 @@ function label(tab: Tab) {
         :data-testid="`tab-${tab.id}`"
         @click="emit('select', tab.id)"
       >
-        <NavIcon name="note" />
+        <NavIcon name="tab" />
         <span
           class="tab-star"
           title="Favorite"
@@ -90,7 +90,7 @@ function label(tab: Tab) {
         </span>
       </button>
       <button type="button" class="tab-add" data-testid="tab-add" title="Open in new tab" aria-label="Open in new tab" @click="showPicker('add')">
-        <NavIcon name="plus" />
+        <NavIcon name="addTab" />
       </button>
     </div>
   </div>
