@@ -316,6 +316,7 @@ describe("Sidebar", () => {
     expect(wrapper.text()).toContain("Favorites");
     expect(wrapper.text()).toContain("Tags");
     expect(wrapper.find('.library-group [data-testid="sidebar-notes"]').exists()).toBe(false);
+    expect(wrapper.find('.sidebar-scroll [data-testid="sidebar-notes"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="sidebar-notes-rail"]').exists()).toBe(true);
     await wrapper.get('[data-testid="sidebar-notes"]').trigger("click");
     await flushPromises();

@@ -393,10 +393,9 @@ defineExpose({ load });
           >
             <NavIcon name="more" />
           </button>
+          </div>
         </div>
       </div>
-      </div>
-    </div>
       <div class="note-library">
       <button
         type="button"
@@ -420,6 +419,7 @@ defineExpose({ load });
         />
       </div>
       </div>
+    </div>
     <div class="sidebar-section sidebar-cal-section">
       <button
         type="button"
