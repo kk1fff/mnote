@@ -1,3 +1,5 @@
+import { EditorSelection } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import Editor from "./Editor.vue";
@@ -54,6 +56,22 @@ describe("Editor", () => {
     expect(exposed.revealRange(0, 3)).toBe(true);
     expect(exposed.revealTag(4, 9)).toBe(true);
     expect(wrapper.find(".cm-tag-flash").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("paints multiple selection ranges", async () => {
+    const wrapper = mount(Editor, { props: { modelValue: "abcd\nefgh" } });
+    await flushPromises();
+    const view = EditorView.findFromDOM(wrapper.find(".cm-content").element as HTMLElement);
+    expect(view).toBeTruthy();
+    expect(wrapper.find(".cm-selectionLayer").exists()).toBe(true);
+    view!.dispatch({
+      selection: EditorSelection.create([
+        EditorSelection.range(0, 2),
+        EditorSelection.range(5, 7),
+      ]),
+    });
+    expect(view!.state.selection.ranges).toHaveLength(2);
     wrapper.unmount();
   });
 });
