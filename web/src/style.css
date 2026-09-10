@@ -2177,8 +2177,8 @@ button.notes-heading.active {
   }
 
   .sidebar-fold-btn .nav-icon {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
   }
 
   .sidebar-fold-btn:hover {
@@ -2202,8 +2202,8 @@ button.notes-heading.active {
   }
 
   .app-shell.sidebar-folded .sidebar-fold-btn .nav-icon {
-    width: 12px;
-    height: 12px;
+    width: 16px;
+    height: 16px;
   }
 
   .app-shell.sidebar-folded .sidebar-fold-btn:hover {
@@ -2518,7 +2518,7 @@ button:disabled { cursor: default; opacity: 0.55; }
 .sidebar-group .section-label { margin-bottom: 0.28rem; }
 .sidebar-link, .recent-note { gap: 0.55rem; min-height: 2.15rem; padding: 0.35rem 0.55rem; border-radius: 7px; }
 .sidebar-link.active, .sidebar .tree-row.active, .sidebar .tree-row.active .recent-note, .sidebar .tree-row.active .tree-link { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); font-weight: 600; }
-.nav-icon { display: block; flex: 0 0 16px; width: 16px; height: 16px; opacity: 0.88; --icon-accent: var(--accent); --icon-accent-soft: var(--accent-soft); }
+.nav-icon { display: block; flex: 0 0 20px; width: 20px; height: 20px; opacity: 0.88; --icon-accent: var(--accent); --icon-accent-soft: var(--accent-soft); }
 .sidebar-create .nav-icon { --icon-accent: currentColor; --icon-accent-soft: color-mix(in srgb, currentColor 22%, transparent); }
 .nav-icon.is-flip { transform: scaleX(-1); }
 .menu-row { display: inline-flex; align-items: center; gap: 0.5rem; }
@@ -2542,8 +2542,8 @@ button:disabled { cursor: default; opacity: 0.55; }
 .note-folder { display: inline-flex; align-items: center; gap: 0.35rem; }
 .backlinks-label { display: inline-flex; align-items: center; gap: 0.4rem; }
 .backlinks-empty { margin: 0 auto; max-width: min(900px, 100%); padding: 0 2.5rem 0.75rem; font-size: 0.8rem; }
-.tab-chip .nav-icon { flex: 0 0 14px; width: 14px; height: 14px; opacity: 0.7; }
-.tab-star .nav-icon { flex: 0 0 12px; width: 12px; height: 12px; opacity: 1; }
+.tab-chip .nav-icon { flex: 0 0 16px; width: 16px; height: 16px; opacity: 0.7; }
+.tab-star .nav-icon { flex: 0 0 14px; width: 14px; height: 14px; opacity: 1; }
 .history-desktop { color: var(--text-muted); }
 .sidebar .note-library { min-height: 0; }
 
