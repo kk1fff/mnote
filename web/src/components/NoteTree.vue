@@ -36,7 +36,7 @@ function onOpen(event: MouseEvent, id: string) {
           @click="emit('toggle', node.path)"
         >
           <span class="fold-chevron" :class="{ folded: collapsed.has(node.path) }" aria-hidden="true">▾</span>
-          {{ node.name }}
+          <span class="folder-name">{{ node.name }}</span>
         </button>
         <SidebarFold :open="!collapsed.has(node.path)">
           <NoteTree
@@ -61,7 +61,7 @@ function onOpen(event: MouseEvent, id: string) {
           :class="{ active: activeIds.includes(node.note.id) }"
           @click="onOpen($event, node.note.id)"
         >
-          {{ node.name }}
+          <NavIcon name="note" /><span>{{ node.name }}</span>
         </RouterLink>
         <button
           type="button"

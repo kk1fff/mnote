@@ -741,14 +741,15 @@ button.notes-heading.active {
 }
 
 .sidebar .tree .tree {
-  padding-left: 0.85rem;
+  padding-left: 0.7rem;
 }
 
 .sidebar .tree-row {
   display: flex;
   align-items: center;
   gap: 0.05rem;
-  border-radius: 8px;
+  min-height: 2.15rem;
+  border-radius: 7px;
 }
 
 .sidebar .tree-row:hover,
@@ -759,14 +760,21 @@ button.notes-heading.active {
 }
 
 .sidebar .tree-link {
+  display: flex;
   flex: 1;
   min-width: 0;
-  display: block;
-  padding: 0.16rem 0.3rem 0.16rem 0.35rem;
-  border-radius: 8px;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.15rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 7px;
   color: var(--text);
-  font-size: 0.8125rem;
+  font-size: 0.82rem;
   text-decoration: none;
+}
+
+.sidebar .tree-link > span:last-child {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -776,7 +784,7 @@ button.notes-heading.active {
 .sidebar .tree-row:focus-within .tree-link,
 .sidebar .tree-row.open .tree-link,
 .sidebar .tree-link.active {
-  color: var(--accent);
+  color: var(--text);
   text-decoration: none;
 }
 
@@ -822,12 +830,31 @@ button.notes-heading.active {
   width: 100%;
   justify-content: flex-start;
   align-items: center;
-  gap: 0.28rem;
+  gap: 0.55rem;
+  min-height: 2.15rem;
+  padding: 0.35rem 0.55rem;
   border: 0;
+  border-radius: 7px;
   background: none;
   color: var(--text-muted);
-  padding: 0.16rem 0.3rem 0.16rem 0.35rem;
-  font-size: 0.8125rem;
+  font-size: 0.82rem;
+}
+
+.sidebar .folder:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.sidebar .folder .fold-chevron {
+  flex: 0 0 16px;
+  width: 16px;
+  text-align: center;
+}
+
+.sidebar .folder-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .search input,
@@ -2473,12 +2500,12 @@ button:disabled { cursor: default; opacity: 0.55; }
 .sidebar-cal-section { margin-top: 0; }
 .section-label, .section-toggle { font-size: 0.68rem; letter-spacing: 0.1em; opacity: 0.78; }
 .note-library { flex: 1 1 auto; min-height: 8rem; margin-top: 1.15rem; overflow: hidden; }
-.sidebar .tree-row { min-height: 2rem; }
-.sidebar .tree-link { padding: 0.32rem 0.45rem; font-size: 0.84rem; }
+.sidebar .tree-row { min-height: 2.15rem; }
+.sidebar .tree-link { padding: 0.35rem 0.55rem; font-size: 0.82rem; }
 .sidebar-group { flex: 0 0 auto; margin-top: 1.1rem; }.sidebar-group:first-of-type { margin-top: 1.1rem; }
 .sidebar-group .section-label { margin-bottom: 0.28rem; }
 .sidebar-link, .recent-note { gap: 0.55rem; min-height: 2.15rem; padding: 0.35rem 0.55rem; border-radius: 7px; }
-.sidebar-link.active, .sidebar .tree-row.active, .sidebar .tree-row.active .recent-note { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); font-weight: 600; }
+.sidebar-link.active, .sidebar .tree-row.active, .sidebar .tree-row.active .recent-note, .sidebar .tree-row.active .tree-link { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); font-weight: 600; }
 .nav-icon { display: block; flex: 0 0 16px; width: 16px; height: 16px; opacity: 0.88; }
 .sidebar-recent { display: flex; flex-direction: column; gap: 0.08rem; }.recent-note { display: flex; width: 100%; min-width: 0; flex: 1; align-items: center; border: 0; background: transparent; color: var(--text); font-size: 0.82rem; text-align: left; }.recent-note > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.recent-note:hover { background: transparent; color: inherit; }.note-list-label { margin-top: 1rem; pointer-events: none; }
 .account-chip { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.15rem; padding: 0.15rem 0.45rem 0.15rem 0.15rem; border: 0; border-radius: 999px; background: transparent; color: var(--text); font-weight: 600; }
