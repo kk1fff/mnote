@@ -527,18 +527,16 @@ button.icon-btn,
 
 .note-library {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   flex-direction: column;
-  min-height: 0;
   margin-top: 0.85rem;
 }
 
 .sidebar-scroll {
   display: flex;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
-  max-height: calc(100% - 8rem);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -732,9 +730,7 @@ button.notes-heading.active {
 }
 
 .note-tree {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
+  flex: 0 0 auto;
 }
 
 .sidebar ul,
@@ -2317,7 +2313,6 @@ button.notes-heading.active {
 
   .note-library {
     margin-top: 0.65rem;
-    min-height: 10rem;
   }
 
   .sidebar-section {
@@ -2511,7 +2506,7 @@ button:disabled { cursor: default; opacity: 0.55; }
 .sidebar-section { margin-top: 1.15rem; }
 .sidebar-cal-section { margin-top: 0; }
 .section-label, .section-toggle { font-size: 0.68rem; letter-spacing: 0.1em; opacity: 0.78; }
-.note-library { flex: 1 1 auto; min-height: 8rem; margin-top: 1.15rem; overflow: hidden; }
+.note-library { flex: 0 0 auto; margin-top: 1.15rem; overflow: visible; }
 .sidebar .tree-row { min-height: 2.15rem; }
 .sidebar .tree-link { padding: 0.35rem 0.55rem; font-size: 0.82rem; }
 .sidebar-group { flex: 0 0 auto; margin-top: 1.1rem; }.sidebar-group:first-of-type { margin-top: 1.1rem; }
@@ -2545,7 +2540,6 @@ button:disabled { cursor: default; opacity: 0.55; }
 .tab-chip .nav-icon { flex: 0 0 16px; width: 16px; height: 16px; opacity: 0.7; }
 .tab-star .nav-icon { flex: 0 0 14px; width: 14px; height: 14px; opacity: 1; }
 .history-desktop { color: var(--text-muted); }
-.sidebar .note-library { min-height: 0; }
 
 .bar { height: auto; min-height: 9.6rem; align-items: flex-start; padding: 2rem max(2rem, env(safe-area-inset-right)) 1.25rem max(2.5rem, env(safe-area-inset-left)); border: 0; transition: min-height 0.16s ease, padding 0.16s ease; }
 .note-heading { --title-h: 2.8rem; --folder-h: 1.4rem; justify-content: flex-start; gap: 0.35rem; height: auto; overflow: visible; }
@@ -2630,8 +2624,7 @@ button:disabled { cursor: default; opacity: 0.55; }
   .journal-header { min-height: 3.5rem; padding: env(safe-area-inset-top) 1rem 0.65rem; }.journal-header h1 { font-size: 1rem; }.journal-header p { display: none; }.journal-browser { grid-template-columns: 1fr; gap: 1.5rem; padding: 1rem 1rem 2rem; }
   .preview-desktop { display: none; }
   .sidebar > * { flex-shrink: 0; }
-  .sidebar .sidebar-scroll { flex: 0 1 auto; min-height: 0; }
-  .sidebar .note-library { flex-shrink: 1; min-height: 8rem; }
+  .sidebar .sidebar-scroll { flex: 1 1 auto; min-height: 0; }
   .sidebar .sidebar-footer-text { padding-bottom: env(safe-area-inset-bottom); }
 
   .note-picker { max-height: 100dvh; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
