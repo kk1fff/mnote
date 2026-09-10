@@ -627,18 +627,12 @@ button.notes-heading {
   padding: 0;
   border: 0;
   background: none;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
   text-align: left;
-  text-transform: inherit;
   cursor: pointer;
 }
 
 button.notes-heading:hover,
 button.notes-heading.active {
-  color: var(--text);
-  opacity: 1;
   background: transparent;
 }
 
