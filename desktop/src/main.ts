@@ -6,7 +6,6 @@ import {
   Menu,
   net,
   protocol,
-  safeStorage,
   session,
   shell,
 } from "electron";
@@ -52,6 +51,10 @@ protocol.registerSchemesAsPrivileged([
 
 if (process.env.MNOTE_E2E_USERDATA) {
   app.setPath("userData", process.env.MNOTE_E2E_USERDATA);
+}
+
+if (process.platform === "darwin") {
+  app.commandLine.appendSwitch("use-mock-keychain");
 }
 
 type Store = {
@@ -101,20 +104,13 @@ function saveStore(next: Store) {
 }
 
 function encrypt(plain: string): string {
-  if (safeStorage.isEncryptionAvailable()) {
-    return safeStorage.encryptString(plain).toString("base64");
-  }
   return `plain:${plain}`;
 }
 
 function decrypt(stored?: string): string | null {
   if (!stored) return null;
   if (stored.startsWith("plain:")) return stored.slice(6);
-  try {
-    return safeStorage.decryptString(Buffer.from(stored, "base64"));
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 function nextE2eFolder(): string | null {
