@@ -54,7 +54,7 @@ make test
 
 API is Rust (`src/`). Web is Vue + Vite (`web/`). Vite proxies `/api` to `127.0.0.1:3000`. The `test` service is the required full validation path: it runs Rust tests and Clippy; web unit, coverage, typecheck, and browser E2E; unpackaged and packaged Electron E2E under Xvfb; Electron visual review; and web visual review. It fails if an E2E test is skipped. Mac packaging commands remain release checks, not a substitute for the container suite.
 
-The test container bind-mounts the repo and overlays generated dirs with Compose volumes. Visual PNGs remain on the host at `web/artifacts/visual/` and `desktop/artifacts/visual/` and are chowned to the host user on exit. If `make dev` hits `EACCES`, run `make fix-perms`.
+The test container bind-mounts the repo and overlays generated dirs with Compose volumes, including Playwright `.auth` session dumps. Visual PNGs remain on the host at `web/artifacts/visual/` and `desktop/artifacts/visual/` and are chowned to the host user on exit. If `make dev` hits `EACCES`, run `make fix-perms`.
 
 ## Visual review
 
