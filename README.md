@@ -2,19 +2,49 @@
 
 Personal markdown notes for a small, locally hosted group (~10 users). Each person has a private vault. The daily note is the inbox; other pages are freeform markdown with `[[wiki-links]]`.
 
+```mermaid
+flowchart LR
+  subgraph frontend [Frontend]
+    Vue[Vue SPA]
+    Electron[Electron]
+  end
+  subgraph backend [Backend — Rust]
+    API[Axum API]
+    CLI[Admin CLI]
+  end
+  subgraph data [Data]
+    DB[(SQLite)]
+    Vault[Markdown vaults]
+  end
+  Vue -->|cookie / WS| API
+  Electron -->|Bearer / WS| API
+  API --> DB
+  API --> Vault
+  CLI --> DB
+  CLI --> Vault
 ```
-Vue SPA  --(cookie, same origin / Vite proxy)-->  Rust API  -->  /data (db, vaults, logs)
-Admin CLI ----------------------------------------------------^
-```
+
+## Contents
+
+- [Features](#features)
+- [Data directory](#data-directory)
+- [First-time users](#first-time-users)
+- [Requirements](#requirements)
+- [Development](#development)
+- [Desktop (Electron)](#desktop-electron)
+- [Tailscale](#tailscale)
+- [Tests](#tests)
+- [Production (single process)](#production-single-process)
+- [Docker](#docker)
+- [API (cookie session)](#api-cookie-session)
 
 ## Features
 
-- Password accounts. Admin CLI creates users and issues a temporary password.
-- First login always asks the user to set their own password
-- Daily notes (`YYYY-MM-DD.md`), freeform pages, backlinks, full-text search
-- Source-first editor (CodeMirror) with a preview toggle
-- Paste or drop images into a note
-- Notes stored as markdown on disk so you can backup or edit them elsewhere
+- **Self-hosted** — one process, one data folder, private vaults. Notes are markdown on disk.
+- **Cross-device** — browser or Electron (local folder or remote server), same account.
+- **Context logging** — time, place, and weather on paragraphs and parked captures, not stuffed into the note body.
+- **History** — snapshots per note; restore any revision.
+- **Interaction** — daily inbox, park-and-capture, `[[wiki-links]]`, note picker, source + preview.
 
 ## Data directory
 
@@ -22,7 +52,7 @@ All persistent state lives under one folder (`MNOTE_DATA`, default `./data`). Mo
 
 ```
 data/                      # bind-mount this
-  db/mnote.db              # users + sessions
+  db/mnote.db              # users, sessions, parked, context, prefs
   vaults/<user>/notes/     # markdown
   vaults/<user>/assets/    # pasted images
   vaults/<user>/history/   # edit snapshots per note id
@@ -35,6 +65,7 @@ data/                      # bind-mount this
 
    ```bash
    cargo run -- --data data user add alice
+   # docker: docker compose exec mnote mnote user add alice
    ```
 
    ```
@@ -95,6 +126,38 @@ make desktop-mac-smoke     # launch those .apps once
 
 The complete Electron E2E suite, including Linux packaged-app launch coverage, runs in the container suite below. The Mac commands remain for Mac release packaging and smoke testing.
 
+## Tailscale
+
+Host mnote at home. Put every device on the same Tailscale network. Phones, laptops, and **mnote Remote** reach it by MagicDNS; notes stay on the home machine.
+
+```mermaid
+flowchart LR
+  subgraph devices [Devices — no note files]
+    Phone[Phone browser]
+    Laptop[Laptop browser]
+    Remote[mnote Remote]
+  end
+  subgraph tailnet [Tailscale]
+    TS[MagicDNS / tailnet IP]
+  end
+  subgraph home [Home host]
+    API[mnote serve]
+    Data[("$data — db, vaults, logs")]
+    API --> Data
+  end
+  Phone --> TS
+  Laptop --> TS
+  Remote --> TS
+  TS --> API
+```
+
+1. Install Tailscale on the home host and on each device.
+2. Run mnote there (`docker compose` or `mnote serve`). Reach it by Tailscale IP or MagicDNS, not a public port.
+3. Set `MNOTE_PUBLIC_URL` to that URL so invites print the right link.
+4. Open it in a browser, or enter `host:port` in **mnote Remote**.
+
+Do not expose port 3000 to the public internet.
+
 ## Tests
 
 ```bash
@@ -127,21 +190,24 @@ Then open http://localhost:3000.
 
 The production `mnote` image intentionally contains only the shipped application. Use the separate `test` Compose service for tests and visual review.
 
-Login also returns a `token` for Electron. Send `Authorization: Bearer <token>` (or `/api/live?token=`). Cookies still work in the browser.
-
 ## API (cookie session)
+
+Browser uses the session cookie. Login also returns a `token` for Electron: send `Authorization: Bearer <token>` (or `/api/live?token=`).
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/health` | liveness |
+| GET/POST | `/api/setup` | first user (loopback, empty server) |
 | POST | `/api/auth/login` | `{ username, password }` |
 | POST | `/api/auth/logout` | clear session |
 | GET | `/api/auth/me` | current user |
 | POST | `/api/auth/password` | `{ password }` |
+| GET | `/api/live` | WebSocket collab |
 | GET | `/api/notes` | list |
 | POST | `/api/notes` | `{ title, folder?, content? }` |
 | GET/PUT | `/api/notes/daily/:date` | daily note |
 | GET/PUT/PATCH/DELETE | `/api/notes/:id` | page |
+| GET/POST | `/api/notes/:id/context` | paragraph stamps |
 | GET | `/api/notes/:id/history` | snapshot list |
 | GET | `/api/notes/:id/history/:rev` | snapshot |
 | POST | `/api/notes/:id/restore` | `{ rev }` restore body |
@@ -149,9 +215,16 @@ Login also returns a `token` for Electron. Send `Authorization: Bearer <token>` 
 | GET | `/api/notes/title-search?q=` | search notes by title, then folder |
 | GET | `/api/favorites` | favorite notes |
 | PUT/DELETE | `/api/favorites/:id` | favorite a note |
+| GET | `/api/parked` | parked captures |
+| POST | `/api/parked` | park text |
+| DELETE | `/api/parked/:id` | drop a parked item |
+| POST | `/api/parked/:id/note` | promote to a note |
+| POST | `/api/tags/suggest` | tag suggestions |
+| GET | `/api/tags/query` | tag search |
 | GET | `/api/search?q=` | search |
 | GET | `/api/backlinks/:id` | backlinks |
-| POST | `/api/assets` | multipart field `file` |
+| GET/POST | `/api/assets` | list / upload (`file`) |
 | GET | `/api/assets/:id` | image |
+| GET | `/api/assets/:id/meta` | asset metadata |
 
 Wiki links use `[[title]]` at the vault root or `[[folder/title]]` (optional `|label`). Titles are unique per folder. Daily notes are the root note titled `YYYY-MM-DD`. File names stay on the server.
