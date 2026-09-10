@@ -191,7 +191,7 @@ test("sidebar row menu deletes a note", async ({ page }) => {
   await page.waitForURL(/\/n\//);
   const title = uid("SideDel");
   await createNote(page, title);
-  const row = page.getByTestId("sidebar").locator(".tree-row", { hasText: title });
+  const row = page.getByTestId("sidebar").locator(".tree-row", { hasText: title }).first();
   await row.hover();
   await row.getByTestId("tree-more").click();
   await page.getByTestId("tree-delete").click();
@@ -258,6 +258,18 @@ test("recent row opens a note", async ({ page }) => {
   await page.goto("/today");
   await page.waitForURL(/\/n\//);
   await page.getByTestId("sidebar").locator(".recent-note", { hasText: title }).click();
+  await expect(page.getByTestId("note-title")).toHaveText(title);
+});
+
+test("notes tree opens a foldered note", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  const title = uid("Nested");
+  await createNote(page, `ideas/${title}`);
+  await page.goto("/today");
+  await page.waitForURL(/\/n\//);
+  await expect(page.getByTestId("sidebar").getByTestId("tree-folder").filter({ hasText: "ideas" })).toBeVisible();
+  await page.getByTestId("sidebar").locator(".tree-link", { hasText: title }).click();
   await expect(page.getByTestId("note-title")).toHaveText(title);
 });
 
@@ -365,7 +377,7 @@ test("page command inserts a folder wiki path", async ({ page }) => {
 });
 
 async function openBeside(page: import("@playwright/test").Page, title: string) {
-  const row = page.locator(".tree-row").filter({ hasText: title });
+  const row = page.locator(".tree-row").filter({ hasText: title }).first();
   await row.hover();
   await row.getByTestId("tree-more").click();
   await page.getByTestId("tree-open-beside").click();

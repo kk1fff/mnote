@@ -2,6 +2,7 @@
 import type { NoteMeta } from "../api";
 import { noteHref } from "../lib/paths";
 import type { TreeNode } from "../lib/tree";
+import NavIcon from "./NavIcon.vue";
 import NoteTree from "./NoteTree.vue";
 import SidebarFold from "./SidebarFold.vue";
 
@@ -35,7 +36,7 @@ function onOpen(event: MouseEvent, id: string) {
           @click="emit('toggle', node.path)"
         >
           <span class="fold-chevron" :class="{ folded: collapsed.has(node.path) }" aria-hidden="true">▾</span>
-          {{ node.name }}
+          <span class="folder-name">{{ node.name }}</span>
         </button>
         <SidebarFold :open="!collapsed.has(node.path)">
           <NoteTree
@@ -60,7 +61,7 @@ function onOpen(event: MouseEvent, id: string) {
           :class="{ active: activeIds.includes(node.note.id) }"
           @click="onOpen($event, node.note.id)"
         >
-          {{ node.name }}
+          <NavIcon name="note" /><span>{{ node.name }}</span>
         </RouterLink>
         <button
           type="button"
@@ -70,11 +71,7 @@ function onOpen(event: MouseEvent, id: string) {
           data-testid="tree-more"
           @click.stop="emit('menu', node.note, $event)"
         >
-          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-            <circle cx="3.5" cy="8" r="1.2" fill="currentColor" />
-            <circle cx="8" cy="8" r="1.2" fill="currentColor" />
-            <circle cx="12.5" cy="8" r="1.2" fill="currentColor" />
-          </svg>
+          <NavIcon name="more" />
         </button>
       </div>
     </li>

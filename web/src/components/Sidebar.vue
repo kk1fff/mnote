@@ -2,9 +2,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, type NoteMeta } from "../api";
+import { collapsed, refreshCollapsed, toggleCollapsed } from "../folders";
 import { clearDraft } from "../lib/drafts";
 import { isDailyNote } from "../lib/calendar";
 import { noteIdFromRoute } from "../lib/paths";
+import { noteTree } from "../lib/tree";
 import { live, type LiveEvent } from "../live";
 import { parkedItems, refreshParked, showParkCapture } from "../parked";
 import type { PickerCollection } from "../lib/picker";
@@ -15,6 +17,7 @@ import { cycleTheme, setThemeMode, themeMode, type ThemeMode } from "../theme";
 import DeleteNoteDialog from "./DeleteNoteDialog.vue";
 import BrandMark from "./BrandMark.vue";
 import NavIcon from "./NavIcon.vue";
+import NoteTree from "./NoteTree.vue";
 import SidebarCalendar from "./SidebarCalendar.vue";
 import SidebarFold from "./SidebarFold.vue";
 
@@ -49,8 +52,9 @@ const themes: { id: ThemeMode; label: string }[] = [
 const recentNotes = computed(() =>
   [...notes.value]
     .sort((a, b) => b.modified_at.localeCompare(a.modified_at))
-    .slice(0, 8),
+    .slice(0, 5),
 );
+const treeNodes = computed(() => noteTree(notes.value.filter((note) => !isDailyNote(note))));
 const journalDates = computed(() => {
   const dates = new Set<string>();
   for (const note of notes.value) {
@@ -254,6 +258,7 @@ const stopLive = live.on(onLive);
 onMounted(() => {
   live.connect();
   void load();
+  void refreshCollapsed().catch(() => undefined);
   void refreshParked().catch(() => undefined);
   document.addEventListener("click", onFooterDocClick);
   document.addEventListener("keydown", onFooterKey);
@@ -321,7 +326,7 @@ defineExpose({ load });
       </div>
       <div class="sidebar-group library-group">
       <p class="section-label">Library</p>
-      <button type="button" class="sidebar-link" data-testid="sidebar-notes" title="Notes" :class="{ active: route.name === 'notes' || (route.name === 'note' && !activeDaily) }" @click="openNotes">
+      <button type="button" class="sidebar-link notes-rail-only" data-testid="sidebar-notes-rail" title="Notes" :class="{ active: route.name === 'notes' }" @click="openNotes">
         <NavIcon name="note" /><span class="rail-label">Notes</span>
       </button>
       <button type="button" class="sidebar-link" data-testid="sidebar-journal" title="Journal" :class="{ active: route.name === 'journal' || !!activeDaily }" @click="openJournal">
@@ -340,7 +345,7 @@ defineExpose({ load });
         <NavIcon name="tag" /><span class="rail-label">Tags</span>
       </button>
       </div>
-      <div class="note-library">
+      <div class="sidebar-group sidebar-recent-group">
       <p class="section-label">Recent</p>
       <div class="sidebar-recent">
         <div
@@ -371,6 +376,29 @@ defineExpose({ load });
       </div>
       </div>
     </div>
+      <div class="note-library">
+      <button
+        type="button"
+        class="section-label notes-heading"
+        data-testid="sidebar-notes"
+        title="Notes"
+        :class="{ active: route.name === 'notes' }"
+        @click="openNotes"
+      >
+        Notes
+      </button>
+      <div class="note-tree">
+        <NoteTree
+          :nodes="treeNodes"
+          :active-ids="openIds"
+          :collapsed="collapsed"
+          :menu-id="menuNote?.id ?? ''"
+          @toggle="void toggleCollapsed($event)"
+          @menu="openMenu"
+          @open="openNote"
+        />
+      </div>
+      </div>
     <div class="sidebar-section sidebar-cal-section">
       <button
         type="button"
