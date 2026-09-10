@@ -516,15 +516,18 @@ button.icon-btn,
 
 .note-library {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   flex-direction: column;
-  min-height: 8rem;
+  min-height: 0;
   margin-top: 0.85rem;
 }
 
 .sidebar-scroll {
-  flex: 1 1 auto;
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
   min-height: 0;
+  max-height: calc(100% - 8rem);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -612,6 +615,31 @@ button.icon-btn,
 .sidebar-link:hover {
   background: color-mix(in srgb, var(--text) 6%, transparent);
   color: var(--text);
+}
+
+.notes-rail-only {
+  display: none;
+}
+
+button.notes-heading {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+button.notes-heading:hover,
+button.notes-heading.active {
+  color: var(--text);
+  opacity: 1;
+  background: transparent;
 }
 
 .sidebar-cal-nav {
@@ -2165,10 +2193,20 @@ button.icon-btn,
   .app-shell.sidebar-folded .brand-copy,
   .app-shell.sidebar-folded .section-label,
   .app-shell.sidebar-folded .note-library,
+  .app-shell.sidebar-folded .sidebar-recent-group,
   .app-shell.sidebar-folded .sidebar-cal-section,
   .app-shell.sidebar-folded .sidebar-search kbd,
   .app-shell.sidebar-folded .parked-count {
     display: none;
+  }
+
+  .app-shell.sidebar-folded .notes-rail-only {
+    display: flex;
+  }
+
+  .app-shell.sidebar-folded .sidebar-scroll {
+    flex: 1 1 auto;
+    max-height: none;
   }
 
   .app-shell.sidebar-folded .sidebar-search,
@@ -2440,7 +2478,7 @@ button:disabled { cursor: default; opacity: 0.55; }
 .sidebar-section { margin-top: 1.15rem; }
 .sidebar-cal-section { margin-top: 0; }
 .section-label, .section-toggle { font-size: 0.68rem; letter-spacing: 0.1em; opacity: 0.78; }
-.note-library { flex: 1 1 auto; min-height: 0; margin-top: 1.15rem; overflow: hidden; }
+.note-library { flex: 1 1 auto; min-height: 8rem; margin-top: 1.15rem; overflow: hidden; }
 .sidebar .tree-row { min-height: 2rem; }
 .sidebar .tree-link { padding: 0.32rem 0.45rem; font-size: 0.84rem; }
 .sidebar-group { flex: 0 0 auto; margin-top: 1.1rem; }.sidebar-group:first-of-type { margin-top: 1.1rem; }
@@ -2448,7 +2486,7 @@ button:disabled { cursor: default; opacity: 0.55; }
 .sidebar-link, .recent-note { gap: 0.55rem; min-height: 2.15rem; padding: 0.35rem 0.55rem; border-radius: 7px; }
 .sidebar-link.active, .sidebar .tree-row.active, .sidebar .tree-row.active .recent-note { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); font-weight: 600; }
 .nav-icon { display: block; flex: 0 0 16px; width: 16px; height: 16px; opacity: 0.88; }
-.sidebar-recent { display: flex; flex-direction: column; gap: 0.08rem; flex: 1; min-height: 0; overflow: auto; }.recent-note { display: flex; width: 100%; min-width: 0; flex: 1; align-items: center; border: 0; background: transparent; color: var(--text); font-size: 0.82rem; text-align: left; }.recent-note > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.recent-note:hover { background: transparent; color: inherit; }.note-list-label { margin-top: 1rem; pointer-events: none; }
+.sidebar-recent { display: flex; flex-direction: column; gap: 0.08rem; }.recent-note { display: flex; width: 100%; min-width: 0; flex: 1; align-items: center; border: 0; background: transparent; color: var(--text); font-size: 0.82rem; text-align: left; }.recent-note > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.recent-note:hover { background: transparent; color: inherit; }.note-list-label { margin-top: 1rem; pointer-events: none; }
 .account-chip { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.15rem; padding: 0.15rem 0.45rem 0.15rem 0.15rem; border: 0; border-radius: 999px; background: transparent; color: var(--text); font-weight: 600; }
 .account-chip:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
 .user-avatar { display: inline-flex; align-items: center; justify-content: center; width: 1.55rem; height: 1.55rem; border-radius: 50%; color: #fff; font-size: 0.72rem; font-weight: 700; line-height: 1; }
@@ -2544,8 +2582,8 @@ button:disabled { cursor: default; opacity: 0.55; }
   .journal-header { min-height: 3.5rem; padding: env(safe-area-inset-top) 1rem 0.65rem; }.journal-header h1 { font-size: 1rem; }.journal-header p { display: none; }.journal-browser { grid-template-columns: 1fr; gap: 1.5rem; padding: 1rem 1rem 2rem; }
   .preview-desktop { display: none; }
   .sidebar > * { flex-shrink: 0; }
-  .sidebar .sidebar-scroll { flex: 1 1 auto; min-height: 0; }
-  .sidebar .note-library { min-height: 0; }
+  .sidebar .sidebar-scroll { flex: 0 1 auto; min-height: 0; }
+  .sidebar .note-library { flex-shrink: 1; min-height: 8rem; }
   .sidebar .sidebar-footer-text { padding-bottom: env(safe-area-inset-bottom); }
 
   .note-picker { max-height: 100dvh; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
