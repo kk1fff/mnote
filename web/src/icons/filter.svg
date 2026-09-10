@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" role="img" aria-hidden="true">
+
+<path d="M10.5 13.5h27L28.7 24v8.2L19.3 36v-12Z" stroke="currentColor" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M16 13.5h16" stroke="var(--icon-accent, var(--accent))" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+</svg>

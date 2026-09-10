@@ -5,6 +5,7 @@ export type IconName =
   | "search"
   | "plus"
   | "inbox"
+  | "park"
   | "note"
   | "notes"
   | "journal"
@@ -40,12 +41,18 @@ export type IconName =
   | "duplicate"
   | "move"
   | "rename"
-  | "collapse";
+  | "collapse"
+  | "help"
+  | "about"
+  | "filter"
+  | "sort"
+  | "viewOptions";
 
 const FILES: Partial<Record<IconName, string>> = {
   search: "search",
   plus: "new-note",
   inbox: "inbox",
+  park: "park-a-thought",
   note: "note",
   notes: "notes",
   journal: "journal",
@@ -81,6 +88,11 @@ const FILES: Partial<Record<IconName, string>> = {
   move: "move",
   rename: "rename",
   collapse: "collapse",
+  help: "help",
+  about: "about",
+  filter: "filter",
+  sort: "sort",
+  viewOptions: "view-options",
 };
 
 const modules = import.meta.glob("../icons/*.svg", {
@@ -94,12 +106,21 @@ const HISTORY =
 
 const props = defineProps<{ name: IconName }>();
 
-const inner = computed(() => {
-  if (props.name === "history") return HISTORY;
+function source() {
   const file = FILES[props.name];
   if (!file) return "";
   const needle = `/icons/${file}.svg`;
-  const raw = Object.entries(modules).find(([key]) => key.replaceAll("\\", "/").endsWith(needle))?.[1];
+  return Object.entries(modules).find(([key]) => key.replaceAll("\\", "/").endsWith(needle))?.[1] ?? "";
+}
+
+const viewBox = computed(() => {
+  if (props.name === "history") return "0 0 16 16";
+  return source().match(/viewBox="([^"]+)"/i)?.[1] ?? "0 0 24 24";
+});
+
+const inner = computed(() => {
+  if (props.name === "history") return HISTORY;
+  const raw = source();
   if (!raw) return "";
   return raw.replace(/^[\s\S]*?<svg[^>]*>/i, "").replace(/<\/svg>\s*$/i, "").trim();
 });
@@ -109,12 +130,12 @@ const inner = computed(() => {
   <svg
     class="nav-icon"
     :class="{ 'is-flip': name === 'chevronLeft' }"
-    :viewBox="name === 'history' ? '0 0 16 16' : '0 0 24 24'"
-    width="16"
-    height="16"
+    :viewBox="viewBox"
+    width="20"
+    height="20"
     fill="none"
     stroke="currentColor"
-    :stroke-width="name === 'history' ? 1.5 : 1.8"
+    :stroke-width="name === 'history' ? 1.5 : undefined"
     stroke-linecap="round"
     stroke-linejoin="round"
     aria-hidden="true"

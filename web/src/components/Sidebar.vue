@@ -331,7 +331,7 @@ defineExpose({ load });
       <p class="section-label">Inbox</p>
       <div class="park-row">
         <button class="parked-button" type="button" data-testid="sidebar-park" title="Park a thought" @click="showParkCapture({})">
-          <NavIcon name="inbox" /><span class="rail-label">Park a thought</span>
+          <NavIcon name="park" /><span class="rail-label">Park a thought</span>
         </button>
       <button
         v-if="parkedItems.length"
@@ -348,7 +348,7 @@ defineExpose({ load });
       <div class="sidebar-group library-group">
       <p class="section-label">Library</p>
       <button type="button" class="sidebar-link notes-rail-only" data-testid="sidebar-notes-rail" title="Notes" :class="{ active: route.name === 'notes' }" @click="openNotes">
-        <NavIcon name="note" /><span class="rail-label">Notes</span>
+        <NavIcon name="notes" /><span class="rail-label">Notes</span>
       </button>
       <button type="button" class="sidebar-link" data-testid="sidebar-journal" title="Journal" :class="{ active: route.name === 'journal' || !!activeDaily }" @click="openJournal">
         <NavIcon name="journal" /><span class="rail-label">Journal</span>

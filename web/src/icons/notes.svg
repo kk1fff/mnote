@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" role="img" aria-hidden="true">
 
-  <path d="M7 4.5h7l4 4V19.5H7Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M14 4.5v4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="13.5" y="12.5" width="17" height="22" rx="3.1" stroke="currentColor" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M18.7 12.5V10.2A2.7 2.7 0 0 1 21.4 7.5h10.2a2.7 2.7 0 0 1 2.7 2.7v17" stroke="currentColor" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M18.5 20h7.5M18.5 25h7.5" stroke="var(--icon-accent, var(--accent))" stroke-width="2.45" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 
 </svg>
