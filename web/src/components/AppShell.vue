@@ -84,7 +84,7 @@ onBeforeUnmount(() => {
       :aria-expanded="!sidebarPrefs.sidebarFolded"
       @click="toggleSidebarSection('sidebarFolded')"
     >
-      <NavIcon :name="sidebarPrefs.sidebarFolded ? 'chevronRight' : 'panelClose'" />
+      <NavIcon :name="sidebarPrefs.sidebarFolded ? 'panelOpen' : 'panelClose'" />
     </button>
     <slot :toggle="() => (open = !open)" />
     <NotePicker ref="picker" @created="sidebar?.load()" />

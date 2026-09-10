@@ -12,6 +12,7 @@ describe("router guards", () => {
   beforeEach(() => {
     currentUser.value = null;
     refreshSession.mockResolvedValue(null);
+    vi.doUnmock("./desktop");
     vi.resetModules();
   });
 
@@ -44,6 +45,23 @@ describe("router guards", () => {
     await router.push("/n/2026-08-22");
     await router.isReady();
     expect(router.currentRoute.value.path).toBe("/password");
+  });
+
+  it("sends the local app to setup when a folder is needed", async () => {
+    vi.doMock("./desktop", () => ({
+      flavor: () => "full",
+      desktopInfo: () => ({
+        flavor: "full",
+        apiBase: null,
+        folder: null,
+        username: null,
+        needsSetup: true,
+      }),
+    }));
+    const router = (await import("./router")).default;
+    await router.push("/today");
+    await router.isReady();
+    expect(router.currentRoute.value.path).toBe("/setup");
   });
 
   it("rechecks session on every navigation", async () => {

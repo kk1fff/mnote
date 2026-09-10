@@ -12,11 +12,12 @@ import { parkedItems, refreshParked, showParkCapture } from "../parked";
 import type { PickerCollection } from "../lib/picker";
 import { sidebarPrefs, toggleSidebarSection } from "../sidebar";
 import { applyOpen, forgetNote, layoutHref, openBeside, visibleIds } from "../workspace";
+import { desktopInfo, flavor } from "../desktop";
 import { currentUser, logout } from "../session";
 import { cycleTheme, setThemeMode, themeMode, type ThemeMode } from "../theme";
 import DeleteNoteDialog from "./DeleteNoteDialog.vue";
 import BrandMark from "./BrandMark.vue";
-import NavIcon from "./NavIcon.vue";
+import NavIcon, { type IconName } from "./NavIcon.vue";
 import NoteTree from "./NoteTree.vue";
 import SidebarCalendar from "./SidebarCalendar.vue";
 import SidebarFold from "./SidebarFold.vue";
@@ -31,7 +32,13 @@ const searchShortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ct
 const notes = ref<NoteMeta[]>([]);
 const route = useRoute();
 const router = useRouter();
-const footerMenu = ref<"account" | "appearance" | null>(null);
+const footerMenu = ref<"account" | "appearance" | "folder" | null>(null);
+const localApp = computed(() => flavor() === "full");
+const folderPath = computed(() => desktopInfo()?.folder ?? "");
+const folderName = computed(() => {
+  const parts = folderPath.value.split(/[/\\]/).filter(Boolean);
+  return parts[parts.length - 1] || folderPath.value || "Folder";
+});
 const footerEl = ref<HTMLElement | null>(null);
 const menuNote = ref<NoteMeta | null>(null);
 const menuEl = ref<HTMLElement | null>(null);
@@ -43,11 +50,15 @@ const deleteError = ref("");
 const deleteBusy = ref(false);
 const narrow = ref(typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches);
 let footerMq: MediaQueryList | undefined;
-const themes: { id: ThemeMode; label: string }[] = [
-  { id: "system", label: "System" },
-  { id: "light", label: "Light" },
-  { id: "dark", label: "Dark" },
+const themes: { id: ThemeMode; label: string; icon: IconName }[] = [
+  { id: "system", label: "System", icon: "settings" },
+  { id: "light", label: "Light", icon: "lightMode" },
+  { id: "dark", label: "Dark", icon: "darkMode" },
 ];
+
+function themeIcon(mode: ThemeMode): IconName {
+  return themes.find((theme) => theme.id === mode)?.icon ?? "settings";
+}
 
 const recentNotes = computed(() =>
   [...notes.value]
@@ -114,7 +125,17 @@ async function signOut() {
   await router.push("/login");
 }
 
-function toggleFooter(menu: "account" | "appearance") {
+async function revealFolder() {
+  footerMenu.value = null;
+  await window.mnote?.revealFolder();
+}
+
+function changeFolder() {
+  footerMenu.value = null;
+  void router.push("/setup");
+}
+
+function toggleFooter(menu: "account" | "appearance" | "folder") {
   footerMenu.value = footerMenu.value === menu ? null : menu;
 }
 
@@ -288,7 +309,7 @@ defineExpose({ load });
   <aside class="sidebar" data-testid="sidebar">
     <div class="brand">
       <div class="brand-id">
-        <BrandMark :size="25" />
+         <BrandMark :size="28" />
         <div class="brand-copy">
           <strong>mnote</strong>
           <span>{{ currentUser?.username }}</span>
@@ -428,10 +449,10 @@ defineExpose({ load });
         :style="{ top: `${menuTop}px`, left: `${menuLeft}px` }"
       >
         <button type="button" role="menuitem" data-testid="tree-open-beside" @click="openBesideNote">
-          Open beside
+          <NavIcon name="splitView" />Open beside
         </button>
         <button type="button" role="menuitem" data-testid="tree-delete" @click="void showDelete()">
-          Delete
+          <NavIcon name="trash" />Delete
         </button>
       </div>
     </Teleport>
@@ -445,7 +466,30 @@ defineExpose({ load });
       @confirm="void confirmDelete()"
     />
     <div v-if="!narrow" ref="footerEl" class="sidebar-footer sidebar-footer-icons">
-      <div class="sidebar-menu" :class="{ open: footerMenu === 'account' }">
+      <div v-if="localApp" class="sidebar-menu" :class="{ open: footerMenu === 'folder' }">
+        <button
+          type="button"
+          class="account-chip"
+          data-testid="folder-menu"
+          aria-label="Notes folder"
+          :aria-expanded="footerMenu === 'folder'"
+          :title="folderPath"
+          @click="toggleFooter('folder')"
+        >
+          <NavIcon name="notes" />
+          <span class="rail-label folder-chip-name">{{ folderName }}</span>
+        </button>
+        <div class="sidebar-popover sidebar-popover-account" role="menu">
+          <p class="sidebar-popover-user folder-popover-path" :title="folderPath">{{ folderPath }}</p>
+          <button type="button" data-testid="show-folder" role="menuitem" @click="void revealFolder()">
+            <NavIcon name="notes" />Show in folder
+          </button>
+          <button type="button" data-testid="change-folder" role="menuitem" @click="changeFolder">
+            <NavIcon name="move" />Change folder
+          </button>
+        </div>
+      </div>
+      <div v-else class="sidebar-menu" :class="{ open: footerMenu === 'account' }">
         <button
           type="button"
           class="account-chip"
@@ -459,7 +503,7 @@ defineExpose({ load });
         </button>
         <div class="sidebar-popover sidebar-popover-account" role="menu">
           <p class="sidebar-popover-user">{{ currentUser?.username }}</p>
-          <RouterLink to="/password" role="menuitem" @click="closeFooter">Account</RouterLink>
+          <RouterLink to="/password" role="menuitem" @click="closeFooter"><NavIcon name="user" />Account</RouterLink>
           <button type="button" data-testid="sign-out" role="menuitem" @click="signOut">Sign out</button>
         </div>
       </div>
@@ -484,18 +528,29 @@ defineExpose({ load });
             :data-testid="`theme-option-${theme.id}`"
             @click="chooseTheme(theme.id)"
           >
-            {{ theme.label }}
+            <NavIcon :name="theme.icon" />{{ theme.label }}
           </button>
         </div>
       </div>
     </div>
     <div v-else class="sidebar-footer sidebar-footer-text">
       <button type="button" class="theme-toggle" @click="cycleTheme">
-        <span>Appearance</span>
+        <span class="menu-row"><NavIcon :name="themeIcon(themeMode)" /><span>Appearance</span></span>
         <span class="muted">{{ themeLabel }}</span>
       </button>
-      <RouterLink to="/password">Account</RouterLink>
-      <button type="button" class="linkish" @click="signOut">Sign out</button>
+      <template v-if="localApp">
+        <p class="sidebar-folder-path" :title="folderPath">{{ folderPath }}</p>
+        <button type="button" class="menu-row" data-testid="show-folder" @click="void revealFolder()">
+          <NavIcon name="notes" />Show in folder
+        </button>
+        <button type="button" class="menu-row" data-testid="change-folder" @click="changeFolder">
+          <NavIcon name="move" />Change folder
+        </button>
+      </template>
+      <template v-else>
+        <RouterLink to="/password" class="menu-row"><NavIcon name="user" />Account</RouterLink>
+        <button type="button" class="linkish" @click="signOut">Sign out</button>
+      </template>
     </div>
   </aside>
 </template>

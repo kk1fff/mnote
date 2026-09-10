@@ -44,7 +44,7 @@ function label(tab: Tab) {
             data-testid="tab-star"
             @click.stop="emit('pin', tab)"
           >
-            ★
+            <NavIcon name="star" />
           </span>
           <span class="tab-title">{{ label(tab) }}</span>
           <span
@@ -77,7 +77,7 @@ function label(tab: Tab) {
           data-testid="tab-star"
           @click.stop="emit('pin', tab)"
         >
-          ★
+          <NavIcon name="star" />
         </span>
         <span class="tab-title">{{ label(tab) }}</span>
         <span

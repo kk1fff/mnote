@@ -32,6 +32,7 @@ describe("ConnectView", () => {
       setServer,
       pickFolder: vi.fn(),
       setup: vi.fn(),
+      revealFolder: vi.fn(),
       getToken: vi.fn(),
       setToken: vi.fn(),
     };

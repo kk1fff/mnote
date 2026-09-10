@@ -116,8 +116,8 @@ cargo run -- --data data user list
 
 Two apps share the Vue UI:
 
-- **mnote Remote** — enter a server `host:port`, log in as usual.
-- **mnote** — pick a local folder, set a password, notes stay on that machine.
+- **mnote Remote** — enter a server `host:port`, log in as usual (username + password).
+- **mnote** — pick a local folder. No password or username. Reopening that folder opens the notes. Change or reveal the folder from the sidebar. Notes stay in that folder (`db/`, `vaults/`). Serving the same folder with `mnote serve` still requires a password.
 
 ```bash
 make desktop-mac           # unpacked .app (arm64/x64 dir target)
@@ -164,7 +164,7 @@ Do not expose port 3000 to the public internet.
 make test
 ```
 
-This is the required full check. It runs Rust tests and Clippy; web unit tests, coverage, typecheck, and browser E2E; unpackaged and packaged Electron E2E under Xvfb; then the visual-review capture. E2E skips fail the command. `make container-test` runs the same Compose command directly. Screenshots are written to `web/artifacts/visual/`; inspect every image after a successful run.
+This is the required full check. It runs Rust tests and Clippy; web unit tests, coverage, typecheck, and browser E2E; unpackaged and packaged Electron E2E under Xvfb; Electron visual capture; then the web visual-review capture. E2E skips fail the command. `make container-test` runs the same Compose command directly. Screenshots are written to `web/artifacts/visual/` and `desktop/artifacts/visual/`; inspect every image after a successful run.
 
 Generated dirs (`node_modules`, `target`, `dist`, …) live in Compose volumes, not the bind-mounted repo. Visual PNGs stay on the host and are chowned to you on exit. If leftover root-owned files block `make dev`, run `make fix-perms`.
 

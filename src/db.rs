@@ -314,9 +314,35 @@ pub fn delete_user_sessions(state: &AppState, username: &str) -> Result<(), AppE
     Ok(())
 }
 
+pub fn sole_user(state: &AppState) -> Result<User, AppError> {
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+    let mut stmt = conn.prepare(
+        "SELECT id, username, must_change_password FROM users ORDER BY id LIMIT 2",
+    )?;
+    let mut rows = stmt.query([])?;
+    let Some(row) = rows.next()? else {
+        return Err(AppError::NotFound);
+    };
+    let user = User {
+        id: row.get(0)?,
+        username: row.get(1)?,
+        must_change_password: row.get::<_, i64>(2)? != 0,
+    };
+    if rows.next()?.is_some() {
+        return Err(AppError::Forbidden("desktop_multi_user"));
+    }
+    Ok(user)
+}
+
 pub fn authenticate(state: &AppState, username: &str, password: &str) -> Result<User, AppError> {
     let username = username.trim();
     let password = password.trim();
+    if password.is_empty() {
+        return Err(AppError::Unauthorized);
+    }
     let conn = state
         .db
         .lock()
@@ -756,6 +782,7 @@ mod tests {
         let user = authenticate(&state, "alice", &pw).unwrap();
         assert_eq!(user.username, "alice");
         assert!(authenticate(&state, "alice", "nope").is_err());
+        assert!(authenticate(&state, "bob", "").is_err());
         assert!(authenticate(&state, "missing", &pw).is_err());
     }
 

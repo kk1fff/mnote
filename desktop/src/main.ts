@@ -8,11 +8,12 @@ import {
   protocol,
   safeStorage,
   session,
+  shell,
 } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createServer } from "node:net";
@@ -63,6 +64,7 @@ let win: BrowserWindow | null = null;
 let child: ChildProcess | null = null;
 let sidecarBase: string | null = null;
 let authFilter: string | null = null;
+let e2ePicks: string[] | undefined;
 
 function repoRoot(): string {
   return path.resolve(here, "..", "..");
@@ -115,9 +117,19 @@ function decrypt(stored?: string): string | null {
   }
 }
 
-function sanitizeUser(name: string): string {
-  const cleaned = name.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32);
-  return cleaned || "me";
+function nextE2eFolder(): string | null {
+  if (e2ePicks === undefined) {
+    const raw = process.env.MNOTE_E2E_DATA;
+    e2ePicks = raw
+      ? raw
+          .split("|")
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : [];
+  }
+  if (!e2ePicks.length) return null;
+  if (e2ePicks.length === 1) return e2ePicks[0];
+  return e2ePicks.shift() ?? null;
 }
 
 function normalizeServer(input: string): string {
@@ -202,20 +214,39 @@ async function stopSidecar() {
   }
 }
 
-async function startSidecar(dataDir: string): Promise<string> {
+async function startSidecar(dataDir: string): Promise<{ apiBase: string; token: string; username: string }> {
   await stopSidecar();
   fs.mkdirSync(dataDir, { recursive: true });
   const port = await freePort();
   const bin = sidecarBin();
   if (!fs.existsSync(bin)) throw new Error(`missing mnote binary at ${bin}`);
+  const unlock = randomBytes(32).toString("hex");
   child = spawn(bin, ["--data", dataDir, "serve", "--bind", `127.0.0.1:${port}`], {
     stdio: "ignore",
-    env: { ...process.env, MNOTE_DATA: dataDir },
+    env: { ...process.env, MNOTE_DATA: dataDir, MNOTE_SIDECAR_UNLOCK: unlock },
   });
   sidecarBase = `http://127.0.0.1:${port}`;
   await waitHealth(sidecarBase);
+  const res = await fetch(`${sidecarBase}/api/desktop/session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ unlock }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    token?: string;
+    username?: string;
+  };
+  if (!res.ok || !body.token) {
+    await stopSidecar();
+    if (body.error === "desktop_multi_user") {
+      throw new Error("This folder has more than one account. Use mnote Remote or the browser.");
+    }
+    throw new Error(body.error || "Couldn't open the folder.");
+  }
+  saveStore({ ...loadStore(), folder: dataDir, token: encrypt(body.token) });
   attachAuth(sidecarBase);
-  return sidecarBase;
+  return { apiBase: sidecarBase, token: body.token, username: body.username || "me" };
 }
 
 function registerProtocol() {
@@ -283,20 +314,34 @@ app.whenReady().then(() => {
   ipcMain.handle("mnote:ready", async () => {
     const store = loadStore();
     if (flavor === "full") {
-      const folder = process.env.MNOTE_E2E_DATA || store.folder || null;
-      let apiBase: string | null = null;
-      if (folder) apiBase = await startSidecar(folder);
-      return {
-        flavor,
-        apiBase,
-        folder,
-        username: sanitizeUser(os.userInfo().username),
-      };
+      const folder = store.folder || null;
+      if (!folder) {
+        return { flavor, apiBase: null, folder: null, username: null, token: null };
+      }
+      try {
+        const started = await startSidecar(folder);
+        return {
+          flavor,
+          apiBase: started.apiBase,
+          folder,
+          username: null,
+          token: started.token,
+        };
+      } catch (err) {
+        return {
+          flavor,
+          apiBase: null,
+          folder,
+          username: null,
+          token: null,
+          error: err instanceof Error ? err.message : "Couldn't open the folder.",
+        };
+      }
     }
     const server = process.env.MNOTE_E2E_SERVER || store.server || null;
     const apiBase = server ? normalizeServer(server) : null;
     if (apiBase) attachAuth(apiBase);
-    return { flavor, apiBase, folder: null, username: null };
+    return { flavor, apiBase, folder: null, username: null, token: decrypt(store.token) };
   });
   ipcMain.handle("mnote:setServer", async (_e, host: string) => {
     try {
@@ -310,35 +355,25 @@ app.whenReady().then(() => {
     }
   });
   ipcMain.handle("mnote:pickFolder", async () => {
-    if (process.env.MNOTE_E2E_DATA) return process.env.MNOTE_E2E_DATA;
+    const stub = nextE2eFolder();
+    if (stub) return stub;
     const result = await dialog.showOpenDialog({
       properties: ["openDirectory", "createDirectory"],
     });
     if (result.canceled) return null;
     return result.filePaths[0] ?? null;
   });
-  ipcMain.handle("mnote:setup", async (_e, opts: { folder?: string; password: string; username?: string }) => {
-    const folder = opts.folder || process.env.MNOTE_E2E_DATA || loadStore().folder;
+  ipcMain.handle("mnote:setup", async (_e, opts?: { folder?: string }) => {
+    const folder = opts?.folder || loadStore().folder;
     if (!folder) throw new Error("Choose a folder for your notes.");
-    const apiBase = sidecarBase || (await startSidecar(folder));
-    const username = sanitizeUser(opts.username || os.userInfo().username);
-    const res = await fetch(`${apiBase}/api/setup`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password: opts.password }),
-    });
-    const body = (await res.json().catch(() => ({}))) as {
-      error?: string;
-      token?: string;
-      username?: string;
-    };
-    if (!res.ok) throw new Error(body.error || "Couldn't create the vault.");
-    saveStore({
-      ...loadStore(),
-      folder,
-      token: body.token ? encrypt(body.token) : loadStore().token,
-    });
-    return { token: body.token, username: body.username || username, apiBase };
+    const started = await startSidecar(folder);
+    return { token: started.token, username: started.username, apiBase: started.apiBase };
+  });
+  ipcMain.handle("mnote:revealFolder", async () => {
+    const folder = loadStore().folder;
+    if (!folder || !fs.existsSync(folder)) return false;
+    shell.showItemInFolder(folder);
+    return true;
   });
   ipcMain.handle("mnote:getToken", () => decrypt(loadStore().token));
   ipcMain.handle("mnote:setToken", (_e, token: string | null) => {

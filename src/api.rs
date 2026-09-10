@@ -29,6 +29,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/password", post(change_password))
         .route("/auth/me", get(me))
         .route("/setup", get(setup_status).post(setup))
+        .route("/desktop/session", post(desktop_session))
         .route("/live", get(live_ws))
         .route("/notes", get(list_notes).post(create_note))
         .route("/notes/daily/{date}", get(daily_note).put(put_daily_note))
@@ -284,6 +285,38 @@ async fn setup(
         return Err(AppError::Conflict("already_setup".into()));
     }
     let user = db::bootstrap_user(&state, body.username.trim(), body.password.trim())?;
+    let token = db::create_session(&state, user.id)?;
+    let mut res = Json(me_body(&user, Some(token.clone()))).into_response();
+    res.headers_mut()
+        .insert(SET_COOKIE, session_cookie(&token, false));
+    Ok(res)
+}
+
+#[derive(Deserialize)]
+struct DesktopSessionBody {
+    unlock: String,
+}
+
+async fn desktop_session(
+    State(state): State<AppState>,
+    Peer(peer): Peer,
+    Json(body): Json<DesktopSessionBody>,
+) -> Result<Response, AppError> {
+    let Some(expected) = state.desktop_unlock.as_deref() else {
+        return Err(AppError::NotFound);
+    };
+    let loopback = peer.map(|addr| addr.ip().is_loopback()).unwrap_or(false);
+    if !loopback {
+        return Err(AppError::Forbidden("desktop_not_allowed"));
+    }
+    if !crate::auth::secrets_equal(body.unlock.trim(), expected) {
+        return Err(AppError::Forbidden("desktop_not_allowed"));
+    }
+    let user = if db::user_count(&state)? == 0 {
+        db::bootstrap_user(&state, "me", &crate::auth::generate_password())?
+    } else {
+        db::sole_user(&state)?
+    };
     let token = db::create_session(&state, user.id)?;
     let mut res = Json(me_body(&user, Some(token.clone()))).into_response();
     res.headers_mut()

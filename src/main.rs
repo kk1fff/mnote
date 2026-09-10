@@ -145,9 +145,16 @@ fn init_logging(
 
 async fn serve(data: PathBuf, bind: String) -> anyhow::Result<()> {
     warn_if_likely_wrong_data_dir(&data);
-    let state = AppState::open(&data)?;
-    let app = api::router(state);
     let addr: SocketAddr = bind.parse()?;
+    let mut state = AppState::open(&data)?;
+    if addr.ip().is_loopback() {
+        if let Ok(secret) = std::env::var("MNOTE_SIDECAR_UNLOCK") {
+            state = state.with_desktop_unlock(secret);
+        }
+    } else if std::env::var_os("MNOTE_SIDECAR_UNLOCK").is_some() {
+        tracing::warn!("ignoring MNOTE_SIDECAR_UNLOCK because bind is not loopback");
+    }
+    let app = api::router(state);
     tracing::info!(data = %data.display(), "listening on http://{addr}");
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(

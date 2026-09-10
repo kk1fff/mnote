@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="mnote mark">
+  <path d="M 178.855,108.448 A 34.000,34.000 0 0 1 169.736,166.018 L 97.823,195.073 A 18.000,18.000 0 0 1 73.473,174.641 L 89.599,98.774 A 34.000,34.000 0 0 1 144.711,79.798 Z" fill="#12204A"/>
+  <line x1="85.72" y1="184.77" x2="120.43" y2="143.41"
+        stroke="#FFFFFF" stroke-width="15.20" stroke-linecap="round"/>
+</svg>

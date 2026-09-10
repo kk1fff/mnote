@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("mnote", {
   setServer: (host) => ipcRenderer.invoke("mnote:setServer", host),
   pickFolder: () => ipcRenderer.invoke("mnote:pickFolder"),
   setup: (opts) => ipcRenderer.invoke("mnote:setup", opts),
+  revealFolder: () => ipcRenderer.invoke("mnote:revealFolder"),
   getToken: () => ipcRenderer.invoke("mnote:getToken"),
   setToken: (token) => ipcRenderer.invoke("mnote:setToken", token),
 });

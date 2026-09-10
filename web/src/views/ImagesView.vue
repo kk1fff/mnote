@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { api, type Asset, type NoteMeta } from "../api";
 import AppShell from "../components/AppShell.vue";
+import NavIcon from "../components/NavIcon.vue";
 
 const assets = ref<Asset[]>([]);
 const group = ref("");
@@ -35,7 +36,9 @@ onMounted(() => void load());
   <AppShell v-slot="{ toggle }">
     <main class="main images-view">
       <header class="bar">
-        <button type="button" class="nav-toggle ghost" @click="toggle">Menu</button>
+        <button type="button" class="nav-toggle ghost" aria-label="Menu" @click="toggle">
+          <NavIcon name="menu" />
+        </button>
         <h1>Images</h1>
       </header>
       <div class="images-toolbar">
