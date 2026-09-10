@@ -218,11 +218,13 @@ function checkTagsRow(chrome, label) {
     console.warn(`tags missing on ${label}`);
     return;
   }
-  if (chrome.tagsLeft + 1 < chrome.folderRight) {
-    console.warn(`tags overlap folder on ${label}`);
-  }
-  if (chrome.tagsLeft - chrome.folderRight > 16) {
-    console.warn(`tags not after folder on ${label}: gap ${chrome.tagsLeft - chrome.folderRight}px`);
+  if (chrome.folderW > 1) {
+    if (chrome.tagsLeft + 1 < chrome.folderRight) {
+      console.warn(`tags overlap folder on ${label}`);
+    }
+    if (chrome.tagsLeft - chrome.folderRight > 16) {
+      console.warn(`tags not after folder on ${label}: gap ${chrome.tagsLeft - chrome.folderRight}px`);
+    }
   }
   if (chrome.tagsRight - chrome.actionsLeft > 1) {
     console.warn(`tags overlap actions on ${label}`);
@@ -315,6 +317,46 @@ async function barHeight(page) {
   return page.locator(".bar").first().evaluate((el) => el.getBoundingClientRect().height);
 }
 
+async function shotCompact(page, name) {
+  const scroller = page.locator(".document-scroll").first();
+  await scroller.evaluate((el) => {
+    if (el.scrollHeight <= el.clientHeight + 40) {
+      const col = el.querySelector(".document-column");
+      if (col instanceof HTMLElement) {
+        col.dataset.visualPad = "1";
+        col.style.paddingBottom = "80vh";
+      }
+    }
+    el.scrollTop = 80;
+  });
+  const bar = page.locator(".bar.is-compact").first();
+  await bar.waitFor({ timeout: 3000 });
+  await bar.evaluate((el) => {
+    el.style.transition = "none";
+    el.querySelectorAll("*").forEach((node) => {
+      if (node instanceof HTMLElement) node.style.transition = "none";
+    });
+  });
+  const file = path.join(out, `${name}.png`);
+  await page.screenshot({ path: file, fullPage: false, animations: "allow" });
+  console.log(file);
+  await scroller.evaluate((el) => {
+    const col = el.querySelector(".document-column");
+    if (col instanceof HTMLElement && col.dataset.visualPad) {
+      col.style.paddingBottom = "";
+      delete col.dataset.visualPad;
+    }
+    el.scrollTop = 0;
+  });
+  await page.locator(".bar").first().evaluate((el) => {
+    el.style.transition = "";
+    el.querySelectorAll("*").forEach((node) => {
+      if (node instanceof HTMLElement) node.style.transition = "";
+    });
+  });
+  await page.waitForTimeout(180);
+}
+
 async function captureSaveStatus(page, unsavedName, toastName) {
   const before = await barHeight(page);
   await editor(page).click();
@@ -342,6 +384,10 @@ if ((await editor(page).innerText()).trim().length < 8) {
 }
 await captureSaveStatus(page, "31-unsaved-desktop-light", "32-saved-toast-desktop-light");
 await shot(page, "02-note-desktop-light");
+await page.goto(`${url}/today`);
+await page.waitForSelector('[data-testid="editor"]');
+await shot(page, "02h-journal-note-light");
+await shotCompact(page, "02j-journal-compact-light");
 await shotModeToggle(page, "34");
 await shotTodos(page, "35");
 await page.goto(`${url}/journal`);
@@ -378,13 +424,14 @@ try {
     await page.waitForTimeout(200);
     checkTagsRow(await tagsChrome(tagsLight), "light overflow");
     await shot(page, "23c-note-tags-overflow-light");
-    await page.getByTestId("note-folder").click();
+    await page.getByTestId("note-title").click();
     await page.waitForSelector('[data-testid="note-folder-input"]');
     await page.getByTestId("note-folder-input").fill("projects/launch/planning/owners/and/more/nested/paths");
     await page.getByTestId("note-title-input").press("Enter");
     await page.waitForSelector('[data-testid="note-folder"]');
     checkTagsRow(await tagsChrome(tagsLight), "light long folder");
     await shot(page, "23f-note-tags-long-folder-light");
+    await shotCompact(page, "03b-note-compact-light");
   } catch {
     console.warn("note tags row did not appear");
   }
@@ -568,6 +615,11 @@ await page.evaluate(() => {
 await page.waitForTimeout(150);
 await captureSaveStatus(page, "31b-unsaved-desktop-dark", "32b-saved-toast-desktop-dark");
 await shot(page, "08-note-desktop-dark");
+await shotCompact(page, "08h-note-compact-dark");
+await page.goto(`${url}/today`);
+await page.waitForSelector('[data-testid="editor"]');
+await shot(page, "08c-journal-note-dark");
+await shotCompact(page, "08f-journal-compact-dark");
 await shotModeToggle(page, "34b");
 await shotTodos(page, "35b");
 await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "08g-sidebar-calendar-folding-dark", "08d-sidebar-calendar-folded-dark");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isDailyNote, monthCells, monthLabel, padDate, shiftMonth } from "./calendar";
+import { formatJournalTitle, isDailyNote, monthCells, monthLabel, padDate, shiftMonth } from "./calendar";
 
 describe("calendar", () => {
   it("detects root YYYY-MM-DD notes", () => {
@@ -7,6 +7,12 @@ describe("calendar", () => {
     expect(isDailyNote({ title: "2026-08-31" })).toBe(true);
     expect(isDailyNote({ title: "2026-08-31", folder: "journal" })).toBe(false);
     expect(isDailyNote({ title: "Launch" })).toBe(false);
+  });
+
+  it("formats a journal heading without the ISO date", () => {
+    const label = formatJournalTitle("2026-09-09");
+    expect(label).not.toBe("2026-09-09");
+    expect(label).toMatch(/9/);
   });
 
   it("builds a Sunday-start August 2026 grid", () => {

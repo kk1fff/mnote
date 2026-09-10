@@ -27,7 +27,7 @@ import { live, type Live, type LiveEvent } from "../live";
 import { pendingExcerpt, setParkContext, showParkCapture } from "../parked";
 import { extractHashtags, openTag, pendingTagReveal } from "../lib/tags";
 import type { TaskChange } from "../lib/tasks";
-import { isDailyNote } from "../lib/calendar";
+import { formatJournalTitle, isDailyNote } from "../lib/calendar";
 import { rememberTitle, setPinned } from "../workspace";
 
 const props = withDefaults(
@@ -64,15 +64,28 @@ const journalParts = computed(() => {
     monthName: date.toLocaleString(undefined, { month: "long" }),
   };
 });
-const journalLabel = computed(() => {
-  if (!journalDate.value) return "";
-  return new Date(`${journalDate.value}T12:00:00`).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-});
+const displayTitle = computed(() =>
+  journalDate.value ? formatJournalTitle(journalDate.value) : title.value || "Note",
+);
 const showTags = computed(() => tags.value.length > 0 && !editingMeta.value);
+const documentScrollEl = ref<HTMLElement | null>(null);
+const compactBar = ref(false);
+
+function resetDocumentScroll() {
+  compactBar.value = false;
+  if (documentScrollEl.value) documentScrollEl.value.scrollTop = 0;
+}
+
+function onDocumentScroll() {
+  const el = documentScrollEl.value;
+  if (!el) return;
+  const y = el.scrollTop;
+  if (compactBar.value) {
+    if (y < 8) compactBar.value = false;
+  } else if (y > 32) {
+    compactBar.value = true;
+  }
+}
 let tagsResize: ResizeObserver | undefined;
 const hasConflictMarkers = computed(() => /^<<<<<<< this device$/m.test(content.value) && /^>>>>>>> other device$/m.test(content.value));
 const preview = ref(false);
@@ -239,6 +252,8 @@ async function load() {
   selectedOrdinal.value = null;
   noteContext.value = await api.noteContext(id).catch(() => ({ blocks: [], events: [] }));
   void flushContext();
+  await nextTick();
+  resetDocumentScroll();
 }
 
 function applyRemote(next: string) {
@@ -394,7 +409,7 @@ function onMetaFocusOut(event: FocusEvent) {
 
 function openJournal(query?: { year: number; month?: number }) {
   void router.push({
-    name: "journal",
+    path: "/journal",
     query: query
       ? {
           year: String(query.year),
@@ -685,10 +700,15 @@ function applyTagReveal() {
 watch(
   () => props.noteId,
   () => {
+    resetDocumentScroll();
     void load();
   },
   { immediate: true },
 );
+
+watch(preview, () => {
+  void nextTick(onDocumentScroll);
+});
 
 watch(pendingTagReveal, () => applyTagReveal());
 
@@ -760,16 +780,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="note-pane" @keydown="onKey">
-    <header class="bar">
+    <header class="bar" :class="{ 'is-compact': compactBar }">
       <button type="button" class="nav-toggle ghost" @click="toggle">Menu</button>
       <div class="note-heading">
-        <p v-if="journalParts && !editingMeta" class="note-breadcrumb">
-          <button type="button" class="crumb-link" data-testid="journal-crumb-journal" @click="openJournal()">Journal</button>
+        <nav v-if="journalParts" class="note-breadcrumb">
+          <button type="button" class="crumb-link" data-testid="journal-crumb-journal" @click.stop="openJournal()">Journal</button>
           <span class="crumb-sep">/</span>
-          <button type="button" class="crumb-link" data-testid="journal-crumb-year" @click="openJournal({ year: journalParts.year })">{{ journalParts.year }}</button>
+          <button type="button" class="crumb-link" data-testid="journal-crumb-year" @click.stop="openJournal({ year: journalParts.year })">{{ journalParts.year }}</button>
           <span class="crumb-sep">/</span>
-          <button type="button" class="crumb-link" data-testid="journal-crumb-month" @click="openJournal({ year: journalParts.year, month: journalParts.month })">{{ journalParts.monthName }}</button>
-        </p>
+          <button type="button" class="crumb-link" data-testid="journal-crumb-month" @click.stop="openJournal({ year: journalParts.year, month: journalParts.month })">{{ journalParts.monthName }}</button>
+        </nav>
         <form v-if="editingMeta" class="note-meta-form" @submit.prevent="saveMeta" @focusout="onMetaFocusOut">
           <input
             v-model="draftTitle"
@@ -792,11 +812,19 @@ onBeforeUnmount(() => {
           </div>
         </form>
         <template v-else>
-        <h1 data-testid="note-title" title="Rename note" tabindex="0" @keydown.enter.prevent="beginMeta" @keydown.space.prevent="beginMeta" @click="beginMeta">{{ title || "Note" }}</h1>
+        <h1
+          data-testid="note-title"
+          :data-journal-date="journalDate || undefined"
+          title="Rename note"
+          tabindex="0"
+          @keydown.enter.prevent="beginMeta"
+          @keydown.space.prevent="beginMeta"
+          @click="beginMeta"
+        >{{ displayTitle }}</h1>
         <div class="note-folder-row" :class="{ 'has-tags': showTags }">
           <p
             class="muted note-folder"
-            :class="{ 'is-empty': !folder, 'is-journal': !!journalDate }"
+            :class="{ 'is-empty': !folder && !journalDate, 'is-journal': !!journalDate }"
             data-testid="note-folder"
             :title="folder || 'Move note'"
             tabindex="0"
@@ -804,8 +832,7 @@ onBeforeUnmount(() => {
             @keydown.space.prevent="beginMeta"
             @click="beginMeta"
           >
-            <template v-if="journalDate"><NavIcon name="calendar" /> Journal · {{ journalLabel }}</template>
-            <template v-else>{{ folder }}</template>
+            <template v-if="!journalDate">{{ folder }}</template>
           </p>
           <div
             v-if="showTags"
@@ -927,7 +954,7 @@ onBeforeUnmount(() => {
       <span><strong>Conflict markers found.</strong> Review both versions in the note before removing the markers.</span>
       <button type="button" class="ghost" @click="history?.show()">Review history</button>
     </div>
-    <div class="document-scroll">
+    <div ref="documentScrollEl" class="document-scroll" @scroll.passive="onDocumentScroll">
       <div class="document-column">
         <Preview v-if="preview" interactive :source="content" @toggle="onTaskToggle" />
         <Editor

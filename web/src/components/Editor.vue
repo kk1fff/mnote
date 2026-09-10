@@ -651,14 +651,15 @@ onMounted(() => {
           },
         }),
         EditorView.editable.of(!props.disabled),
-        EditorView.theme({
-          "&": {
-            height: "100%",
-            fontSize: "13px",
-            backgroundColor: "transparent",
-            color: "var(--text)",
-          },
-          ".cm-scroller": { fontFamily: "var(--font-mono)" },
+          EditorView.theme({
+            "&": {
+              height: "auto",
+              minHeight: "100%",
+              fontSize: "13px",
+              backgroundColor: "transparent",
+              color: "var(--text)",
+            },
+            ".cm-scroller": { fontFamily: "var(--font-mono)", overflow: "visible" },
           ".cm-content": {
             caretColor: "var(--text)",
             color: "var(--text)",

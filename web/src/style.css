@@ -2461,17 +2461,17 @@ button:disabled { cursor: default; opacity: 0.55; }
 .history-desktop { color: var(--text-muted); }
 .sidebar .note-library { min-height: 0; }
 
-.bar { height: auto; min-height: 9.6rem; align-items: flex-start; padding: 2rem max(2rem, env(safe-area-inset-right)) 1.25rem max(2.5rem, env(safe-area-inset-left)); border: 0; }
+.bar { height: auto; min-height: 9.6rem; align-items: flex-start; padding: 2rem max(2rem, env(safe-area-inset-right)) 1.25rem max(2.5rem, env(safe-area-inset-left)); border: 0; transition: min-height 0.16s ease, padding 0.16s ease; }
 .note-heading { --title-h: 2.8rem; --folder-h: 1.4rem; justify-content: flex-start; gap: 0.35rem; height: auto; overflow: visible; }
-.note-breadcrumb { display: flex; align-items: center; margin: 0 0 0.15rem; color: var(--text-muted); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em; }
-.crumb-link { margin: 0; padding: 0; min-height: 0; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; }
+.note-breadcrumb { position: relative; z-index: 1; display: flex; align-items: center; margin: 0 0 0.15rem; color: var(--text-muted); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em; }
+.crumb-link { margin: 0; padding: 0.1rem 0; min-height: 0; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-decoration: none; }
 .crumb-link:hover { color: var(--text); }
 .crumb-sep { opacity: 0.55; padding: 0 0.2rem; }
-.bar > h1, .note-heading h1, .note-meta-form .title-input { height: var(--title-h); min-height: var(--title-h); max-height: var(--title-h); padding: 0; border-radius: 0; font-size: 2rem; font-weight: 720; line-height: 1.15; letter-spacing: -0.045em; }
+.bar > h1, .note-heading h1, .note-meta-form .title-input { height: var(--title-h); min-height: var(--title-h); max-height: var(--title-h); padding: 0; border-radius: 0; font-size: 2rem; font-weight: 720; line-height: 1.15; letter-spacing: -0.045em; transition: font-size 0.16s ease, height 0.16s ease, min-height 0.16s ease, max-height 0.16s ease, line-height 0.16s ease, letter-spacing 0.16s ease; }
 .note-folder-row { height: var(--folder-h); gap: 0.4rem; }
 .note-folder, .note-folder-row .folder-input { height: var(--folder-h); min-height: var(--folder-h); max-height: var(--folder-h); padding: 0; color: var(--text-muted); font-size: 0.8rem; line-height: var(--folder-h); }
 .note-folder.is-empty::after { content: "Add folder"; }
-.note-folder.is-journal::after { content: none; }
+.note-folder.is-journal { flex: 0 0 auto; width: 0; min-width: 0; padding: 0; overflow: hidden; }
 .note-tag { height: 1.35rem; max-height: 1.35rem; padding: 0 0.45rem; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--text) 8%, var(--surface)); color: var(--text-muted); font-size: 0.72rem; line-height: 1.35rem; }
 .actions { padding-top: 0.05rem; }
 .mode-toggle { --mode-x: 0; position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; padding: 0.15rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); touch-action: none; user-select: none; }
@@ -2484,6 +2484,8 @@ button:disabled { cursor: default; opacity: 0.55; }
 .document-scroll { display: flex; flex: 1; min-height: 0; overflow: auto; background: var(--surface); }
 .document-column { width: min(900px, 100%); min-height: 100%; margin: 0 auto; padding: 0 2.5rem 4rem; }
 .document-column .editor, .document-column .preview { min-height: 100%; overflow: visible; }
+.document-column .cm-editor { height: auto; min-height: 100%; }
+.document-column .cm-editor .cm-scroller { overflow: visible; }
 .cm-editor { font-size: 15px; }
 .cm-editor .cm-content { padding: 1.15rem 0 2rem; line-height: 1.72; letter-spacing: 0.005em; }
 .cm-editor .cm-line { padding: 0; }
@@ -2522,6 +2524,13 @@ button:disabled { cursor: default; opacity: 0.55; }
   .note-heading { --title-h: 2.8rem; --folder-h: 1.4rem; height: auto; }
   .note-heading h1, .note-meta-form .title-input { font-size: 2rem; }
   .actions-menu button { min-height: 2.25rem; }
+  .bar.is-compact { min-height: 3.5rem; align-items: center; padding: 0.45rem max(2rem, env(safe-area-inset-right)) 0.45rem max(2.5rem, env(safe-area-inset-left)); }
+  .bar.is-compact .note-heading { --title-h: 2rem; --folder-h: 0; gap: 0; }
+  .bar.is-compact .note-breadcrumb,
+  .bar.is-compact .note-folder-row { display: none !important; }
+  .bar.is-compact .note-heading h1,
+  .bar.is-compact .note-meta-form .title-input { font-size: 1rem; line-height: 2rem; font-weight: 650; letter-spacing: -0.02em; }
+  .bar.is-compact .actions { padding-top: 0; }
 }
 @media (max-width: 720px) {
   .bar { min-height: 3.5rem; align-items: center; padding: env(safe-area-inset-top) 0.75rem 0; }
