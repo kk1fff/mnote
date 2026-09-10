@@ -41,6 +41,13 @@ router.beforeEach(async (to) => {
     const { desktopInfo } = await import("./desktop");
     const needed = desktopInfo()?.needsSetup ?? !getApiBase();
     if (needed && to.path !== "/setup") return { path: "/setup" };
+    if (to.path === "/setup") return true;
+    await refreshSession();
+    if (!currentUser.value) return { path: "/setup" };
+    if (to.path === "/login" || to.path === "/password" || to.path === "/connect") {
+      return { path: "/" };
+    }
+    return true;
   }
   if (to.path === "/connect" || to.path === "/setup") return true;
   await refreshSession();

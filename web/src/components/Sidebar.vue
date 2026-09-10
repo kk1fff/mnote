@@ -12,6 +12,7 @@ import { parkedItems, refreshParked, showParkCapture } from "../parked";
 import type { PickerCollection } from "../lib/picker";
 import { sidebarPrefs, toggleSidebarSection } from "../sidebar";
 import { applyOpen, forgetNote, layoutHref, openBeside, visibleIds } from "../workspace";
+import { desktopInfo, flavor } from "../desktop";
 import { currentUser, logout } from "../session";
 import { cycleTheme, setThemeMode, themeMode, type ThemeMode } from "../theme";
 import DeleteNoteDialog from "./DeleteNoteDialog.vue";
@@ -31,7 +32,13 @@ const searchShortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ct
 const notes = ref<NoteMeta[]>([]);
 const route = useRoute();
 const router = useRouter();
-const footerMenu = ref<"account" | "appearance" | null>(null);
+const footerMenu = ref<"account" | "appearance" | "folder" | null>(null);
+const localApp = computed(() => flavor() === "full");
+const folderPath = computed(() => desktopInfo()?.folder ?? "");
+const folderName = computed(() => {
+  const parts = folderPath.value.split(/[/\\]/).filter(Boolean);
+  return parts[parts.length - 1] || folderPath.value || "Folder";
+});
 const footerEl = ref<HTMLElement | null>(null);
 const menuNote = ref<NoteMeta | null>(null);
 const menuEl = ref<HTMLElement | null>(null);
@@ -118,7 +125,17 @@ async function signOut() {
   await router.push("/login");
 }
 
-function toggleFooter(menu: "account" | "appearance") {
+async function revealFolder() {
+  footerMenu.value = null;
+  await window.mnote?.revealFolder();
+}
+
+function changeFolder() {
+  footerMenu.value = null;
+  void router.push("/setup");
+}
+
+function toggleFooter(menu: "account" | "appearance" | "folder") {
   footerMenu.value = footerMenu.value === menu ? null : menu;
 }
 
@@ -449,7 +466,30 @@ defineExpose({ load });
       @confirm="void confirmDelete()"
     />
     <div v-if="!narrow" ref="footerEl" class="sidebar-footer sidebar-footer-icons">
-      <div class="sidebar-menu" :class="{ open: footerMenu === 'account' }">
+      <div v-if="localApp" class="sidebar-menu" :class="{ open: footerMenu === 'folder' }">
+        <button
+          type="button"
+          class="account-chip"
+          data-testid="folder-menu"
+          aria-label="Notes folder"
+          :aria-expanded="footerMenu === 'folder'"
+          :title="folderPath"
+          @click="toggleFooter('folder')"
+        >
+          <NavIcon name="notes" />
+          <span class="rail-label folder-chip-name">{{ folderName }}</span>
+        </button>
+        <div class="sidebar-popover sidebar-popover-account" role="menu">
+          <p class="sidebar-popover-user folder-popover-path" :title="folderPath">{{ folderPath }}</p>
+          <button type="button" data-testid="show-folder" role="menuitem" @click="void revealFolder()">
+            <NavIcon name="notes" />Show in folder
+          </button>
+          <button type="button" data-testid="change-folder" role="menuitem" @click="changeFolder">
+            <NavIcon name="move" />Change folder
+          </button>
+        </div>
+      </div>
+      <div v-else class="sidebar-menu" :class="{ open: footerMenu === 'account' }">
         <button
           type="button"
           class="account-chip"
@@ -498,8 +538,19 @@ defineExpose({ load });
         <span class="menu-row"><NavIcon :name="themeIcon(themeMode)" /><span>Appearance</span></span>
         <span class="muted">{{ themeLabel }}</span>
       </button>
-      <RouterLink to="/password" class="menu-row"><NavIcon name="user" />Account</RouterLink>
-      <button type="button" class="linkish" @click="signOut">Sign out</button>
+      <template v-if="localApp">
+        <p class="sidebar-folder-path" :title="folderPath">{{ folderPath }}</p>
+        <button type="button" class="menu-row" data-testid="show-folder" @click="void revealFolder()">
+          <NavIcon name="notes" />Show in folder
+        </button>
+        <button type="button" class="menu-row" data-testid="change-folder" @click="changeFolder">
+          <NavIcon name="move" />Change folder
+        </button>
+      </template>
+      <template v-else>
+        <RouterLink to="/password" class="menu-row"><NavIcon name="user" />Account</RouterLink>
+        <button type="button" class="linkish" @click="signOut">Sign out</button>
+      </template>
     </div>
   </aside>
 </template>

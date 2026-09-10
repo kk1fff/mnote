@@ -2522,6 +2522,17 @@ button:disabled { cursor: default; opacity: 0.55; }
 .nav-icon.is-flip { transform: scaleX(-1); }
 .menu-row { display: inline-flex; align-items: center; gap: 0.5rem; }
 .sidebar-recent { display: flex; flex-direction: column; gap: 0.08rem; }.recent-note { display: flex; width: 100%; min-width: 0; flex: 1; align-items: center; border: 0; background: transparent; color: var(--text); font-size: 0.82rem; text-align: left; }.recent-note > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.recent-note:hover { background: transparent; color: inherit; }.note-list-label { margin-top: 1rem; pointer-events: none; }
+.folder-chip-name { max-width: 7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-popover-path, .sidebar-folder-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-folder-path {
+  margin: 0 0 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
 .account-chip { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.15rem; padding: 0.15rem 0.45rem 0.15rem 0.15rem; border: 0; border-radius: 999px; background: transparent; color: var(--text); font-weight: 600; }
 .account-chip:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
 .user-avatar { display: inline-flex; align-items: center; justify-content: center; width: 1.55rem; height: 1.55rem; border-radius: 50%; color: #fff; font-size: 0.72rem; font-weight: 700; line-height: 1; }

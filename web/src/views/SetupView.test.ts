@@ -9,7 +9,7 @@ const pickFolder = vi.fn();
 const setup = vi.fn();
 
 vi.mock("../desktop", () => ({
-  desktopInfo: () => ({ flavor: "full", apiBase: null, folder: null, username: "pat", needsSetup: true }),
+  desktopInfo: () => ({ flavor: "full", apiBase: null, folder: null, username: null, needsSetup: true }),
   markSetupDone: vi.fn(),
 }));
 
@@ -46,41 +46,35 @@ describe("SetupView", () => {
       setServer: vi.fn(),
       pickFolder,
       setup,
+      revealFolder: vi.fn(),
       getToken: vi.fn(),
       setToken: vi.fn(),
     };
   });
 
-  it("creates a vault and routes home", async () => {
+  it("opens a folder and routes home", async () => {
     pickFolder.mockResolvedValue("/tmp/notes");
     setup.mockResolvedValue({
       token: "tok",
-      username: "pat",
+      username: "me",
       apiBase: "http://127.0.0.1:18732",
     });
     const { wrapper, router } = await make();
     await wrapper.get("button.ghost").trigger("click");
     await flushPromises();
-    await wrapper.get('input[name="password"]').setValue("password1");
     await wrapper.get("form").trigger("submit");
     await flushPromises();
-    expect(setup).toHaveBeenCalledWith({
-      folder: "/tmp/notes",
-      password: "password1",
-      username: "pat",
-    });
+    expect(setup).toHaveBeenCalledWith({ folder: "/tmp/notes" });
     expect(getApiBase()).toBe("http://127.0.0.1:18732");
     expect(getSessionToken()).toBe("tok");
     expect(router.currentRoute.value.path).toBe("/");
   });
 
-  it("rejects a short password", async () => {
+  it("requires a folder", async () => {
     const { wrapper } = await make();
-    await wrapper.get('input[name="folder"]').setValue("/tmp/notes");
-    await wrapper.get('input[name="password"]').setValue("short");
     await wrapper.get("form").trigger("submit");
     await flushPromises();
-    expect(wrapper.text()).toContain("at least 8 characters");
+    expect(wrapper.text()).toContain("Choose a folder for your notes.");
     expect(setup).not.toHaveBeenCalled();
   });
 });

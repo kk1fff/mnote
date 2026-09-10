@@ -5,6 +5,8 @@ export type DesktopReady = {
   apiBase: string | null;
   folder: string | null;
   username: string | null;
+  token?: string | null;
+  error?: string | null;
   needsSetup: boolean;
 };
 
@@ -13,11 +15,8 @@ export type MnoteDesktop = {
   ready(): Promise<Omit<DesktopReady, "needsSetup">>;
   setServer(host: string): Promise<{ ok: boolean; error?: string; apiBase?: string }>;
   pickFolder(): Promise<string | null>;
-  setup(opts: {
-    folder?: string;
-    password: string;
-    username?: string;
-  }): Promise<{ token: string; username: string; apiBase: string }>;
+  setup(opts?: { folder?: string }): Promise<{ token: string; username: string; apiBase: string }>;
+  revealFolder(): Promise<boolean>;
   getToken(): Promise<string | null>;
   setToken(token: string | null): Promise<void>;
 };
@@ -43,24 +42,26 @@ export function desktopInfo(): DesktopReady | null {
 }
 
 export async function initDesktop(): Promise<void> {
-  const { setApiBase, setSessionToken, api } = await import("./api");
+  const { setApiBase, setSessionToken } = await import("./api");
   if (!window.mnote) return;
   const ready = await window.mnote.ready();
   setApiBase(ready.apiBase);
-  setSessionToken(await window.mnote.getToken());
-  let needsSetup = !ready.apiBase;
-  if (ready.apiBase && ready.flavor === "full") {
-    try {
-      const status = await api.setupStatus();
-      needsSetup = status.needed;
-    } catch {
-      needsSetup = true;
-    }
-  }
+  const token = ready.token ?? (await window.mnote.getToken());
+  setSessionToken(token ?? null);
+  const needsSetup = ready.flavor === "full" ? !ready.apiBase || !ready.folder : !ready.apiBase;
   info = { ...ready, needsSetup };
 }
 
 export function markSetupDone(apiBase: string, folder: string | null): void {
-  if (!info) return;
-  info = { ...info, apiBase, folder, needsSetup: false };
+  if (!info) {
+    info = {
+      flavor: window.mnote?.flavor ?? "full",
+      apiBase,
+      folder,
+      username: null,
+      needsSetup: false,
+    };
+    return;
+  }
+  info = { ...info, apiBase, folder, needsSetup: false, error: null };
 }

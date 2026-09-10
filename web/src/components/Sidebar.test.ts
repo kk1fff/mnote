@@ -7,6 +7,21 @@ import { resetCollapsed } from "../folders";
 import { todayDate } from "../lib/paths";
 import { logout } from "../session";
 import { resetSidebarPrefs } from "../sidebar";
+
+const desktopState = { flavor: null as "full" | "remote" | null, folder: "/tmp/notes-vault" };
+vi.mock("../desktop", () => ({
+  flavor: () => desktopState.flavor,
+  desktopInfo: () =>
+    desktopState.flavor === "full"
+      ? {
+          flavor: "full" as const,
+          apiBase: "http://127.0.0.1:1",
+          folder: desktopState.folder,
+          username: null,
+          needsSetup: false,
+        }
+      : null,
+}));
 import { emptyWorkspace, resetWorkspace } from "../workspace";
 import Sidebar from "./Sidebar.vue";
 
@@ -55,6 +70,7 @@ vi.mock("../parked", async () => {
 
 describe("Sidebar", () => {
   afterEach(() => {
+    desktopState.flavor = null;
     showParkCapture.mockClear();
     vi.mocked(api.collapsedFolders).mockResolvedValue([]);
     resetCollapsed();
@@ -121,6 +137,40 @@ describe("Sidebar", () => {
     await flushPromises();
     expect(logout).toHaveBeenCalled();
     expect(router.currentRoute.value.path).toBe("/login");
+  });
+
+  it("hides account controls on the local app", async () => {
+    desktopState.flavor = "full";
+    vi.mocked(api.listNotes).mockResolvedValue([]);
+    window.mnote = {
+      flavor: "full",
+      ready: vi.fn(),
+      setServer: vi.fn(),
+      pickFolder: vi.fn(),
+      setup: vi.fn(),
+      revealFolder: vi.fn().mockResolvedValue(true),
+      getToken: vi.fn(),
+      setToken: vi.fn(),
+    };
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/", component: { template: "<div />" } },
+        { path: "/setup", component: { template: "<div />" } },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/");
+    await router.isReady();
+    const wrapper = mount(Sidebar, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="account-menu"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="sign-out"]').exists()).toBe(false);
+    await wrapper.get('[data-testid="folder-menu"]').trigger("click");
+    expect(wrapper.text()).toContain("Show in folder");
+    await wrapper.get('[data-testid="change-folder"]').trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/setup");
   });
 
   it("opens park without a source note", async () => {

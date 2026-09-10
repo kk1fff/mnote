@@ -1306,6 +1306,166 @@ async fn setup_only_on_loopback_when_empty() {
 }
 
 #[tokio::test]
+async fn desktop_session_absent_without_sidecar_unlock() {
+    let h = Harness::empty();
+    let (status, _, body) = h
+        .call(
+            with_peer(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/desktop/session")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "unlock": "secret" }).to_string()))
+                    .unwrap(),
+                "127.0.0.1:9",
+            ),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+
+    let populated = Harness::new();
+    let (status, _, body) = populated
+        .call(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/auth/login")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "username": "alice", "password": "" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+}
+
+#[tokio::test]
+async fn desktop_session_loopback_secret_only() {
+    let dir = TempDir::new().unwrap();
+    let state = AppState::open(dir.path())
+        .unwrap()
+        .with_desktop_unlock("sidecar-secret");
+    let h = Harness {
+        app: api::router(state),
+        _dir: dir,
+    };
+
+    let (status, _, body) = h
+        .call(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/desktop/session")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({ "unlock": "sidecar-secret" }).to_string()))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    assert_eq!(body["error"], "desktop_not_allowed");
+
+    let (status, _, body) = h
+        .call(
+            with_peer(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/desktop/session")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "unlock": "wrong" }).to_string()))
+                    .unwrap(),
+                "127.0.0.1:9",
+            ),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+
+    let (status, _, body) = h
+        .call(
+            with_peer(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/desktop/session")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "unlock": "sidecar-secret" }).to_string()))
+                    .unwrap(),
+                "10.0.0.8:9",
+            ),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+
+    let (status, _, body) = h
+        .call(
+            with_peer(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/desktop/session")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "unlock": "sidecar-secret" }).to_string()))
+                    .unwrap(),
+                "127.0.0.1:9",
+            ),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["username"], "me");
+    assert_eq!(body["must_change_password"], false);
+    let token = body["token"].as_str().unwrap();
+    let (status, _, body) = h
+        .call(
+            Request::builder()
+                .uri("/api/notes")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, _, body) = h
+        .call(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/auth/login")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "username": "me", "password": "password1" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+}
+
+#[tokio::test]
+async fn desktop_session_rejects_multi_user_vault() {
+    let dir = TempDir::new().unwrap();
+    let state = AppState::open(dir.path())
+        .unwrap()
+        .with_desktop_unlock("sidecar-secret");
+    db::create_user(&state, "alice", Some("password1")).unwrap();
+    db::create_user(&state, "bob", Some("password1")).unwrap();
+    let h = Harness {
+        app: api::router(state),
+        _dir: dir,
+    };
+    let (status, _, body) = h
+        .call(
+            with_peer(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/desktop/session")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "unlock": "sidecar-secret" }).to_string()))
+                    .unwrap(),
+                "127.0.0.1:9",
+            ),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    assert_eq!(body["error"], "desktop_multi_user");
+}
+
+#[tokio::test]
 async fn tags_patch_search_parked_and_suggest() {
     let h = Harness::new();
     let cookie = h.login("alice", "password1").await;

@@ -33,6 +33,17 @@ There is no self-signup.
 
 `MNOTE_PUBLIC_URL` (default `http://127.0.0.1:3000`) is the URL printed in the invite.
 
+Browser and **mnote Remote** always use that invite + password flow. `POST /api/auth/login` never accepts an empty password. `POST /api/setup` stays loopback + username/password.
+
+## Electron
+
+Two packaged apps share the Vue UI. “Desktop” in visual-review viewports means a wide browser window, not Electron.
+
+- **mnote** (`full`) — local folder is the secret. First screen is `/setup` (folder + Open, no password or username). Reopen starts the sidecar on `127.0.0.1`, unlocks via `POST /api/desktop/session`, and shows notes. No sign-out, account, or password UI. Sidebar folder chip: Show in folder, Change folder.
+- **mnote Remote** (`remote`) — `/connect` then the same login as the browser.
+
+`POST /api/desktop/session` exists only when the sidecar is spawned with `MNOTE_SIDECAR_UNLOCK` **and** bind is loopback. Default `mnote serve` must 404 that route. A multi-user folder is rejected.
+
 ## Dev and checks
 
 ```bash
@@ -41,9 +52,9 @@ make dev
 make test
 ```
 
-API is Rust (`src/`). Web is Vue + Vite (`web/`). Vite proxies `/api` to `127.0.0.1:3000`. The `test` service is the required full validation path: it runs Rust tests and Clippy; web unit, coverage, typecheck, and browser E2E; unpackaged and packaged Electron E2E under Xvfb; and visual review. It fails if an E2E test is skipped. Mac packaging commands remain release checks, not a substitute for the container suite.
+API is Rust (`src/`). Web is Vue + Vite (`web/`). Vite proxies `/api` to `127.0.0.1:3000`. The `test` service is the required full validation path: it runs Rust tests and Clippy; web unit, coverage, typecheck, and browser E2E; unpackaged and packaged Electron E2E under Xvfb; Electron visual review; and web visual review. It fails if an E2E test is skipped. Mac packaging commands remain release checks, not a substitute for the container suite.
 
-The test container bind-mounts the repo and overlays generated dirs with Compose volumes. Visual PNGs remain on the host at `web/artifacts/visual/` and are chowned to the host user on exit. If `make dev` hits `EACCES`, run `make fix-perms`.
+The test container bind-mounts the repo and overlays generated dirs with Compose volumes. Visual PNGs remain on the host at `web/artifacts/visual/` and `desktop/artifacts/visual/` and are chowned to the host user on exit. If `make dev` hits `EACCES`, run `make fix-perms`.
 
 ## Visual review
 
@@ -58,9 +69,11 @@ For every new user-facing feature, add or update a corresponding visual-review s
    make test
    ```
    The first visual login sets its password from `password1` to `visualpass1`.
-2. Read every PNG in `web/artifacts/visual/` with the image Read tool. Fix issues, then rerun the container suite.
+2. Read every PNG in `web/artifacts/visual/` and `desktop/artifacts/visual/` with the image Read tool. Fix issues, then rerun the container suite.
 
 Required shots: login light/dark, note desktop light/dark, title editing, history, park capture, parked list/detail, mobile note, mobile More menu, mobile nav, picker light/dark, picker recent light/dark, picker favorites light, picker mobile, picker recent mobile, images page light/dark, images page mobile, tags row light/dark/mobile, tags overflow, tags long folder, sidebar calendar folded light/dark/mobile, sidebar calendar mid-fold light/dark, mode toggle edit/preview/mid-drag light/dark.
+
+Required Electron shots: connect light/dark, connect error light/dark, setup light/dark, note light/dark, folder popover light/dark, note mobile light/dark.
 
 Check all of the following:
 

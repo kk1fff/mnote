@@ -7,14 +7,14 @@ import { currentUser } from "../session";
 import { live } from "../live";
 
 const folder = ref("");
-const password = ref("");
 const error = ref("");
 const busy = ref(false);
 const router = useRouter();
-const username = desktopInfo()?.username || "me";
 
 onMounted(() => {
-  folder.value = desktopInfo()?.folder || "";
+  const info = desktopInfo();
+  folder.value = info?.folder || "";
+  if (info?.error) error.value = info.error;
 });
 
 async function choose() {
@@ -30,17 +30,9 @@ async function submit() {
       error.value = "Choose a folder for your notes.";
       return;
     }
-    if (password.value.trim().length < 8) {
-      error.value = "Password must be at least 8 characters.";
-      return;
-    }
-    const result = await window.mnote?.setup({
-      folder: folder.value,
-      password: password.value.trim(),
-      username,
-    });
+    const result = await window.mnote?.setup({ folder: folder.value });
     if (!result) {
-      error.value = "Couldn't create the vault.";
+      error.value = "Couldn't open the folder.";
       return;
     }
     setApiBase(result.apiBase);
@@ -53,7 +45,7 @@ async function submit() {
     live.connect();
     await router.replace("/");
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "Couldn't create the vault.";
+    error.value = err instanceof Error ? err.message : "Couldn't open the folder.";
   } finally {
     busy.value = false;
   }
@@ -72,18 +64,8 @@ async function submit() {
           <button type="button" class="ghost" @click="choose">Choose</button>
         </span>
       </label>
-      <label>
-        Password
-        <input
-          v-model="password"
-          type="password"
-          name="password"
-          autocomplete="new-password"
-          required
-        />
-      </label>
       <p v-if="error" class="error">{{ error }}</p>
-      <button type="submit" :disabled="busy">Create vault</button>
+      <button type="submit" :disabled="busy">Open</button>
     </form>
   </main>
 </template>

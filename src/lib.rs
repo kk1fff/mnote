@@ -22,6 +22,7 @@ pub struct AppState {
     pub db: Arc<Mutex<Connection>>,
     pub live: live::LiveHub,
     pub weather: WeatherFn,
+    pub desktop_unlock: Option<String>,
 }
 
 fn default_weather() -> WeatherFn {
@@ -53,7 +54,14 @@ impl AppState {
             db: Arc::new(Mutex::new(conn)),
             live: live::LiveHub::new(),
             weather: default_weather(),
+            desktop_unlock: None,
         })
+    }
+
+    pub fn with_desktop_unlock(mut self, secret: impl Into<String>) -> Self {
+        let secret = secret.into();
+        self.desktop_unlock = if secret.is_empty() { None } else { Some(secret) };
+        self
     }
 
     pub fn vault_dir(&self, username: &str) -> PathBuf {

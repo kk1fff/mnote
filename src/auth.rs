@@ -44,6 +44,19 @@ pub fn hash_token(token: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
+pub fn secrets_equal(a: &str, b: &str) -> bool {
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    let len = a.len().max(b.len());
+    let mut diff = a.len() ^ b.len();
+    for i in 0..len {
+        let x = a.get(i).copied().unwrap_or(0);
+        let y = b.get(i).copied().unwrap_or(0);
+        diff |= usize::from(x ^ y);
+    }
+    diff == 0
+}
+
 pub fn valid_username(username: &str) -> bool {
     let len = username.len();
     (1..=32).contains(&len)
@@ -78,6 +91,14 @@ mod tests {
         let p = generate_password();
         assert_eq!(p.len(), 20);
         assert!(p.chars().all(|c| PASSWORD_CHARS.contains(&(c as u8))));
+    }
+
+    #[test]
+    fn secrets_match_only_when_equal() {
+        assert!(secrets_equal("abc", "abc"));
+        assert!(!secrets_equal("abc", "abd"));
+        assert!(!secrets_equal("abc", "ab"));
+        assert!(!secrets_equal("", "x"));
     }
 
     #[test]

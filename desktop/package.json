@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && cp src/preload.cjs dist/preload.cjs",
     "test": "playwright test",
+    "visual:review": "node scripts/visual-review.mjs",
     "dist:linux": "electron-builder --linux dir --config electron-builder.full.yml && electron-builder --linux dir --config electron-builder.remote.yml",
     "dist:full": "electron-builder --config electron-builder.full.yml",
     "dist:remote": "electron-builder --config electron-builder.remote.yml",

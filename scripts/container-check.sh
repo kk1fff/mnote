@@ -35,8 +35,13 @@ cleanup_visual() {
 }
 
 restore_artifact_ownership() {
-  if [ -n "${HOST_UID:-}" ] && [ -n "${HOST_GID:-}" ] && [ -d /workspace/web/artifacts ]; then
-    chown -R "${HOST_UID}:${HOST_GID}" /workspace/web/artifacts || true
+  if [ -n "${HOST_UID:-}" ] && [ -n "${HOST_GID:-}" ]; then
+    if [ -d /workspace/web/artifacts ]; then
+      chown -R "${HOST_UID}:${HOST_GID}" /workspace/web/artifacts || true
+    fi
+    if [ -d /workspace/desktop/artifacts ]; then
+      chown -R "${HOST_UID}:${HOST_GID}" /workspace/desktop/artifacts || true
+    fi
   fi
 }
 
@@ -63,6 +68,7 @@ npm --prefix desktop run build
 npm --prefix desktop run dist:linux
 run_e2e xvfb-run -a npm --prefix desktop test -- e2e/full.spec.ts e2e/remote.spec.ts
 run_e2e env MNOTE_PACKAGED=1 xvfb-run -a npm --prefix desktop test -- e2e/packaged.spec.ts
+xvfb-run -a npm --prefix desktop run visual:review
 
 visual_data="$(mktemp -d)"
 cargo run -- --data "$visual_data" user add visual --password password1
