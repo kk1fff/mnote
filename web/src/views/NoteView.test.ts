@@ -351,5 +351,57 @@ describe("NoteView", () => {
     expect(wrapper.find('[data-testid="note-tags"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="note-folder-input"]').isVisible()).toBe(true);
   });
+
+  it("shows a friendly journal heading without the ISO title", async () => {
+    vi.mocked(api.getNote).mockResolvedValue({
+      id: "n1",
+      title: "2026-09-09",
+      folder: "",
+      content: "morning",
+      modified_at: "",
+    });
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/n/:id", component: NoteView },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/n/n1");
+    await router.isReady();
+    const wrapper = mount(NoteView, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="note-title"]').attributes("data-journal-date")).toBe("2026-09-09");
+    expect(wrapper.get('[data-testid="note-title"]').text()).not.toBe("2026-09-09");
+    expect(wrapper.get('[data-testid="note-folder"]').text()).toBe("");
+    expect(wrapper.get('[data-testid="journal-crumb-journal"]').text()).toBe("Journal");
+  });
+
+  it("compacts the title bar when the document scrolls", async () => {
+    vi.mocked(api.getNote).mockResolvedValue({
+      id: "n1",
+      title: "One",
+      folder: "ideas",
+      content: "hi",
+      modified_at: "",
+    });
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/n/:id", component: NoteView },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/n/n1");
+    await router.isReady();
+    const wrapper = mount(NoteView, { global: { plugins: [router] } });
+    await flushPromises();
+    const bar = wrapper.get(".bar");
+    expect(bar.classes()).not.toContain("is-compact");
+    const scroll = wrapper.get(".document-scroll");
+    Object.defineProperty(scroll.element, "scrollTop", { value: 80, configurable: true });
+    await scroll.trigger("scroll");
+    expect(bar.classes()).toContain("is-compact");
+  });
 });
 

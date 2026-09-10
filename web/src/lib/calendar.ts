@@ -6,6 +6,14 @@ export function isDailyNote(note: { title: string; folder?: string | null }): bo
   return !(note.folder ?? "") && DAILY_RE.test(note.title);
 }
 
+export function formatJournalTitle(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+}
+
 export function padDate(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }

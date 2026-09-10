@@ -37,8 +37,11 @@ test("calendar day creates a journal", async ({ page }) => {
   await page.waitForURL(/\/n\//);
   await page.getByTestId("sidebar-cal-toggle").click();
   await page.getByTestId("cal-next").click();
-  await page.locator(".sidebar-cal-day").first().click();
-  await expect(page.getByTestId("note-title")).toHaveText(/\d{4}-\d{2}-\d{2}/);
+  const day = page.locator(".sidebar-cal-day").first();
+  const date = (await day.getAttribute("data-testid"))?.replace("cal-day-", "") ?? "";
+  await day.click();
+  await expect(page.getByTestId("note-title")).toHaveAttribute("data-journal-date", date);
+  await expect(page.locator(".bar").first()).not.toHaveClass(/is-compact/);
   await expect(page.getByTestId("journal-crumb-month")).toBeVisible();
   await page.getByTestId("journal-crumb-month").click();
   await expect(page).toHaveURL(/\/journal\?year=\d+&month=\d+/);

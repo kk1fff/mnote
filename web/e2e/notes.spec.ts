@@ -7,7 +7,19 @@ test("today opens a dated note", async ({ page }) => {
   await page.waitForURL(/\/n\//);
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  await expect(page.getByTestId("note-title")).toHaveText(today);
+  const title = page.getByTestId("note-title");
+  await expect(title).toHaveAttribute("data-journal-date", today);
+  await expect(title).not.toHaveText(today);
+  const bar = page.locator(".bar").first();
+  await expect(bar).not.toHaveClass(/is-compact/);
+  await page.locator(".document-scroll").evaluate((el) => {
+    if (el.scrollHeight <= el.clientHeight + 40) {
+      const col = el.querySelector(".document-column");
+      if (col instanceof HTMLElement) col.style.minHeight = `${el.clientHeight + 240}px`;
+    }
+    el.scrollTop = 80;
+  });
+  await expect(bar).toHaveClass(/is-compact/);
 });
 
 test("missing note shows not found", async ({ page }) => {
