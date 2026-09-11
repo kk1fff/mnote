@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { api, type Asset } from "../api";
-import { isAllowedImage } from "../lib/images";
+import { assetMarkdown, isAllowedImage } from "../lib/images";
+
+const props = defineProps<{ folder?: string }>();
 
 const emit = defineEmits<{ close: []; insert: [markdown: string] }>();
 const assets = ref<Asset[]>([]);
@@ -52,7 +54,9 @@ async function upload(event: Event) {
 
 function insert() {
   if (!selected.value) return;
-  emit("insert", `![${alt.value.trim()}](mnote-asset:${selected.value.id})`);
+  const md = assetMarkdown(selected.value, props.folder);
+  const altText = alt.value.trim();
+  emit("insert", altText ? md.replace("![](", `![${altText}](`) : md);
 }
 
 onMounted(() => void load());

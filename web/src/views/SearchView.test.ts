@@ -73,7 +73,7 @@ describe("SearchView", () => {
 
   it("opens parked hits in the parked sheet", async () => {
     vi.mocked(api.search).mockResolvedValue([
-      { id: "parked-7", title: "call jim", snippet: "#work", kind: "parked", parked_id: 7 },
+      { id: "parked-7", title: "call jim", snippet: "#work", kind: "parked", parked_id: "7" },
     ]);
     const router = createRouter({
       history: createWebHistory(),
@@ -84,6 +84,6 @@ describe("SearchView", () => {
     const wrapper = mount(SearchView, { global: { plugins: [router] } });
     await flushPromises();
     await wrapper.get('[data-testid="search-hit"]').trigger("click");
-    expect(showParkedList).toHaveBeenCalledWith(7);
+    expect(showParkedList).toHaveBeenCalledWith("7");
   });
 });

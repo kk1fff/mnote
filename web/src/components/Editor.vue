@@ -17,7 +17,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { markdown } from "@codemirror/lang-markdown";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { excerptAround, findExcerpt } from "../lib/excerpt";
-import { imageFileFromList, insertAt, isAllowedImage } from "../lib/images";
+import { assetMarkdown, imageFileFromList, insertAt, isAllowedImage } from "../lib/images";
 import { preprocessPaste } from "../lib/paste";
 import { api, type NoteMeta } from "../api";
 import { isDailyNote } from "../lib/calendar";
@@ -503,7 +503,7 @@ function insertMarkdown(markdown: string) {
 async function handleImage(file: File | null) {
   if (!file || !isAllowedImage(file) || !view) return;
   const asset = await api.uploadAsset(file);
-  insertMarkdown(asset.markdown);
+  insertMarkdown(assetMarkdown(asset, props.folder));
 }
 
 onMounted(() => {

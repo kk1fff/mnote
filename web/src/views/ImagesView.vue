@@ -52,11 +52,11 @@ onMounted(() => void load());
           <img :src="asset.url" :alt="asset.original_name" loading="lazy" />
           <strong>{{ asset.original_name }}</strong>
           <span class="muted">{{ asset.group || "Ungrouped" }} · {{ asset.width }} × {{ asset.height }}</span>
-          <code>mnote-asset:{{ asset.id }}</code>
+          <code>{{ asset.path || asset.markdown }}</code>
         </button>
       </div>
       <section v-if="selected" class="image-detail" aria-live="polite">
-        <div><h2>{{ selected.original_name }}</h2><p class="muted">{{ selected.group || "Ungrouped" }} · {{ selected.mime }} · {{ selected.width }} × {{ selected.height }}</p><code>mnote-asset:{{ selected.id }}</code></div>
+        <div><h2>{{ selected.original_name }}</h2><p class="muted">{{ selected.group || "Ungrouped" }} · {{ selected.mime }} · {{ selected.width }} × {{ selected.height }}</p><code>{{ selected.path || selected.markdown }}</code></div>
         <div><h3>Used in</h3><p v-if="!links.length" class="muted">Not embedded in any current note.</p><ul v-else><li v-for="note in links" :key="note.id"><RouterLink :to="`/n/${note.id}`">{{ note.title }}</RouterLink><span class="muted"> {{ note.folder }}</span></li></ul></div>
       </section>
     </main>

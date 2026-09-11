@@ -3,15 +3,17 @@ pub mod auth;
 pub mod context;
 pub mod db;
 pub mod error;
+pub mod index;
 pub mod live;
 pub mod merge;
 pub mod notes;
+pub mod parked;
 pub mod tags;
 
 use crate::context::WeatherNow;
 use crate::error::AppError;
 use rusqlite::Connection;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 pub type WeatherFn = Arc<dyn Fn(f64, f64) -> Option<WeatherNow> + Send + Sync>;
@@ -19,6 +21,8 @@ pub type WeatherFn = Arc<dyn Fn(f64, f64) -> Option<WeatherNow> + Send + Sync>;
 #[derive(Clone)]
 pub struct AppState {
     pub data_dir: PathBuf,
+    pub state_dir: PathBuf,
+    pub single_vault: bool,
     pub db: Arc<Mutex<Connection>>,
     pub live: live::LiveHub,
     pub weather: WeatherFn,
@@ -39,23 +43,31 @@ fn default_weather() -> WeatherFn {
 impl AppState {
     pub fn open(data_dir: impl Into<PathBuf>) -> Result<Self, AppError> {
         let data_dir = data_dir.into();
-        ensure_data_layout(&data_dir)?;
-        let conn = Connection::open(db_path(&data_dir))?;
-        db::init(&conn)?;
-        if let Ok(entries) = std::fs::read_dir(vaults_dir(&data_dir)) {
-            for entry in entries.flatten() {
-                if entry.path().is_dir() {
-                    notes::migrate_wiki_paths(&entry.path())?;
-                }
-            }
+        Self::open_inner(data_dir.clone(), data_dir, false)
+    }
+
+    pub fn open_single(vault: impl Into<PathBuf>, state_dir: impl Into<PathBuf>) -> Result<Self, AppError> {
+        Self::open_inner(vault.into(), state_dir.into(), true)
+    }
+
+    fn open_inner(data_dir: PathBuf, state_dir: PathBuf, single_vault: bool) -> Result<Self, AppError> {
+        ensure_layout(&data_dir, &state_dir, single_vault)?;
+        if single_vault {
+            migrate_legacy_desktop_vault(&data_dir)?;
         }
-        Ok(Self {
+        let conn = Connection::open(db_file(&state_dir, single_vault))?;
+        db::init(&conn)?;
+        let state = Self {
             data_dir,
+            state_dir,
+            single_vault,
             db: Arc::new(Mutex::new(conn)),
             live: live::LiveHub::new(),
             weather: default_weather(),
             desktop_unlock: None,
-        })
+        };
+        migrate_on_open(&state)?;
+        Ok(state)
     }
 
     pub fn with_desktop_unlock(mut self, secret: impl Into<String>) -> Self {
@@ -65,34 +77,129 @@ impl AppState {
     }
 
     pub fn vault_dir(&self, username: &str) -> PathBuf {
-        vaults_dir(&self.data_dir).join(username)
+        if self.single_vault {
+            self.data_dir.clone()
+        } else {
+            vaults_dir(&self.data_dir).join(username)
+        }
     }
 
     pub fn logs_dir(&self) -> PathBuf {
-        logs_dir(&self.data_dir)
+        if self.single_vault {
+            self.state_dir.join("logs")
+        } else {
+            logs_dir(&self.data_dir)
+        }
+    }
+
+    pub fn each_vault(&self) -> Result<Vec<(String, PathBuf)>, AppError> {
+        if self.single_vault {
+            return Ok(vec![("me".into(), self.data_dir.clone())]);
+        }
+        let root = vaults_dir(&self.data_dir);
+        let mut out = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&root) {
+            for entry in entries.flatten() {
+                if entry.path().is_dir() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        out.push((name.to_string(), entry.path()));
+                    }
+                }
+            }
+        }
+        Ok(out)
     }
 }
 
-pub fn db_path(data_dir: &std::path::Path) -> PathBuf {
-    data_dir.join("db").join("mnote.db")
+pub fn db_path(data_dir: &Path) -> PathBuf {
+    db_file(data_dir, false)
 }
 
-pub fn vaults_dir(data_dir: &std::path::Path) -> PathBuf {
+fn db_file(state_dir: &Path, single_vault: bool) -> PathBuf {
+    if single_vault {
+        state_dir.join("mnote.db")
+    } else {
+        state_dir.join("db").join("mnote.db")
+    }
+}
+
+pub fn vaults_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("vaults")
 }
 
-pub fn logs_dir(data_dir: &std::path::Path) -> PathBuf {
+pub fn logs_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("logs")
 }
 
-pub fn ensure_data_layout(data_dir: &std::path::Path) -> Result<(), AppError> {
+pub fn ensure_data_layout(data_dir: &Path) -> Result<(), AppError> {
+    ensure_layout(data_dir, data_dir, false)
+}
+
+fn ensure_layout(data_dir: &Path, state_dir: &Path, single_vault: bool) -> Result<(), AppError> {
+    if single_vault {
+        std::fs::create_dir_all(state_dir)?;
+        std::fs::create_dir_all(state_dir.join("logs"))?;
+        notes::ensure_vault(data_dir)?;
+        return Ok(());
+    }
     std::fs::create_dir_all(data_dir.join("db"))?;
     std::fs::create_dir_all(vaults_dir(data_dir))?;
     std::fs::create_dir_all(logs_dir(data_dir))?;
     let legacy = data_dir.join("mnote.db");
-    let current = db_path(data_dir);
+    let current = db_file(state_dir, false);
     if legacy.is_file() && !current.exists() {
         std::fs::rename(legacy, current)?;
+    }
+    Ok(())
+}
+
+fn migrate_legacy_desktop_vault(vault: &Path) -> Result<(), AppError> {
+    let nested = vault.join("vaults");
+    if !nested.is_dir() {
+        return Ok(());
+    }
+    let mut users = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&nested) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                users.push(entry.path());
+            }
+        }
+    }
+    if users.len() != 1 {
+        return Ok(());
+    }
+    let src = &users[0];
+    for name in ["notes", "history", "assets", "parked", "context"] {
+        let from = src.join(name);
+        let to = vault.join(name);
+        if from.exists() && !to.exists() {
+            std::fs::rename(&from, &to)?;
+        }
+    }
+    let _ = std::fs::remove_dir_all(src);
+    let _ = std::fs::remove_dir(&nested);
+    Ok(())
+}
+
+fn migrate_on_open(state: &AppState) -> Result<(), AppError> {
+    for (username, vault) in state.each_vault()? {
+        notes::ensure_vault(&vault)?;
+        notes::migrate_wiki_paths(&vault)?;
+        notes::migrate_assets_map(&vault)?;
+        parked::migrate_from_db(state, &username, &vault)?;
+        context::migrate_from_db(state, &username, &vault)?;
+        notes::migrate_last_edit_files(state, &username, &vault)?;
+    }
+    if state.single_vault {
+        let db_dir = state.data_dir.join("db");
+        let logs = state.data_dir.join("logs");
+        if db_dir.exists() {
+            let _ = std::fs::remove_dir_all(&db_dir);
+        }
+        if logs.exists() {
+            let _ = std::fs::remove_dir_all(&logs);
+        }
     }
     Ok(())
 }
@@ -143,5 +250,17 @@ mod tests {
             std::fs::read(dir.path().join("db").join("mnote.db")).unwrap(),
             b"legacy"
         );
+    }
+
+    #[test]
+    fn open_single_keeps_db_out_of_vault() {
+        let vault = tempdir().unwrap();
+        let state_dir = tempdir().unwrap();
+        let state = AppState::open_single(vault.path(), state_dir.path()).unwrap();
+        assert!(vault.path().join("notes").is_dir());
+        assert!(!vault.path().join("db").exists());
+        assert!(state_dir.path().join("mnote.db").is_file());
+        assert_eq!(state.vault_dir("me"), vault.path());
+        assert_eq!(state.vault_dir("alice"), vault.path());
     }
 }

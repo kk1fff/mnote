@@ -2,16 +2,22 @@
 
 ## Data directory
 
-All persistent state is under one folder. Default `./data`. Override with `--data` or `MNOTE_DATA`. In Docker this is `/data` (the volume to mount).
+Server/Docker persistent state is under one folder. Default `./data`. Override with `--data` or `MNOTE_DATA`. In Docker this is `/data` (the volume to mount).
 
 ```
 $data/
-  db/mnote.db
-  vaults/<username>/notes/
-  vaults/<username>/assets/
-  vaults/<username>/history/<note-id>/
+  db/mnote.db                 # users, sessions, prefs, FTS, weather, edit clocks
+  vaults/<username>/
+    notes/
+    history/<note-id>/
+    parked/
+    context/
+    assets/map.json
+    assets/<group>/<uuid>/
   logs/mnote.log.YYYY-MM-DD
 ```
+
+Desktop full app: the picked folder is a clean vault (notes/history/parked/context/assets only). Prefs, FTS, and cache live in Electron userData `state/<hash>/`. Sidecar: `--vault` + `--state`.
 
 Do not store notes, sqlite, or logs anywhere else. A legacy `$data/mnote.db` is moved to `$data/db/mnote.db` on startup.
 

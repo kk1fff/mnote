@@ -24,6 +24,11 @@ describe("markdown", () => {
     expect(html).toContain('data-asset-id="018f0a20-7d2b-7d75-a5d2-cb7b4fb6e57c"');
   });
 
+  it("resolves relative asset paths at render time", () => {
+    const html = renderMarkdown("![Harbor](../assets/image/018f0a20-7d2b-7d75-a5d2-cb7b4fb6e57c/dot.png)");
+    expect(html).toContain('src="/api/assets/018f0a20-7d2b-7d75-a5d2-cb7b4fb6e57c"');
+  });
+
   it("renders task list checkboxes", () => {
     const html = renderMarkdown("- [ ] one\n- [x] two\n  - [ ] nested");
     expect(html).toContain('class="task-list-item"');

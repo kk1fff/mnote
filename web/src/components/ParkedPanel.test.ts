@@ -27,7 +27,7 @@ describe("ParkedPanel", () => {
   it("makes a note from a parked thought", async () => {
     vi.mocked(api.listParked).mockResolvedValue([
       {
-        id: 7,
+        id: "7",
         body: "ask jim #work",
         created_at: "2026-08-22T15:00:00Z",
         source_id: "n1",
@@ -43,7 +43,7 @@ describe("ParkedPanel", () => {
     });
     vi.mocked(api.listParked).mockResolvedValueOnce([
       {
-        id: 7,
+        id: "7",
         body: "ask jim #work",
         created_at: "2026-08-22T15:00:00Z",
         source_id: "n1",
@@ -68,7 +68,7 @@ describe("ParkedPanel", () => {
     await wrapper.get('[data-testid="parked-row"]').trigger("click");
     await wrapper.get('[data-testid="parked-make-note"]').trigger("click");
     await flushPromises();
-    expect(api.parkedToNote).toHaveBeenCalledWith(7);
+    expect(api.parkedToNote).toHaveBeenCalledWith("7");
     expect(router.currentRoute.value.path).toBe("/n/n2");
   });
 });

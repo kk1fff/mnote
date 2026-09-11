@@ -10,6 +10,10 @@ use tracing_subscriber::util::SubscriberInitExt;
 struct Cli {
     #[arg(long, env = "MNOTE_DATA", default_value = "data")]
     data: PathBuf,
+    #[arg(long, env = "MNOTE_VAULT")]
+    vault: Option<PathBuf>,
+    #[arg(long, env = "MNOTE_STATE")]
+    state: Option<PathBuf>,
     #[command(subcommand)]
     command: Command,
 }
@@ -74,36 +78,51 @@ fn warn_if_likely_wrong_data_dir(data_dir: &std::path::Path) {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let data = resolve_data_dir(cli.data)?;
-    ensure_data_layout(&data)?;
-    let _guard = init_logging(&data)?;
-    match cli.command {
-        Command::Serve { bind } => serve(data, bind).await,
-        Command::User { command } => {
-            warn_if_likely_wrong_data_dir(&data);
-            let state = AppState::open(&data)?;
-            match command {
-                UserCommand::Add { username, password } => {
-                    let password = db::create_user(&state, &username, password.as_deref())?;
-                    print_account_invite(&username, &password, &data);
-                }
-                UserCommand::List => {
-                    for user in db::list_users(&state)? {
-                        let flag = if user.must_change_password {
-                            " (set password on next login)"
-                        } else {
-                            ""
-                        };
-                        println!("{}{flag}", user.username);
+    match (cli.vault, cli.state) {
+        (Some(vault), Some(state_dir)) => {
+            let vault = resolve_data_dir(vault)?;
+            let state_dir = resolve_data_dir(state_dir)?;
+            std::fs::create_dir_all(state_dir.join("logs"))?;
+            let _guard = init_logging(&state_dir)?;
+            match cli.command {
+                Command::Serve { bind } => serve_vault(vault, state_dir, bind).await,
+                Command::User { .. } => anyhow::bail!("user commands require --data, not --vault"),
+            }
+        }
+        (None, None) => {
+            let data = resolve_data_dir(cli.data)?;
+            ensure_data_layout(&data)?;
+            let _guard = init_logging(&data)?;
+            match cli.command {
+                Command::Serve { bind } => serve(data, bind).await,
+                Command::User { command } => {
+                    warn_if_likely_wrong_data_dir(&data);
+                    let state = AppState::open(&data)?;
+                    match command {
+                        UserCommand::Add { username, password } => {
+                            let password = db::create_user(&state, &username, password.as_deref())?;
+                            print_account_invite(&username, &password, &data);
+                        }
+                        UserCommand::List => {
+                            for user in db::list_users(&state)? {
+                                let flag = if user.must_change_password {
+                                    " (set password on next login)"
+                                } else {
+                                    ""
+                                };
+                                println!("{}{flag}", user.username);
+                            }
+                        }
+                        UserCommand::ResetPassword { username } => {
+                            let password = db::reset_password(&state, &username)?;
+                            print_account_invite(&username, &password, &data);
+                        }
                     }
-                }
-                UserCommand::ResetPassword { username } => {
-                    let password = db::reset_password(&state, &username)?;
-                    print_account_invite(&username, &password, &data);
+                    Ok(())
                 }
             }
-            Ok(())
         }
+        _ => anyhow::bail!("--vault and --state must be used together"),
     }
 }
 
@@ -141,6 +160,27 @@ fn init_logging(
         )
         .init();
     Ok(guard)
+}
+
+async fn serve_vault(vault: PathBuf, state_dir: PathBuf, bind: String) -> anyhow::Result<()> {
+    let addr: SocketAddr = bind.parse()?;
+    let mut state = AppState::open_single(&vault, &state_dir)?;
+    if addr.ip().is_loopback() {
+        if let Ok(secret) = std::env::var("MNOTE_SIDECAR_UNLOCK") {
+            state = state.with_desktop_unlock(secret);
+        }
+    } else if std::env::var_os("MNOTE_SIDECAR_UNLOCK").is_some() {
+        tracing::warn!("ignoring MNOTE_SIDECAR_UNLOCK because bind is not loopback");
+    }
+    let app = api::router(state);
+    tracing::info!(vault = %vault.display(), state = %state_dir.display(), "listening on http://{addr}");
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
+    Ok(())
 }
 
 async fn serve(data: PathBuf, bind: String) -> anyhow::Result<()> {

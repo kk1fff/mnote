@@ -1007,6 +1007,6 @@ onBeforeUnmount(() => {
       @cancel="closeDelete"
       @confirm="void confirmDelete()"
     />
-    <AssetPicker v-if="assetPickerOpen" @close="assetPickerOpen = false" @insert="insertAsset" />
+    <AssetPicker v-if="assetPickerOpen" :folder="folder" @close="assetPickerOpen = false" @insert="insertAsset" />
   </div>
 </template>

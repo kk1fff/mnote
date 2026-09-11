@@ -31,13 +31,13 @@ export function showParkCapture(ctx?: ParkContext) {
   showCaptureFn?.(ctx);
 }
 
-let showListFn: ((id?: number) => void) | null = null;
+let showListFn: ((id?: string) => void) | null = null;
 
-export function registerParkedList(fn: ((id?: number) => void) | null) {
+export function registerParkedList(fn: ((id?: string) => void) | null) {
   showListFn = fn;
 }
 
-export function showParkedList(id?: number) {
+export function showParkedList(id?: string) {
   showListFn?.(id);
 }
 

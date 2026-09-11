@@ -15,7 +15,7 @@ const error = ref("");
 
 const items = computed(() => parkedItems.value);
 
-function show(id?: number) {
+function show(id?: string) {
   error.value = "";
   selected.value = null;
   open.value = true;

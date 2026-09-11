@@ -1,6 +1,6 @@
-use crate::db;
 use crate::error::AppError;
 use crate::notes::{self, SearchHit};
+use crate::parked;
 use crate::AppState;
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -84,7 +84,7 @@ pub struct BlockOut {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct EventOut {
-    pub id: i64,
+    pub id: String,
     pub block_id: String,
     pub captured_at: String,
     pub local_time: String,
@@ -356,74 +356,138 @@ fn valid_coord(lat: Option<f64>, lon: Option<f64>) -> (Option<f64>, Option<f64>)
     }
 }
 
-fn load_blocks(
-    conn: &rusqlite::Connection,
-    user_id: i64,
-    note_id: &str,
-) -> Result<Vec<Block>, AppError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, ordinal, text_norm, preview FROM note_blocks
-         WHERE user_id = ?1 AND note_id = ?2 AND ordinal IS NOT NULL
-         ORDER BY ordinal",
-    )?;
-    let rows = stmt.query_map(params![user_id, note_id], |row| {
-        Ok(Block {
-            id: row.get(0)?,
-            ordinal: row.get(1)?,
-            text_norm: row.get(2)?,
-            preview: row.get(3)?,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ContextFile {
+    version: u8,
+    note_id: String,
+    blocks: Vec<BlockRec>,
+    events: Vec<EventRec>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct BlockRec {
+    id: String,
+    ordinal: Option<i64>,
+    text_norm: String,
+    preview: String,
+    created_at: String,
+    updated_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    deleted_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct EventRec {
+    id: String,
+    block_id: String,
+    captured_at: String,
+    local_time: String,
+    timezone: String,
+    surface: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    device: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    lat: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    lon: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    accuracy_m: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    weather_code: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    weather_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    temp_c: Option<f64>,
+    #[serde(default)]
+    source: String,
+}
+
+pub struct PendingWeather {
+    pub note_id: String,
+    pub event_id: String,
+    pub lat: f64,
+    pub lon: f64,
+}
+
+fn context_path(vault: &std::path::Path, note_id: &str) -> std::path::PathBuf {
+    vault.join("context").join(format!("{note_id}.json"))
+}
+
+fn empty_context(note_id: &str) -> ContextFile {
+    ContextFile {
+        version: 1,
+        note_id: note_id.to_string(),
+        blocks: Vec::new(),
+        events: Vec::new(),
+    }
+}
+
+fn load_context_file(vault: &std::path::Path, note_id: &str) -> Result<ContextFile, AppError> {
+    let path = context_path(vault, note_id);
+    if !path.is_file() {
+        return Ok(empty_context(note_id));
+    }
+    let text = std::fs::read_to_string(path)?;
+    serde_json::from_str(&text).map_err(|_| AppError::BadRequest("invalid context file".into()))
+}
+
+fn save_context_file(vault: &std::path::Path, file: &ContextFile) -> Result<(), AppError> {
+    let dir = vault.join("context");
+    std::fs::create_dir_all(&dir)?;
+    let json = serde_json::to_vec_pretty(file).map_err(|e| AppError::Internal(e.into()))?;
+    std::fs::write(context_path(vault, &file.note_id), json)?;
+    Ok(())
+}
+
+fn live_blocks(file: &ContextFile) -> Vec<Block> {
+    let mut blocks: Vec<_> = file
+        .blocks
+        .iter()
+        .filter(|b| b.ordinal.is_some())
+        .cloned()
+        .collect();
+    blocks.sort_by_key(|b| b.ordinal.unwrap_or(0));
+    blocks
+        .into_iter()
+        .map(|b| Block {
+            id: b.id,
+            ordinal: b.ordinal,
+            text_norm: b.text_norm,
+            preview: b.preview,
         })
-    })?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+        .collect()
 }
 
-fn load_events(
-    conn: &rusqlite::Connection,
-    user_id: i64,
-    note_id: &str,
-) -> Result<Vec<EventOut>, AppError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, block_id, captured_at, local_time, timezone, device, surface,
-                lat, lon, weather_code, weather_label, temp_c, source
-         FROM context_events
-         WHERE user_id = ?1 AND note_id = ?2
-         ORDER BY captured_at, id",
-    )?;
-    let rows = stmt.query_map(params![user_id, note_id], event_from_row)?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
-}
-
-fn event_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<EventOut> {
-    Ok(EventOut {
-        id: row.get(0)?,
-        block_id: row.get(1)?,
-        captured_at: row.get(2)?,
-        local_time: row.get(3)?,
-        timezone: row.get(4)?,
-        device: row.get(5)?,
-        surface: row.get(6)?,
-        lat: row.get(7)?,
-        lon: row.get(8)?,
-        weather_code: row.get(9)?,
-        weather_label: row.get(10)?,
-        temp_c: row.get(11)?,
-        source: row.get(12)?,
-    })
+fn events_out(file: &ContextFile) -> Vec<EventOut> {
+    let mut events = file.events.clone();
+    events.sort_by(|a, b| a.captured_at.cmp(&b.captured_at).then(a.id.cmp(&b.id)));
+    events
+        .into_iter()
+        .map(|e| EventOut {
+            id: e.id,
+            block_id: e.block_id,
+            captured_at: e.captured_at,
+            local_time: e.local_time,
+            timezone: e.timezone,
+            device: e.device,
+            surface: e.surface,
+            lat: e.lat,
+            lon: e.lon,
+            weather_code: e.weather_code,
+            weather_label: e.weather_label,
+            temp_c: e.temp_c,
+            source: e.source,
+        })
+        .collect()
 }
 
 pub fn get_context(
-    state: &AppState,
-    user_id: i64,
+    vault: &std::path::Path,
     note_id: &str,
 ) -> Result<ContextResponse, AppError> {
-    let conn = state
-        .db
-        .lock()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
-    let blocks = load_blocks(&conn, user_id, note_id)?;
-    let events = load_events(&conn, user_id, note_id)?;
+    let file = load_context_file(vault, note_id)?;
     Ok(ContextResponse {
-        blocks: blocks
+        blocks: live_blocks(&file)
             .into_iter()
             .map(|b| BlockOut {
                 id: b.id,
@@ -432,16 +496,16 @@ pub fn get_context(
                 tmp_id: None,
             })
             .collect(),
-        events,
+        events: events_out(&file),
     })
 }
 
 pub fn ingest(
     state: &AppState,
-    user_id: i64,
+    vault: &std::path::Path,
     note_id: &str,
     body: IngestBody,
-) -> Result<(ContextResponse, Vec<i64>), AppError> {
+) -> Result<(ContextResponse, Vec<PendingWeather>), AppError> {
     if body.paragraphs.len() > MAX_PARAS {
         return Err(AppError::BadRequest("too many paragraphs".into()));
     }
@@ -449,52 +513,59 @@ pub fn ingest(
         return Err(AppError::BadRequest("too many events".into()));
     }
     let now = chrono::Utc::now().to_rfc3339();
-    let conn = state
-        .db
-        .lock()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
-    let old = load_blocks(&conn, user_id, note_id)?;
+    let mut file = load_context_file(vault, note_id)?;
+    let old = live_blocks(&file);
     let ops = align(&old, &body.paragraphs);
-    conn.execute(
-        "UPDATE note_blocks SET ordinal = NULL WHERE user_id = ?1 AND note_id = ?2",
-        params![user_id, note_id],
-    )?;
+    for block in &mut file.blocks {
+        if block.ordinal.is_some() {
+            block.ordinal = None;
+        }
+    }
     let mut id_at_new: HashMap<usize, String> = HashMap::new();
     for op in &ops {
         match op {
             AlignOp::Keep { old_idx, new_idx } => {
-                let block = &old[*old_idx];
+                let block_id = old[*old_idx].id.clone();
                 let preview = preview_of(&body.paragraphs[*new_idx]);
                 let text_norm = normalize_line(&body.paragraphs[*new_idx]);
-                conn.execute(
-                    "UPDATE note_blocks SET ordinal = ?1, text_norm = ?2, preview = ?3, updated_at = ?4, deleted_at = NULL
-                     WHERE id = ?5",
-                    params![*new_idx as i64, text_norm, preview, now, block.id],
-                )?;
-                id_at_new.insert(*new_idx, block.id.clone());
+                if let Some(block) = file.blocks.iter_mut().find(|b| b.id == block_id) {
+                    block.ordinal = Some(*new_idx as i64);
+                    block.text_norm = text_norm;
+                    block.preview = preview;
+                    block.updated_at = now.clone();
+                    block.deleted_at = None;
+                }
+                id_at_new.insert(*new_idx, block_id);
             }
             AlignOp::Insert { new_idx } => {
                 let id = Uuid::new_v4().to_string();
-                let preview = preview_of(&body.paragraphs[*new_idx]);
-                let text_norm = normalize_line(&body.paragraphs[*new_idx]);
-                conn.execute(
-                    "INSERT INTO note_blocks (id, user_id, note_id, ordinal, text_norm, preview, created_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
-                    params![id, user_id, note_id, *new_idx as i64, text_norm, preview, now],
-                )?;
+                file.blocks.push(BlockRec {
+                    id: id.clone(),
+                    ordinal: Some(*new_idx as i64),
+                    text_norm: normalize_line(&body.paragraphs[*new_idx]),
+                    preview: preview_of(&body.paragraphs[*new_idx]),
+                    created_at: now.clone(),
+                    updated_at: now.clone(),
+                    deleted_at: None,
+                });
                 id_at_new.insert(*new_idx, id);
             }
             AlignOp::Delete { old_idx } => {
-                let block = &old[*old_idx];
-                conn.execute(
-                    "UPDATE note_blocks SET ordinal = NULL, deleted_at = ?1, updated_at = ?1 WHERE id = ?2",
-                    params![now, block.id],
-                )?;
+                let block_id = old[*old_idx].id.clone();
+                if let Some(block) = file.blocks.iter_mut().find(|b| b.id == block_id) {
+                    block.ordinal = None;
+                    block.deleted_at = Some(now.clone());
+                    block.updated_at = now.clone();
+                }
             }
         }
     }
     let mut tmp_map: HashMap<String, String> = HashMap::new();
     let mut pending_weather = Vec::new();
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
     for ev in &body.events {
         if ev.tmp_id.is_empty() || ev.captured_at.is_empty() || ev.local_time.is_empty() {
             continue;
@@ -525,39 +596,38 @@ pub fn ingest(
             (Some(la), Some(lo)) => cached_weather(&conn, la, lo)?,
             _ => None,
         };
-        conn.execute(
-            "INSERT INTO context_events
-             (user_id, block_id, note_id, captured_at, local_time, timezone, surface, device,
-              lat, lon, accuracy_m, weather_code, weather_label, temp_c, source)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
-            params![
-                user_id,
-                block_id,
-                note_id,
-                ev.captured_at,
-                ev.local_time,
-                ev.timezone,
-                ev.surface,
-                ev.device,
-                lat,
-                lon,
-                ev.accuracy_m,
-                weather.as_ref().map(|w| w.weather_code),
-                weather.as_ref().map(|w| w.weather_label.as_str()),
-                weather.as_ref().map(|w| w.temp_c),
-                source,
-            ],
-        )?;
-        let event_id = conn.last_insert_rowid();
+        let event_id = Uuid::new_v4().to_string();
+        file.events.push(EventRec {
+            id: event_id.clone(),
+            block_id: block_id.clone(),
+            captured_at: ev.captured_at.clone(),
+            local_time: ev.local_time.clone(),
+            timezone: ev.timezone.clone(),
+            surface: ev.surface.clone(),
+            device: ev.device.clone(),
+            lat,
+            lon,
+            accuracy_m: ev.accuracy_m,
+            weather_code: weather.as_ref().map(|w| w.weather_code),
+            weather_label: weather.as_ref().map(|w| w.weather_label.clone()),
+            temp_c: weather.as_ref().map(|w| w.temp_c),
+            source: source.to_string(),
+        });
         tmp_map.insert(ev.tmp_id.clone(), block_id.clone());
-        if weather.is_none() && lat.is_some() {
-            pending_weather.push(event_id);
+        if weather.is_none() {
+            if let (Some(lat), Some(lon)) = (lat, lon) {
+                pending_weather.push(PendingWeather {
+                    note_id: note_id.to_string(),
+                    event_id,
+                    lat,
+                    lon,
+                });
+            }
         }
     }
-    let blocks = load_blocks(&conn, user_id, note_id)?;
-    let events = load_events(&conn, user_id, note_id)?;
     drop(conn);
-    let blocks_out = blocks
+    save_context_file(vault, &file)?;
+    let blocks_out = live_blocks(&file)
         .into_iter()
         .map(|b| {
             let tmp_id = tmp_map
@@ -574,7 +644,7 @@ pub fn ingest(
     Ok((
         ContextResponse {
             blocks: blocks_out,
-            events,
+            events: events_out(&file),
         },
         pending_weather,
     ))
@@ -657,74 +727,34 @@ pub fn lookup_weather(state: &AppState, lat: f64, lon: f64) -> Result<Option<Wea
 }
 
 pub fn apply_weather_to_event(
-    state: &AppState,
-    event_id: i64,
+    vault: &std::path::Path,
+    note_id: &str,
+    event_id: &str,
     weather: &WeatherNow,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .lock()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
-    conn.execute(
-        "UPDATE context_events SET weather_code = ?1, weather_label = ?2, temp_c = ?3 WHERE id = ?4",
-        params![
-            weather.weather_code,
-            weather.weather_label,
-            weather.temp_c,
-            event_id
-        ],
-    )?;
-    Ok(())
+    let mut file = load_context_file(vault, note_id)?;
+    let Some(event) = file.events.iter_mut().find(|e| e.id == event_id) else {
+        return Ok(());
+    };
+    event.weather_code = Some(weather.weather_code);
+    event.weather_label = Some(weather.weather_label.clone());
+    event.temp_c = Some(weather.temp_c);
+    save_context_file(vault, &file)
 }
 
 pub fn apply_weather_to_parked(
-    state: &AppState,
-    user_id: i64,
-    parked_id: i64,
+    vault: &std::path::Path,
+    parked_id: &str,
     weather: &WeatherNow,
 ) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .lock()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
-    conn.execute(
-        "UPDATE parked SET weather_code = ?1, weather_label = ?2, temp_c = ?3
-         WHERE id = ?4 AND user_id = ?5",
-        params![
-            weather.weather_code,
-            weather.weather_label,
-            weather.temp_c,
-            parked_id,
-            user_id
-        ],
-    )?;
-    Ok(())
+    parked::apply_weather(vault, parked_id, weather)
 }
 
-pub fn event_coords(state: &AppState, event_id: i64) -> Result<Option<(f64, f64)>, AppError> {
-    let conn = state
-        .db
-        .lock()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
-    conn.query_row(
-        "SELECT lat, lon FROM context_events WHERE id = ?1",
-        params![event_id],
-        |row| Ok((row.get::<_, Option<f64>>(0)?, row.get::<_, Option<f64>>(1)?)),
-    )
-    .optional()?
-    .and_then(|(lat, lon)| Some((lat?, lon?)))
-    .map_or(Ok(None), |v| Ok(Some(v)))
-}
-
-pub fn delete_note_context(state: &AppState, user_id: i64, note_id: &str) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .lock()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
-    conn.execute(
-        "DELETE FROM note_blocks WHERE user_id = ?1 AND note_id = ?2",
-        params![user_id, note_id],
-    )?;
+pub fn delete_note_context(vault: &std::path::Path, note_id: &str) -> Result<(), AppError> {
+    let path = context_path(vault, note_id);
+    if path.is_file() {
+        std::fs::remove_file(path)?;
+    }
     Ok(())
 }
 
@@ -746,7 +776,7 @@ fn parse_near(near: &str) -> Option<(f64, f64)> {
 
 struct SitRow {
     note_id: Option<String>,
-    parked_id: Option<i64>,
+    parked_id: Option<String>,
     parked_body: Option<String>,
     local_time: String,
     timezone: String,
@@ -755,89 +785,78 @@ struct SitRow {
     weather_code: Option<i64>,
 }
 
-fn situation_rows(state: &AppState, user_id: i64, q: &SearchParams) -> Result<Vec<SitRow>, AppError> {
+fn situation_rows(vault: &std::path::Path, q: &SearchParams) -> Result<Vec<SitRow>, AppError> {
     let near = q.near.as_deref().and_then(parse_near);
     let radius = q.radius_m.unwrap_or(1000.0).clamp(1.0, 50_000.0);
-    let conn = state
-        .db
-        .lock()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
     let mut rows = Vec::new();
-    {
-        let mut stmt = conn.prepare(
-            "SELECT note_id, captured_at, local_time, timezone, weather_label, temp_c, lat, lon, weather_code, surface
-             FROM context_events WHERE user_id = ?1",
-        )?;
-        let mapped = stmt.query_map(params![user_id], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, Option<String>>(4)?,
-                row.get::<_, Option<f64>>(5)?,
-                row.get::<_, Option<f64>>(6)?,
-                row.get::<_, Option<f64>>(7)?,
-                row.get::<_, Option<i64>>(8)?,
-                row.get::<_, String>(9)?,
-            ))
-        })?;
-        for row in mapped {
-            let (note_id, captured, local, tz, wlabel, temp, lat, lon, code, surface) = row?;
-            if !sit_match(q, &captured, &surface, code, lat, lon, near, radius) {
+    let ctx_dir = vault.join("context");
+    if ctx_dir.is_dir() {
+        for entry in std::fs::read_dir(&ctx_dir)? {
+            let path = entry?.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("json") {
                 continue;
             }
-            rows.push(SitRow {
-                note_id: Some(note_id),
-                parked_id: None,
-                parked_body: None,
-                local_time: local,
-                timezone: tz,
-                weather_label: wlabel,
-                temp_c: temp,
-                weather_code: code,
-            });
+            let Ok(file) = load_context_file(
+                vault,
+                path.file_stem().and_then(|s| s.to_str()).unwrap_or(""),
+            ) else {
+                continue;
+            };
+            for ev in &file.events {
+                if !sit_match(
+                    q,
+                    &ev.captured_at,
+                    &ev.surface,
+                    ev.weather_code,
+                    ev.lat,
+                    ev.lon,
+                    near,
+                    radius,
+                ) {
+                    continue;
+                }
+                rows.push(SitRow {
+                    note_id: Some(file.note_id.clone()),
+                    parked_id: None,
+                    parked_body: None,
+                    local_time: ev.local_time.clone(),
+                    timezone: ev.timezone.clone(),
+                    weather_label: ev.weather_label.clone(),
+                    temp_c: ev.temp_c,
+                    weather_code: ev.weather_code,
+                });
+            }
         }
     }
-    {
-        let mut stmt = conn.prepare(
-            "SELECT id, body, created_at, local_time, timezone, weather_label, temp_c, lat, lon, weather_code, surface
-             FROM parked WHERE user_id = ?1",
-        )?;
-        let mapped = stmt.query_map(params![user_id], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, Option<String>>(3)?,
-                row.get::<_, Option<String>>(4)?,
-                row.get::<_, Option<String>>(5)?,
-                row.get::<_, Option<f64>>(6)?,
-                row.get::<_, Option<f64>>(7)?,
-                row.get::<_, Option<f64>>(8)?,
-                row.get::<_, Option<i64>>(9)?,
-                row.get::<_, Option<String>>(10)?,
-            ))
-        })?;
-        for row in mapped {
-            let (id, body, created, local, tz, wlabel, temp, lat, lon, code, surface) = row?;
-            let surface = surface.unwrap_or_default();
-            let local = local.unwrap_or_else(|| created.clone());
-            let tz = tz.unwrap_or_default();
-            if !sit_match(q, &created, &surface, code, lat, lon, near, radius) {
-                continue;
-            }
-            rows.push(SitRow {
-                note_id: None,
-                parked_id: Some(id),
-                parked_body: Some(body),
-                local_time: local,
-                timezone: tz,
-                weather_label: wlabel,
-                temp_c: temp,
-                weather_code: code,
-            });
+    for item in parked::list_parked(vault)? {
+        let surface = item.surface.clone().unwrap_or_default();
+        let local = item
+            .local_time
+            .clone()
+            .unwrap_or_else(|| item.created_at.clone());
+        let tz = item.timezone.clone().unwrap_or_default();
+        if !sit_match(
+            q,
+            &item.created_at,
+            &surface,
+            item.weather_code,
+            item.lat,
+            item.lon,
+            near,
+            radius,
+        ) {
+            continue;
         }
+        rows.push(SitRow {
+            note_id: None,
+            parked_id: Some(item.id),
+            parked_body: Some(item.body),
+            local_time: local,
+            timezone: tz,
+            weather_label: item.weather_label,
+            temp_c: item.temp_c,
+            weather_code: item.weather_code,
+        });
     }
     Ok(rows)
 }
@@ -913,6 +932,7 @@ pub fn search(
     if q.len() > 200 {
         return Err(AppError::BadRequest("query is too long".into()));
     }
+    let _ = crate::index::sync(state, user_id, vault);
     let text_hits = if q.is_empty() {
         Vec::new()
     } else {
@@ -921,12 +941,12 @@ pub fn search(
     if !params.has_filters() {
         if let Some(tag) = crate::tags::parse_tag_query(q) {
             let mut hits = text_hits;
-            hits.extend(parked_tag_hits(state, user_id, &tag)?);
+            hits.extend(parked_tag_hits(vault, &tag)?);
             return Ok(hits);
         }
         return Ok(text_hits);
     }
-    let sits = situation_rows(state, user_id, params)?;
+    let sits = situation_rows(vault, params)?;
     let mut out = Vec::new();
     let mut seen_notes = HashSet::new();
     let metas: HashMap<String, notes::NoteMeta> = notes::list_notes(vault)?
@@ -953,7 +973,7 @@ pub fn search(
                     to: None,
                     line: None,
                 });
-            } else if let Some(pid) = row.parked_id {
+            } else if let Some(pid) = row.parked_id.as_ref() {
                 let title = row
                     .parked_body
                     .as_deref()
@@ -965,7 +985,7 @@ pub fn search(
                     title,
                     snippet: context_line(row),
                     kind: Some("parked".into()),
-                    parked_id: Some(pid),
+                    parked_id: Some(pid.clone()),
                     context: Some(context_line(row)),
                     from: None,
                     to: None,
@@ -995,7 +1015,7 @@ pub fn search(
     let needle = q.to_lowercase();
     let tag_q = crate::tags::parse_tag_query(q);
     for row in &sits {
-        let Some(pid) = row.parked_id else {
+        let Some(pid) = row.parked_id.as_ref() else {
             continue;
         };
         let body = row.parked_body.as_deref().unwrap_or("");
@@ -1011,7 +1031,7 @@ pub fn search(
             title,
             snippet: context_line(row),
             kind: Some("parked".into()),
-            parked_id: Some(pid),
+            parked_id: Some(pid.clone()),
             context: Some(context_line(row)),
             from: None,
             to: None,
@@ -1021,9 +1041,9 @@ pub fn search(
     Ok(out)
 }
 
-fn parked_tag_hits(state: &AppState, user_id: i64, tag: &str) -> Result<Vec<SearchHit>, AppError> {
+fn parked_tag_hits(vault: &std::path::Path, tag: &str) -> Result<Vec<SearchHit>, AppError> {
     let mut hits = Vec::new();
-    for item in db::list_parked(state, user_id)? {
+    for item in parked::list_parked(vault)? {
         let tagged = item.tags.iter().any(|t| t == tag);
         let idx = crate::tags::first_hashtag_index(&item.body, tag);
         if !tagged && idx.is_none() {
@@ -1055,23 +1075,107 @@ fn parked_tag_hits(state: &AppState, user_id: i64, tag: &str) -> Result<Vec<Sear
     Ok(hits)
 }
 
-pub fn fill_pending_weather(state: &AppState, event_ids: Vec<i64>) {
-    for id in event_ids {
-        let Ok(Some((lat, lon))) = event_coords(state, id) else {
-            continue;
-        };
-        let weather = match lookup_weather(state, lat, lon) {
+pub fn fill_pending_weather(state: &AppState, vault: &std::path::Path, pending: Vec<PendingWeather>) {
+    for item in pending {
+        let weather = match lookup_weather(state, item.lat, item.lon) {
             Ok(Some(w)) => w,
-            _ => match (state.weather)(lat, lon) {
+            _ => match (state.weather)(item.lat, item.lon) {
                 Some(w) => {
-                    let _ = put_weather_cache(state, lat, lon, &w);
+                    let _ = put_weather_cache(state, item.lat, item.lon, &w);
                     w
                 }
                 None => continue,
             },
         };
-        let _ = apply_weather_to_event(state, id, &weather);
+        let _ = apply_weather_to_event(vault, &item.note_id, &item.event_id, &weather);
     }
+}
+
+pub fn migrate_from_db(state: &AppState, username: &str, vault: &std::path::Path) -> Result<(), AppError> {
+    let Some(user_id) = crate::index::user_id_by_name(state, username)? else {
+        return Ok(());
+    };
+    let files = {
+        let conn = state
+            .db
+            .lock()
+            .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
+        let exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'note_blocks'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if exists == 0 {
+            return Ok(());
+        }
+        let mut stmt = conn.prepare(
+            "SELECT note_id FROM note_blocks WHERE user_id = ?1 GROUP BY note_id",
+        )?;
+        let note_ids: Vec<String> = stmt
+            .query_map(params![user_id], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        drop(stmt);
+        let mut files = Vec::new();
+        for note_id in note_ids {
+            let mut file = empty_context(&note_id);
+            let mut bstmt = conn.prepare(
+                "SELECT id, ordinal, text_norm, preview, created_at, updated_at, deleted_at
+                 FROM note_blocks WHERE user_id = ?1 AND note_id = ?2",
+            )?;
+            let blocks = bstmt.query_map(params![user_id, note_id], |row| {
+                Ok(BlockRec {
+                    id: row.get(0)?,
+                    ordinal: row.get(1)?,
+                    text_norm: row.get(2)?,
+                    preview: row.get(3)?,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
+                    deleted_at: row.get(6)?,
+                })
+            })?;
+            for block in blocks {
+                file.blocks.push(block?);
+            }
+            drop(bstmt);
+            let mut estmt = conn.prepare(
+                "SELECT id, block_id, captured_at, local_time, timezone, surface, device,
+                        lat, lon, accuracy_m, weather_code, weather_label, temp_c, source
+                 FROM context_events WHERE user_id = ?1 AND note_id = ?2",
+            )?;
+            let events = estmt.query_map(params![user_id, note_id], |row| {
+                Ok(EventRec {
+                    id: row.get::<_, i64>(0)?.to_string(),
+                    block_id: row.get(1)?,
+                    captured_at: row.get(2)?,
+                    local_time: row.get(3)?,
+                    timezone: row.get(4)?,
+                    surface: row.get(5)?,
+                    device: row.get(6)?,
+                    lat: row.get(7)?,
+                    lon: row.get(8)?,
+                    accuracy_m: row.get(9)?,
+                    weather_code: row.get(10)?,
+                    weather_label: row.get(11)?,
+                    temp_c: row.get(12)?,
+                    source: row.get(13)?,
+                })
+            })?;
+            for event in events {
+                file.events.push(event?);
+            }
+            files.push(file);
+        }
+        conn.execute("DELETE FROM note_blocks WHERE user_id = ?1", params![user_id])?;
+        files
+    };
+    for file in files {
+        if !context_path(vault, &file.note_id).is_file() {
+            save_context_file(vault, &file)?;
+        }
+    }
+    Ok(())
 }
 
 pub fn resolve_weather(state: &AppState, lat: f64, lon: f64) -> Option<WeatherNow> {

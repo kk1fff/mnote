@@ -52,10 +52,12 @@ All persistent state lives under one folder (`MNOTE_DATA`, default `./data`). Mo
 
 ```
 data/                      # bind-mount this
-  db/mnote.db              # users, sessions, parked, context, prefs
+  db/mnote.db              # users, sessions, prefs, FTS, cache
   vaults/<user>/notes/     # markdown
-  vaults/<user>/assets/    # pasted images
+  vaults/<user>/assets/    # images + map.json
   vaults/<user>/history/   # edit snapshots per note id
+  vaults/<user>/parked/    # parked captures
+  vaults/<user>/context/   # paragraph context JSON
   logs/mnote.log.YYYY-MM-DD
 ```
 
@@ -117,7 +119,7 @@ cargo run -- --data data user list
 Two apps share the Vue UI:
 
 - **mnote Remote** — enter a server `host:port`, log in as usual (username + password).
-- **mnote** — pick a local folder. No password or username. Reopening that folder opens the notes. Change or reveal the folder from the sidebar. Notes stay in that folder (`db/`, `vaults/`). Serving the same folder with `mnote serve` still requires a password.
+- **mnote** — pick a local folder. No password or username. Reopening that folder opens the notes. Change or reveal the folder from the sidebar. Notes stay in that folder (`notes/`, `history/`, `parked/`, `context/`, `assets/`). Index and prefs live in app userData so cloud sync is not triggered by every keystroke. Serving a server data dir with `mnote serve` still requires a password.
 
 ```bash
 make desktop-mac           # unpacked .app (arm64/x64 dir target)

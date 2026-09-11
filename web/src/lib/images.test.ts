@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { imageFileFromList, insertAt, isAllowedImage } from "./images";
+import { assetMarkdown, imageFileFromList, insertAt, isAllowedImage } from "./images";
 
 describe("images", () => {
   it("picks the first image item", () => {
@@ -16,6 +16,21 @@ describe("images", () => {
     expect(insertAt("hello", 5, "![](a)")).toBe("hello\n![](a)");
     expect(insertAt("hello", 2, "X")).toBe("he\nX\nllo");
     expect(insertAt("", 0, "X")).toBe("X");
+  });
+
+  it("builds relative asset markdown", () => {
+    expect(
+      assetMarkdown(
+        { id: "abc", filename: "dot.png", group: "image", path: "assets/image/abc/dot.png" },
+        "",
+      ),
+    ).toBe("![](../assets/image/abc/dot.png)");
+    expect(
+      assetMarkdown(
+        { id: "abc", filename: "dot.png", group: "image", path: "assets/image/abc/dot.png" },
+        "ideas",
+      ),
+    ).toBe("![](../../assets/image/abc/dot.png)");
   });
 
   it("allows common image types", () => {

@@ -10,7 +10,7 @@ import {
   shell,
 } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -88,6 +88,11 @@ function sidecarBin(): string {
 
 function storePath(): string {
   return path.join(app.getPath("userData"), "desktop.json");
+}
+
+function vaultStateDir(folder: string): string {
+  const hash = createHash("sha256").update(path.resolve(folder)).digest("hex").slice(0, 16);
+  return path.join(app.getPath("userData"), "state", hash);
 }
 
 function loadStore(): Store {
@@ -213,13 +218,15 @@ async function stopSidecar() {
 async function startSidecar(dataDir: string): Promise<{ apiBase: string; token: string; username: string }> {
   await stopSidecar();
   fs.mkdirSync(dataDir, { recursive: true });
+  const stateDir = vaultStateDir(dataDir);
+  fs.mkdirSync(stateDir, { recursive: true });
   const port = await freePort();
   const bin = sidecarBin();
   if (!fs.existsSync(bin)) throw new Error(`missing mnote binary at ${bin}`);
   const unlock = randomBytes(32).toString("hex");
-  child = spawn(bin, ["--data", dataDir, "serve", "--bind", `127.0.0.1:${port}`], {
+  child = spawn(bin, ["--vault", dataDir, "--state", stateDir, "serve", "--bind", `127.0.0.1:${port}`], {
     stdio: "ignore",
-    env: { ...process.env, MNOTE_DATA: dataDir, MNOTE_SIDECAR_UNLOCK: unlock },
+    env: { ...process.env, MNOTE_VAULT: dataDir, MNOTE_STATE: stateDir, MNOTE_SIDECAR_UNLOCK: unlock },
   });
   sidecarBase = `http://127.0.0.1:${port}`;
   await waitHealth(sidecarBase);

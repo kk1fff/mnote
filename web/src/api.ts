@@ -92,7 +92,7 @@ export interface SearchHit {
   title: string;
   snippet: string;
   kind?: string;
-  parked_id?: number;
+  parked_id?: string;
   context?: string;
   from?: number;
   to?: number;
@@ -107,7 +107,7 @@ export interface ContextBlock {
 }
 
 export interface ContextEvent {
-  id: number;
+  id: string;
   block_id: string;
   captured_at: string;
   local_time: string;
@@ -137,6 +137,7 @@ export interface Asset {
   id: string;
   url: string;
   markdown: string;
+  path?: string;
   filename: string;
   original_name: string;
   mime: string;
@@ -163,7 +164,7 @@ export interface HistoryRev {
 }
 
 export interface Parked {
-  id: number;
+  id: string;
   body: string;
   created_at: string;
   source_id?: string;
@@ -384,9 +385,10 @@ export const api = {
     lon?: number;
     accuracy_m?: number;
   }) => request<Parked>("/api/parked", { method: "POST", body: JSON.stringify(body) }),
-  deleteParked: (id: number) =>
-    request<void>(`/api/parked/${id}`, { method: "DELETE" }),
-  parkedToNote: (id: number) => request<Note>(`/api/parked/${id}/note`, { method: "POST" }),
+  deleteParked: (id: string) =>
+    request<void>(`/api/parked/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  parkedToNote: (id: string) =>
+    request<Note>(`/api/parked/${encodeURIComponent(id)}/note`, { method: "POST" }),
   listAssets: () => request<Asset[]>("/api/assets"),
   assetMeta: (id: string) => request<Asset>(`/api/assets/${encodeURIComponent(id)}/meta`),
   assetBacklinks: (id: string) => request<NoteMeta[]>(`/api/assets/${encodeURIComponent(id)}/backlinks`),

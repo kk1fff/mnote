@@ -9,6 +9,24 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 use tower::ServiceExt;
 
+fn age_note_edit(data: &std::path::Path, username: &str, note_id: &str) {
+    let conn = rusqlite::Connection::open(data.join("db").join("mnote.db")).unwrap();
+    let user_id: i64 = conn
+        .query_row(
+            "SELECT id FROM users WHERE username = ?1",
+            [username],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let aged = chrono::Utc::now() - chrono::Duration::minutes(6);
+    conn.execute(
+        "INSERT INTO note_edit_clock (user_id, note_id, last_edit) VALUES (?1, ?2, ?3)
+         ON CONFLICT(user_id, note_id) DO UPDATE SET last_edit = excluded.last_edit",
+        rusqlite::params![user_id, note_id, aged.to_rfc3339()],
+    )
+    .unwrap();
+}
+
 struct Harness {
     app: axum::Router,
     _dir: TempDir,
@@ -867,7 +885,7 @@ async fn parked_crud_and_make_note() {
         ))
         .await;
     assert_eq!(status, StatusCode::CREATED);
-    let id = body["id"].as_i64().unwrap();
+    let id = body["id"].as_str().unwrap();
     assert_eq!(body["body"], "ask jim about the API");
 
     let (status, _, body) = h
@@ -907,7 +925,7 @@ async fn parked_crud_and_make_note() {
         ))
         .await;
     assert_eq!(status, StatusCode::CREATED);
-    let id = body["id"].as_i64().unwrap();
+    let id = body["id"].as_str().unwrap();
     let (status, _, _) = h
         .call(h.authed(Method::DELETE, &format!("/api/parked/{id}"), &cookie, None))
         .await;
@@ -950,14 +968,7 @@ async fn note_history_and_restore() {
     assert_eq!(status, StatusCode::OK);
     assert!(body.as_array().unwrap().is_empty());
 
-    let last_edit = h
-        ._dir
-        .path()
-        .join("vaults/alice/history")
-        .join(&id)
-        .join("last_edit");
-    let aged = chrono::Utc::now() - chrono::Duration::minutes(6);
-    std::fs::write(&last_edit, aged.to_rfc3339()).unwrap();
+    age_note_edit(h._dir.path(), "alice", &id);
 
     let (status, _, _) = h
         .call(h.authed(
@@ -1109,7 +1120,7 @@ async fn parked_stamp_stays_out_of_markdown() {
         ))
         .await;
     assert_eq!(status, StatusCode::CREATED, "{body}");
-    let id = body["id"].as_i64().unwrap();
+    let id = body["id"].as_str().unwrap();
     assert_eq!(body["lat"], 37.77);
     assert_eq!(body["surface"], "park");
 
@@ -1511,7 +1522,7 @@ async fn tags_patch_search_parked_and_suggest() {
         .await;
     assert_eq!(status, StatusCode::CREATED, "{body}");
     assert_eq!(body["tags"], json!(["work"]));
-    let parked_id = body["id"].as_i64().unwrap();
+    let parked_id = body["id"].as_str().unwrap();
 
     let (status, _, body) = h
         .call(h.authed(Method::GET, "/api/search?q=%23work", &cookie, None))

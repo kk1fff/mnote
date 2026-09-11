@@ -12,7 +12,7 @@ vi.mock("../api", async () => {
     api: {
       listParked: vi.fn().mockResolvedValue([]),
       createParked: vi.fn().mockResolvedValue({
-        id: 1,
+        id: "1",
         body: "milk",
         created_at: "2026-08-22T15:00:00Z",
       }),
@@ -29,7 +29,7 @@ describe("QuickView", () => {
     vi.mocked(api.listParked)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
-        { id: 1, body: "milk", created_at: "2026-08-22T15:00:00Z" },
+        { id: "1", body: "milk", created_at: "2026-08-22T15:00:00Z" },
       ]);
     const router = createRouter({
       history: createWebHistory(),
