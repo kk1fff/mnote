@@ -212,7 +212,7 @@ describe("Sidebar", () => {
   it("shows parked count", async () => {
     vi.mocked(api.listNotes).mockResolvedValue([]);
     vi.mocked(api.listParked).mockResolvedValue([
-      { id: 1, body: "ask jim", created_at: "2026-08-22T15:00:00Z" },
+      { id: "1", body: "ask jim", created_at: "2026-08-22T15:00:00Z" },
     ]);
     const router = createRouter({
       history: createWebHistory(),

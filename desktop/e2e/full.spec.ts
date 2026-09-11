@@ -15,8 +15,9 @@ test("opens a local folder without a password and reopens it", async () => {
   await expect(first.page.getByTestId("sign-out")).toHaveCount(0);
   await expect(first.page.getByTestId("account-menu")).toHaveCount(0);
   await expect(first.page.getByTestId("folder-menu")).toBeVisible();
-  expect(fs.existsSync(path.join(data, "db", "mnote.db"))).toBe(true);
-  expect(fs.readdirSync(path.join(data, "vaults")).length).toBeGreaterThan(0);
+  expect(fs.existsSync(path.join(data, "notes"))).toBe(true);
+  expect(fs.existsSync(path.join(data, "db"))).toBe(false);
+  expect(fs.existsSync(path.join(first.userData, "state"))).toBe(true);
   await first.app.close();
 
   const second = await launchApp({ flavor: "full", userData: first.userData, data });
@@ -36,7 +37,8 @@ test("changes the notes folder", async () => {
   await app.page.getByRole("button", { name: "Choose" }).click();
   await app.page.getByRole("button", { name: "Open" }).click();
   await expect(app.page.getByTestId("note-title")).toBeVisible({ timeout: 30_000 });
-  expect(fs.existsSync(path.join(firstDir, "db", "mnote.db"))).toBe(true);
+  expect(fs.existsSync(path.join(firstDir, "notes"))).toBe(true);
+  expect(fs.existsSync(path.join(firstDir, "db"))).toBe(false);
 
   await app.page.getByTestId("folder-menu").click();
   await app.page.getByTestId("change-folder").click();
@@ -44,7 +46,8 @@ test("changes the notes folder", async () => {
   await app.page.getByRole("button", { name: "Choose" }).click();
   await app.page.getByRole("button", { name: "Open" }).click();
   await expect(app.page.getByTestId("note-title")).toBeVisible({ timeout: 30_000 });
-  expect(fs.existsSync(path.join(secondDir, "db", "mnote.db"))).toBe(true);
+  expect(fs.existsSync(path.join(secondDir, "notes"))).toBe(true);
+  expect(fs.existsSync(path.join(secondDir, "db"))).toBe(false);
   await app.app.close();
   fs.rmSync(app.userData, { recursive: true, force: true });
   fs.rmSync(firstDir, { recursive: true, force: true });

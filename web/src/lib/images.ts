@@ -17,6 +17,20 @@ export function insertAt(content: string, index: number, inserted: string): stri
   return `${content.slice(0, at)}${prefix}${inserted}${suffix}${content.slice(at)}`;
 }
 
+export function assetMarkdown(
+  asset: { id: string; filename?: string; group?: string; path?: string; markdown?: string },
+  folder = "",
+): string {
+  const vaultPath =
+    asset.path ||
+    (asset.filename
+      ? `assets/${asset.group || "image"}/${asset.id}/${asset.filename}`
+      : "");
+  if (!vaultPath) return asset.markdown || `![](/api/assets/${asset.id})`;
+  const depth = folder.split("/").filter(Boolean).length + 1;
+  return `![](${"../".repeat(depth)}${vaultPath.replace(/^\/+/, "")})`;
+}
+
 export function isAllowedImage(file: File): boolean {
   return ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"].includes(file.type)
     || /\.(png|jpe?g|gif|webp)$/i.test(file.name);

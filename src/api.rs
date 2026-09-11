@@ -3,6 +3,7 @@ use crate::db::{self, User, SESSION_COOKIE, SESSION_DAYS};
 use crate::error::AppError;
 use crate::live::{self, ClientMsg, ServerMsg};
 use crate::notes;
+use crate::parked;
 use crate::AppState;
 use axum::body::Body;
 use axum::extract::connect_info::ConnectInfo;
@@ -374,6 +375,7 @@ async fn create_note(
         body.content.as_deref(),
     ) {
         Ok(note) => {
+            let _ = crate::index::touch_edit(&state, user.id, &note.id);
             state.live.replace(user.id, &note.id, &note.content);
             state.live.index(user.id, notes::to_meta(&note));
             Ok((StatusCode::CREATED, Json(note)).into_response())
@@ -396,6 +398,7 @@ async fn daily_note(
 ) -> Result<Json<notes::Note>, AppError> {
     require_ready(&user)?;
     let note = notes::get_or_create_daily(&state.vault_dir(&user.username), &date)?;
+    let _ = crate::index::touch_edit(&state, user.id, &note.id);
     db::record_note_open(&state, user.id, &note.id)?;
     state.live.index(user.id, notes::to_meta(&note));
     Ok(Json(note))
@@ -408,8 +411,11 @@ async fn put_daily_note(
     Json(body): Json<UpdateNote>,
 ) -> Result<Json<notes::Note>, AppError> {
     require_ready(&user)?;
-    let note = notes::get_or_create_daily(&state.vault_dir(&user.username), &date)?;
-    let note = notes::put_note(&state.vault_dir(&user.username), &note.id, &body.content)?;
+    let vault = state.vault_dir(&user.username);
+    let note = notes::get_or_create_daily(&vault, &date)?;
+    let idle = crate::index::session_ended(&state, user.id, &note.id)?;
+    let note = notes::put_note_session(&vault, &note.id, &body.content, idle)?;
+    crate::index::touch_edit(&state, user.id, &note.id)?;
     state.live.replace(user.id, &note.id, &note.content);
     Ok(Json(note))
 }
@@ -554,9 +560,10 @@ async fn delete_note(
 ) -> Result<StatusCode, AppError> {
     require_ready(&user)?;
     let id = notes::normalize_note_id(&id)?;
-    notes::delete_note(&state.vault_dir(&user.username), &id)?;
+    let vault = state.vault_dir(&user.username);
+    notes::delete_note(&vault, &id)?;
     db::clear_note_state(&state, user.id, &id)?;
-    context::delete_note_context(&state, user.id, &id)?;
+    context::delete_note_context(&vault, &id)?;
     state.live.remove(user.id, &id);
     Ok(StatusCode::NO_CONTENT)
 }
@@ -580,7 +587,10 @@ async fn put_note(
     Json(body): Json<UpdateNote>,
 ) -> Result<Json<notes::Note>, AppError> {
     require_ready(&user)?;
-    let note = notes::put_note(&state.vault_dir(&user.username), &id, &body.content)?;
+    let vault = state.vault_dir(&user.username);
+    let idle = crate::index::session_ended(&state, user.id, &id)?;
+    let note = notes::put_note_session(&vault, &id, &body.content, idle)?;
+    crate::index::touch_edit(&state, user.id, &id)?;
     state.live.replace(user.id, &note.id, &note.content);
     state.live.index(user.id, notes::to_meta(&note));
     Ok(Json(note))
@@ -633,16 +643,16 @@ struct CreateParked {
 async fn list_parked(
     State(state): State<AppState>,
     Auth(user): Auth,
-) -> Result<Json<Vec<db::Parked>>, AppError> {
+) -> Result<Json<Vec<parked::Parked>>, AppError> {
     require_ready(&user)?;
-    Ok(Json(db::list_parked(&state, user.id)?))
+    Ok(Json(parked::list_parked(&state.vault_dir(&user.username))?))
 }
 
 async fn create_parked(
     State(state): State<AppState>,
     Auth(user): Auth,
     Json(body): Json<CreateParked>,
-) -> Result<(StatusCode, Json<db::Parked>), AppError> {
+) -> Result<(StatusCode, Json<parked::Parked>), AppError> {
     require_ready(&user)?;
     let stamp = ContextStamp {
         surface: body.surface.clone(),
@@ -653,11 +663,12 @@ async fn create_parked(
         lon: body.lon,
         accuracy_m: body.accuracy_m,
     };
-    let item = db::create_parked(
+    let vault = state.vault_dir(&user.username);
+    let item = parked::create_parked(
         &state,
-        user.id,
+        &vault,
         &body.body,
-        db::ParkedSource {
+        parked::ParkedSource {
             source_id: body.source_id.as_deref(),
             source_title: body.source_title.as_deref(),
             source_folder: body.source_folder.as_deref(),
@@ -668,8 +679,8 @@ async fn create_parked(
     if item.weather_label.is_none() {
         if let (Some(lat), Some(lon)) = (body.lat, body.lon) {
             let state2 = state.clone();
-            let user_id = user.id;
-            let parked_id = item.id;
+            let vault2 = vault.clone();
+            let parked_id = item.id.clone();
             tokio::spawn(async move {
                 let fetch = state2.clone();
                 let Some(weather) = tokio::task::spawn_blocking(move || {
@@ -680,7 +691,7 @@ async fn create_parked(
                 .flatten() else {
                     return;
                 };
-                let _ = context::apply_weather_to_parked(&state2, user_id, parked_id, &weather);
+                let _ = context::apply_weather_to_parked(&vault2, &parked_id, &weather);
             });
         }
     }
@@ -690,20 +701,21 @@ async fn create_parked(
 async fn delete_parked(
     State(state): State<AppState>,
     Auth(user): Auth,
-    Path(id): Path<i64>,
+    Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
     require_ready(&user)?;
-    db::delete_parked(&state, user.id, id)?;
+    parked::delete_parked(&state.vault_dir(&user.username), &id)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 async fn parked_to_note(
     State(state): State<AppState>,
     Auth(user): Auth,
-    Path(id): Path<i64>,
+    Path(id): Path<String>,
 ) -> Result<Response, AppError> {
     require_ready(&user)?;
-    let item = db::get_parked(&state, user.id, id)?;
+    let vault = state.vault_dir(&user.username);
+    let item = parked::get_parked(&vault, &id)?;
     let title = notes::parked_note_title(&item.body);
     let folder = item.source_folder.clone().unwrap_or_default();
     let content = notes::parked_note_body(
@@ -722,7 +734,7 @@ async fn parked_to_note(
             (StatusCode::OK, notes::get_note(&vault, existing_id)?)
         }
     };
-    db::delete_parked(&state, user.id, id)?;
+    parked::delete_parked(&vault, &id)?;
     state.live.replace(user.id, &note.id, &note.content);
     state.live.index(user.id, notes::to_meta(&note));
     Ok((status, Json(note)).into_response())
@@ -786,8 +798,9 @@ async fn get_context(
 ) -> Result<Json<context::ContextResponse>, AppError> {
     require_ready(&user)?;
     let id = notes::normalize_note_id(&id)?;
-    notes::get_note(&state.vault_dir(&user.username), &id)?;
-    Ok(Json(context::get_context(&state, user.id, &id)?))
+    let vault = state.vault_dir(&user.username);
+    notes::get_note(&vault, &id)?;
+    Ok(Json(context::get_context(&vault, &id)?))
 }
 
 async fn post_context(
@@ -798,13 +811,15 @@ async fn post_context(
 ) -> Result<Json<context::ContextResponse>, AppError> {
     require_ready(&user)?;
     let id = notes::normalize_note_id(&id)?;
-    notes::get_note(&state.vault_dir(&user.username), &id)?;
-    let (resp, pending) = context::ingest(&state, user.id, &id, body)?;
+    let vault = state.vault_dir(&user.username);
+    notes::get_note(&vault, &id)?;
+    let (resp, pending) = context::ingest(&state, &vault, &id, body)?;
     if !pending.is_empty() {
         let state2 = state.clone();
+        let vault2 = vault.clone();
         tokio::spawn(async move {
             let _ = tokio::task::spawn_blocking(move || {
-                context::fill_pending_weather(&state2, pending);
+                context::fill_pending_weather(&state2, &vault2, pending);
             })
             .await;
         });
@@ -863,7 +878,7 @@ async fn suggest_tags(
     require_ready(&user)?;
     let vault = state.vault_dir(&user.username);
     let notes = notes::list_notes_internal(&vault)?;
-    let parked = db::list_parked(&state, user.id)?;
+    let parked = parked::list_parked(&vault)?;
     let mut title = body.title.unwrap_or_default();
     let mut folder = body.folder.unwrap_or_default();
     let mut content = body.content.unwrap_or_default();
@@ -1135,11 +1150,10 @@ fn schedule_persist(state: AppState, user: User, persist: live::Persist) {
         if state.live.rev(user.id, &persist.path) != Some(persist.rev) {
             return;
         }
-        if let Ok(note) = notes::put_note(
-            &state.vault_dir(&user.username),
-            &persist.path,
-            &persist.content,
-        ) {
+        let vault = state.vault_dir(&user.username);
+        let idle = crate::index::session_ended(&state, user.id, &persist.path).unwrap_or(true);
+        if let Ok(note) = notes::put_note_session(&vault, &persist.path, &persist.content, idle) {
+            let _ = crate::index::touch_edit(&state, user.id, &persist.path);
             state.live.index(user.id, notes::to_meta(&note));
         }
     });

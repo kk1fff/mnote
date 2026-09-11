@@ -40,7 +40,7 @@ pub struct SearchHit {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub parked_id: Option<i64>,
+    pub parked_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -56,6 +56,7 @@ pub struct Asset {
     pub id: String,
     pub url: String,
     pub markdown: String,
+    pub path: String,
     pub filename: String,
     pub original_name: String,
     pub mime: String,
@@ -114,6 +115,8 @@ pub const MAX_ASSET_PIXELS: u64 = 40_000_000;
 pub fn ensure_vault(vault: &Path) -> Result<(), AppError> {
     std::fs::create_dir_all(vault.join("notes"))?;
     std::fs::create_dir_all(vault.join("assets"))?;
+    std::fs::create_dir_all(vault.join("parked"))?;
+    std::fs::create_dir_all(vault.join("context"))?;
     migrate_legacy_assets(vault)?;
     Ok(())
 }
@@ -345,7 +348,7 @@ fn heading_title(content: &str) -> Option<String> {
     None
 }
 
-fn parse_frontmatter(raw: &str) -> (HashMap<String, String>, String) {
+pub(crate) fn parse_frontmatter(raw: &str) -> (HashMap<String, String>, String) {
     let Some(rest) = raw
         .strip_prefix("---\n")
         .or_else(|| raw.strip_prefix("---\r\n"))
@@ -393,42 +396,41 @@ fn render_file(note: &Note) -> String {
     out
 }
 
-const SESSION_IDLE: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 const CONFLICT_MARK: &str = "<<<<<<< this device";
 
 fn history_dir(vault: &Path, id: &str) -> PathBuf {
     vault.join("history").join(id)
 }
 
-fn last_edit_path(vault: &Path, id: &str) -> PathBuf {
-    history_dir(vault, id).join("last_edit")
-}
-
-fn read_last_edit(vault: &Path, id: &str) -> Option<chrono::DateTime<chrono::Utc>> {
-    let raw = std::fs::read_to_string(last_edit_path(vault, id)).ok()?;
-    chrono::DateTime::parse_from_rfc3339(raw.trim())
-        .ok()
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-}
-
-fn write_last_edit(vault: &Path, id: &str) -> Result<(), AppError> {
-    let dir = history_dir(vault, id);
-    std::fs::create_dir_all(&dir)?;
-    std::fs::write(last_edit_path(vault, id), chrono::Utc::now().to_rfc3339())?;
-    Ok(())
-}
-
-fn session_ended(vault: &Path, id: &str) -> bool {
-    match read_last_edit(vault, id) {
-        None => true,
-        Some(at) => {
-            let age = chrono::Utc::now()
-                .signed_duration_since(at)
-                .to_std()
-                .unwrap_or(std::time::Duration::ZERO);
-            age >= SESSION_IDLE
-        }
+pub fn migrate_last_edit_files(
+    state: &crate::AppState,
+    username: &str,
+    vault: &Path,
+) -> Result<(), AppError> {
+    let Some(user_id) = crate::index::user_id_by_name(state, username)? else {
+        return Ok(());
+    };
+    let root = vault.join("history");
+    if !root.is_dir() {
+        return Ok(());
     }
+    for entry in std::fs::read_dir(&root)? {
+        let dir = entry?.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        let file = dir.join("last_edit");
+        if !file.is_file() {
+            continue;
+        }
+        if let Some(note_id) = dir.file_name().and_then(|s| s.to_str()) {
+            if let Ok(raw) = std::fs::read_to_string(&file) {
+                let _ = crate::index::set_last_edit(state, user_id, note_id, raw.trim());
+            }
+        }
+        let _ = std::fs::remove_file(file);
+    }
+    Ok(())
 }
 
 fn find_existing(vault: &Path, id: &str) -> Result<Option<Note>, AppError> {
@@ -537,7 +539,7 @@ fn snapshot_note(vault: &Path, note: &Note) -> Result<(), AppError> {
     Ok(())
 }
 
-fn maybe_snapshot(vault: &Path, id: &str, force: bool) -> Result<(), AppError> {
+fn maybe_snapshot(vault: &Path, id: &str, force: bool, session_ended: bool) -> Result<(), AppError> {
     let Some(disk) = find_existing(vault, id)? else {
         return Ok(());
     };
@@ -550,18 +552,17 @@ fn maybe_snapshot(vault: &Path, id: &str, force: bool) -> Result<(), AppError> {
             return Ok(());
         }
     }
-    if !force && !session_ended(vault, id) {
+    if !force && !session_ended {
         return Ok(());
     }
     snapshot_note(vault, &disk)
 }
 
-fn write_note(vault: &Path, note: &Note) -> Result<(), AppError> {
+fn write_note(vault: &Path, note: &Note, session_ended: bool) -> Result<(), AppError> {
     ensure_vault(vault)?;
     let force = note.content.contains(CONFLICT_MARK);
-    maybe_snapshot(vault, &note.id, force)?;
+    maybe_snapshot(vault, &note.id, force, session_ended)?;
     write_note_file(vault, note)?;
-    write_last_edit(vault, &note.id)?;
     Ok(())
 }
 
@@ -644,7 +645,7 @@ fn note_from_file(vault: &Path, file: &Path) -> Result<Note, AppError> {
     let (fields, _) = parse_frontmatter(&raw);
     let note = load_note_file(vault, file)?;
     if fields.get("id").map(|s| s.trim()).unwrap_or("").is_empty() {
-        write_note(vault, &note)?;
+        write_note(vault, &note, false)?;
     }
     Ok(note)
 }
@@ -744,15 +745,24 @@ pub fn create_note(
         tags,
         title,
     };
-    write_note(vault, &note)?;
+    write_note(vault, &note, true)?;
     get_note(vault, &note.id)
 }
 
 pub fn put_note(vault: &Path, id: &str, content: &str) -> Result<Note, AppError> {
+    put_note_session(vault, id, content, false)
+}
+
+pub fn put_note_session(
+    vault: &Path,
+    id: &str,
+    content: &str,
+    session_ended: bool,
+) -> Result<Note, AppError> {
     let mut note = get_note(vault, id)?;
     note.content = content.to_string();
     note.tags = crate::tags::extract_hashtags(content);
-    write_note(vault, &note)?;
+    write_note(vault, &note, session_ended)?;
     get_note(vault, id)
 }
 
@@ -834,7 +844,7 @@ pub fn get_history(vault: &Path, id: &str, rev: &str) -> Result<HistoryRev, AppE
 
 pub fn restore_note(vault: &Path, id: &str, rev: &str) -> Result<Note, AppError> {
     let snap = get_history(vault, id, rev)?;
-    maybe_snapshot(vault, id, true)?;
+    maybe_snapshot(vault, id, true, true)?;
     let mut note = get_note(vault, id)?;
     note.content = snap.content;
     let file = note_file(vault, &note.file_path);
@@ -842,7 +852,6 @@ pub fn restore_note(vault: &Path, id: &str, rev: &str) -> Result<Note, AppError>
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(&file, render_file(&note))?;
-    write_last_edit(vault, &note.id)?;
     get_note(vault, id)
 }
 
@@ -895,7 +904,7 @@ pub fn update_meta_and_rewrites(
     if path_changed {
         note.file_path = allocate_file_path(vault, &note.folder, &note.title, Some(&note.id));
     }
-    write_note(vault, &note)?;
+    write_note(vault, &note, false)?;
     if old_file != note.file_path {
         let old = note_file(vault, &old_file);
         if old.exists() {
@@ -1353,12 +1362,121 @@ fn safe_filename(name: &str, ext: &str) -> String {
     format!("{}.{}", if stem.is_empty() { "image" } else { stem }, ext)
 }
 
-fn manifest_path(vault: &Path, id: &str) -> Option<PathBuf> {
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct AssetMapFile {
+    version: u8,
+    assets: HashMap<String, AssetMapEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AssetMapEntry {
+    path: String,
+    filename: String,
+    original_name: String,
+    mime: String,
+    bytes: u64,
+    width: u32,
+    height: u32,
+    created_at: String,
+    #[serde(default)]
+    group: String,
+}
+
+fn asset_map_path(vault: &Path) -> PathBuf {
+    vault.join("assets").join("map.json")
+}
+
+fn vault_asset_path(group: &str, id: &str, filename: &str) -> String {
+    if group.is_empty() {
+        format!("assets/{id}/{filename}")
+    } else {
+        format!("assets/{group}/{id}/{filename}")
+    }
+}
+
+fn relative_asset_markdown(folder: &str, vault_path: &str) -> String {
+    let depth = folder.split('/').filter(|s| !s.is_empty()).count() + 1;
+    format!("![]({}{vault_path})", "../".repeat(depth))
+}
+
+fn asset_from_entry(id: &str, entry: &AssetMapEntry) -> Asset {
+    Asset {
+        markdown: relative_asset_markdown("", &entry.path),
+        url: format!("/api/assets/{id}"),
+        path: entry.path.clone(),
+        id: id.to_string(),
+        filename: entry.filename.clone(),
+        original_name: entry.original_name.clone(),
+        mime: entry.mime.clone(),
+        bytes: entry.bytes,
+        width: entry.width,
+        height: entry.height,
+        group: entry.group.clone(),
+        created_at: entry.created_at.clone(),
+    }
+}
+
+fn load_asset_map(vault: &Path) -> Result<AssetMapFile, AppError> {
+    let path = asset_map_path(vault);
+    if !path.is_file() {
+        return Ok(AssetMapFile {
+            version: 1,
+            assets: HashMap::new(),
+        });
+    }
+    let text = std::fs::read_to_string(path)?;
+    serde_json::from_str(&text).map_err(|_| AppError::BadRequest("invalid asset map".into()))
+}
+
+fn save_asset_map(vault: &Path, map: &AssetMapFile) -> Result<(), AppError> {
+    ensure_vault(vault)?;
+    let json = serde_json::to_vec_pretty(map).map_err(|e| AppError::Internal(e.into()))?;
+    std::fs::write(asset_map_path(vault), json)?;
+    Ok(())
+}
+
+fn rebuild_asset_map(vault: &Path) -> Result<AssetMapFile, AppError> {
+    let mut map = AssetMapFile {
+        version: 1,
+        assets: HashMap::new(),
+    };
     let root = vault.join("assets");
-    WalkDir::new(&root).into_iter().filter_map(Result::ok).find_map(|entry| {
-        (entry.file_name() == "asset.json" && entry.path().parent()?.file_name()?.to_string_lossy() == id)
-            .then(|| entry.path().to_path_buf())
-    })
+    if root.is_dir() {
+        for entry in WalkDir::new(&root).into_iter().filter_map(Result::ok) {
+            if entry.file_name() != "asset.json" {
+                continue;
+            }
+            let Ok(manifest) = read_manifest(entry.path()) else {
+                continue;
+            };
+            let rel = vault_asset_path(&manifest.group, &manifest.id, &manifest.filename);
+            map.assets.insert(
+                manifest.id.clone(),
+                AssetMapEntry {
+                    path: rel,
+                    filename: manifest.filename,
+                    original_name: manifest.original_name,
+                    mime: manifest.mime,
+                    bytes: manifest.bytes,
+                    width: manifest.width,
+                    height: manifest.height,
+                    created_at: manifest.created_at,
+                    group: manifest.group,
+                },
+            );
+        }
+    }
+    save_asset_map(vault, &map)?;
+    Ok(map)
+}
+
+fn asset_map(vault: &Path) -> Result<AssetMapFile, AppError> {
+    let path = asset_map_path(vault);
+    if path.is_file() {
+        load_asset_map(vault)
+    } else {
+        rebuild_asset_map(vault)
+    }
 }
 
 fn read_manifest(path: &Path) -> Result<AssetManifest, AppError> {
@@ -1366,30 +1484,30 @@ fn read_manifest(path: &Path) -> Result<AssetManifest, AppError> {
     serde_json::from_str(&text).map_err(|_| AppError::BadRequest("invalid asset manifest".into()))
 }
 
-fn asset_from_manifest(manifest: AssetManifest) -> Asset {
-    let id = manifest.id.clone();
-    Asset {
-        markdown: format!("![]({})", asset_embed(&id)),
-        url: format!("/api/assets/{id}"),
-        id,
-        filename: manifest.filename,
-        original_name: manifest.original_name,
-        mime: manifest.mime,
-        bytes: manifest.bytes,
-        width: manifest.width,
-        height: manifest.height,
-        group: manifest.group,
-        created_at: manifest.created_at,
+pub fn migrate_assets_map(vault: &Path) -> Result<(), AppError> {
+    ensure_vault(vault)?;
+    if asset_map_path(vault).is_file() {
+        return Ok(());
     }
+    let _ = rebuild_asset_map(vault)?;
+    Ok(())
 }
 
-pub fn asset_embed(id: &str) -> String { format!("mnote-asset:{id}") }
+pub fn asset_embed(id: &str) -> String {
+    format!("mnote-asset:{id}")
+}
 
 pub fn save_asset(vault: &Path, content_type: &str, bytes: &[u8]) -> Result<Asset, AppError> {
     save_asset_in_group(vault, content_type, bytes, "image", "")
 }
 
-pub fn save_asset_in_group(vault: &Path, content_type: &str, bytes: &[u8], original_name: &str, group: &str) -> Result<Asset, AppError> {
+pub fn save_asset_in_group(
+    vault: &Path,
+    content_type: &str,
+    bytes: &[u8],
+    original_name: &str,
+    group: &str,
+) -> Result<Asset, AppError> {
     if bytes.is_empty() {
         return Err(AppError::BadRequest("empty file".into()));
     }
@@ -1406,23 +1524,37 @@ pub fn save_asset_in_group(vault: &Path, content_type: &str, bytes: &[u8], origi
         return Err(AppError::BadRequest("image dimensions are too large".into()));
     }
     let group = normalize_asset_group(group)?;
+    let group = if group.is_empty() {
+        "image".to_string()
+    } else {
+        group
+    };
     ensure_vault(vault)?;
     let id = uuid::Uuid::new_v4().to_string();
     let dir = vault.join("assets").join(&group).join(&id);
     std::fs::create_dir_all(&dir)?;
     let filename = safe_filename(original_name, ext);
-    let manifest = AssetManifest {
-        version: 1, id: id.clone(), filename: filename.clone(), original_name: original_name.to_string(),
-        mime: mime.to_string(), bytes: bytes.len() as u64,
-        width, height, created_at: chrono::Utc::now().to_rfc3339(), group,
-    };
     std::fs::write(dir.join(&filename), bytes)?;
-    let json = serde_json::to_vec_pretty(&manifest).map_err(|e| AppError::Internal(e.into()))?;
-    std::fs::write(dir.join("asset.json"), json)?;
-    Ok(asset_from_manifest(manifest))
+    let path = vault_asset_path(&group, &id, &filename);
+    let entry = AssetMapEntry {
+        path: path.clone(),
+        filename,
+        original_name: original_name.to_string(),
+        mime: mime.to_string(),
+        bytes: bytes.len() as u64,
+        width,
+        height,
+        created_at: chrono::Utc::now().to_rfc3339(),
+        group,
+    };
+    let mut map = asset_map(vault)?;
+    map.version = 1;
+    map.assets.insert(id.clone(), entry.clone());
+    save_asset_map(vault, &map)?;
+    Ok(asset_from_entry(&id, &entry))
 }
 
-pub fn read_asset(vault: &Path, id: &str) -> Result<(Vec<u8>, String), AppError> {
+fn valid_asset_id(id: &str) -> Result<(), AppError> {
     if id.is_empty()
         || id.contains('/')
         || id.contains('\\')
@@ -1431,13 +1563,34 @@ pub fn read_asset(vault: &Path, id: &str) -> Result<(Vec<u8>, String), AppError>
     {
         return Err(AppError::BadRequest("invalid asset id".into()));
     }
-    if let Some(manifest_path) = manifest_path(vault, id) {
-        let manifest = read_manifest(&manifest_path)?;
-        let path = manifest_path.parent().unwrap().join(&manifest.filename);
-        if !path.is_file() { return Err(AppError::NotFound); }
-        return Ok((std::fs::read(path)?, manifest.mime));
+    Ok(())
+}
+
+pub fn read_asset(vault: &Path, id: &str) -> Result<(Vec<u8>, String), AppError> {
+    valid_asset_id(id)?;
+    if let Some(entry) = asset_map(vault)?.assets.get(id).cloned() {
+        let path = vault.join(&entry.path);
+        if path.is_file() {
+            return Ok((std::fs::read(path)?, entry.mime));
+        }
     }
-    // Legacy flat assets remain readable for existing notes and history.
+    let root = vault.join("assets");
+    for entry in WalkDir::new(&root).into_iter().filter_map(Result::ok) {
+        if entry.file_name() == "asset.json"
+            && entry
+                .path()
+                .parent()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy() == id)
+                .unwrap_or(false)
+        {
+            let manifest = read_manifest(entry.path())?;
+            let path = entry.path().parent().unwrap().join(&manifest.filename);
+            if path.is_file() {
+                return Ok((std::fs::read(path)?, manifest.mime));
+            }
+        }
+    }
     let path = vault.join("assets").join(id);
     if !path.is_file() {
         return Err(AppError::NotFound);
@@ -1451,24 +1604,30 @@ pub fn read_asset(vault: &Path, id: &str) -> Result<(Vec<u8>, String), AppError>
 
 pub fn list_assets(vault: &Path) -> Result<Vec<Asset>, AppError> {
     ensure_vault(vault)?;
-    let mut assets = WalkDir::new(vault.join("assets")).into_iter().filter_map(Result::ok).filter_map(|entry| {
-        (entry.file_name() == "asset.json").then(|| read_manifest(entry.path()).ok()).flatten().map(asset_from_manifest)
-    }).collect::<Vec<_>>();
+    let map = asset_map(vault)?;
+    let mut assets: Vec<Asset> = map
+        .assets
+        .iter()
+        .map(|(id, entry)| asset_from_entry(id, entry))
+        .collect();
     assets.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     Ok(assets)
 }
 
 pub fn get_asset_meta(vault: &Path, id: &str) -> Result<Asset, AppError> {
-    if id.is_empty() || id.contains('/') || id.contains('\\') || id.contains("..") { return Err(AppError::BadRequest("invalid asset id".into())); }
-    let path = manifest_path(vault, id).ok_or(AppError::NotFound)?;
-    Ok(asset_from_manifest(read_manifest(&path)?))
+    valid_asset_id(id)?;
+    let map = asset_map(vault)?;
+    let entry = map.assets.get(id).ok_or(AppError::NotFound)?;
+    Ok(asset_from_entry(id, entry))
 }
 
 pub fn asset_backlinks(vault: &Path, id: &str) -> Result<Vec<NoteMeta>, AppError> {
-    let needle = asset_embed(id);
+    let embed = asset_embed(id);
+    let path_needle = format!("/{id}/");
     let mut links = Vec::new();
     for meta in list_notes(vault)? {
-        if get_note(vault, &meta.id)?.content.contains(&needle) {
+        let content = get_note(vault, &meta.id)?.content;
+        if content.contains(&embed) || content.contains(&path_needle) {
             links.push(meta);
         }
     }
@@ -1585,8 +1744,7 @@ mod tests {
         let vault = dir.path();
         let note = create_note(vault, "One", "ideas/nested", Some("hi")).unwrap();
         let linker = create_note(vault, "Index", "", Some("see [[ideas/nested/One]]")).unwrap();
-        age_last_edit(vault, &note.id, 6);
-        put_note(vault, &note.id, "v2").unwrap();
+        put_note_session(vault, &note.id, "v2", true).unwrap();
         assert!(!list_history(vault, &note.id).unwrap().is_empty());
 
         delete_note(vault, &note.id).unwrap();
@@ -1636,8 +1794,7 @@ mod tests {
             Some("see [[One|label]] and [[ideas/One]] and [[Other]]"),
         )
         .unwrap();
-        age_last_edit(vault, &src.id, 6);
-        put_note(vault, &src.id, &src.content).unwrap();
+        put_note_session(vault, &src.id, &src.content, true).unwrap();
         let hist_before = list_history(vault, &src.id).unwrap();
         assert_eq!(hist_before.len(), 1);
 
@@ -1724,8 +1881,9 @@ mod tests {
         ];
         let asset = save_asset(vault, "image/png", &png).unwrap();
         assert!(!asset.id.contains('.'));
-        assert!(vault.join("assets").join(&asset.id).join("asset.json").is_file());
-        assert_eq!(asset.markdown, format!("![]({})", asset_embed(&asset.id)));
+        assert!(vault.join("assets").join("map.json").is_file());
+        assert!(asset.markdown.contains("assets/"));
+        assert!(asset.path.contains(&asset.id));
         let (bytes, mime) = read_asset(vault, &asset.id).unwrap();
         assert_eq!(bytes, png);
         assert!(mime.contains("png"));
@@ -1741,23 +1899,16 @@ mod tests {
         assert_eq!(snippet("", 0, 1), "");
     }
 
-    fn age_last_edit(vault: &Path, id: &str, minutes: i64) {
-        let at = chrono::Utc::now() - chrono::Duration::minutes(minutes);
-        std::fs::create_dir_all(history_dir(vault, id)).unwrap();
-        std::fs::write(last_edit_path(vault, id), at.to_rfc3339()).unwrap();
-    }
-
     #[test]
     fn history_snapshots_after_idle_session() {
         let dir = tempdir().unwrap();
         let vault = dir.path();
         let note = create_note(vault, "One", "", Some("v0")).unwrap();
-        put_note(vault, &note.id, "v1").unwrap();
+        put_note_session(vault, &note.id, "v1", false).unwrap();
         assert!(list_history(vault, &note.id).unwrap().is_empty());
 
-        age_last_edit(vault, &note.id, 6);
-        put_note(vault, &note.id, "v2").unwrap();
-        put_note(vault, &note.id, "v2b").unwrap();
+        put_note_session(vault, &note.id, "v2", true).unwrap();
+        put_note_session(vault, &note.id, "v2b", false).unwrap();
         let hist = list_history(vault, &note.id).unwrap();
         assert_eq!(hist.len(), 1);
         let snap = get_history(vault, &note.id, &hist[0].rev).unwrap();
@@ -1770,9 +1921,8 @@ mod tests {
         let dir = tempdir().unwrap();
         let vault = dir.path();
         let note = create_note(vault, "One", "", Some("v0")).unwrap();
-        put_note(vault, &note.id, "keep").unwrap();
-        age_last_edit(vault, &note.id, 6);
-        put_note(vault, &note.id, "newer").unwrap();
+        put_note_session(vault, &note.id, "keep", false).unwrap();
+        put_note_session(vault, &note.id, "newer", true).unwrap();
         let hist = list_history(vault, &note.id).unwrap();
         assert_eq!(hist.len(), 1);
 

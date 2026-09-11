@@ -19,7 +19,7 @@ const picker = ref<{
   showCreate: () => void;
   open: boolean;
 } | null>(null);
-const parked = ref<{ show: (id?: number) => void } | null>(null);
+const parked = ref<{ show: (id?: string) => void } | null>(null);
 const open = ref(false);
 const route = useRoute();
 

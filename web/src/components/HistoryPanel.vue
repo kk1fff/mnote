@@ -13,7 +13,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{ restored: [note: Note]; reveal: [event: ContextEvent] }>();
 
-const selectedContext = ref<number | null>(null);
+const selectedContext = ref<string | null>(null);
 
 const open = ref(false);
 const items = ref<HistoryEntry[]>([]);

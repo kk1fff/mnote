@@ -10,7 +10,7 @@ vi.mock("../api", async () => {
     ...actual,
     api: {
       createParked: vi.fn().mockResolvedValue({
-        id: 1,
+        id: "1",
         body: "ask jim",
         created_at: "2026-08-22T15:00:00Z",
       }),

@@ -316,7 +316,7 @@ test("pasting a png inserts an asset", async ({ page }) => {
       new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: dt }),
     );
   }, [...png]);
-  await expect(page.locator(".cm-content")).toContainText("mnote-asset:");
+  await expect(page.locator(".cm-content")).toContainText("assets/");
 });
 
 test("image picker uploads and inserts an asset", async ({ page }) => {
@@ -336,7 +336,7 @@ test("image picker uploads and inserts an asset", async ({ page }) => {
   });
   await expect(page.getByTestId("asset-picker")).toContainText("dot.png");
   await page.getByTestId("asset-picker").getByRole("button", { name: "Insert image" }).click();
-  await expect(page.locator(".cm-content")).toContainText("mnote-asset:");
+  await expect(page.locator(".cm-content")).toContainText("assets/");
 });
 
 test("slash where inserts a stamp without coordinates", async ({ page }) => {

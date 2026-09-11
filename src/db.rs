@@ -114,6 +114,7 @@ pub fn init(conn: &rusqlite::Connection) -> Result<(), AppError> {
     )?;
         migrate_parked_context(conn)?;
         add_column(conn, "parked", "tags", "TEXT")?;
+        crate::index::init(conn)?;
         Ok(())
 }
 
@@ -571,186 +572,7 @@ pub fn set_folder_collapsed(
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
-pub struct Parked {
-    pub id: i64,
-    pub body: String,
-    pub created_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_folder: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub excerpt: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub surface: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub device: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub local_time: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub timezone: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub lat: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub lon: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub accuracy_m: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub weather_code: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub weather_label: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub temp_c: Option<f64>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tags: Vec<String>,
-}
 
-const PARKED_COLS: &str = "id, body, created_at, source_id, source_title, source_folder, excerpt,
-         surface, device, local_time, timezone, lat, lon, accuracy_m,
-         weather_code, weather_label, temp_c, tags";
-
-fn parked_tags(stored: Option<String>, body: String) -> Vec<String> {
-    let from_col = stored
-        .as_deref()
-        .filter(|s| !s.trim().is_empty())
-        .map(crate::tags::parse_tags_field)
-        .unwrap_or_default();
-    if from_col.is_empty() {
-        crate::tags::extract_hashtags(&body)
-    } else {
-        from_col
-    }
-}
-
-fn parked_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Parked> {
-    Ok(Parked {
-        id: row.get("id")?,
-        body: row.get("body")?,
-        created_at: row.get("created_at")?,
-        source_id: row.get("source_id")?,
-        source_title: row.get("source_title")?,
-        source_folder: row.get("source_folder")?,
-        excerpt: row.get("excerpt")?,
-        surface: row.get("surface")?,
-        device: row.get("device")?,
-        local_time: row.get("local_time")?,
-        timezone: row.get("timezone")?,
-        lat: row.get("lat")?,
-        lon: row.get("lon")?,
-        accuracy_m: row.get("accuracy_m")?,
-        weather_code: row.get("weather_code")?,
-        weather_label: row.get("weather_label")?,
-        temp_c: row.get("temp_c")?,
-        tags: parked_tags(row.get("tags")?, row.get("body")?),
-    })
-}
-
-pub fn list_parked(state: &AppState, user_id: i64) -> Result<Vec<Parked>, AppError> {
-    let conn = state
-        .db
-        .lock()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
-    let mut stmt = conn.prepare(&format!(
-        "SELECT {PARKED_COLS} FROM parked WHERE user_id = ?1 ORDER BY created_at DESC, id DESC"
-    ))?;
-    let rows = stmt.query_map(params![user_id], parked_from_row)?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
-}
-
-pub struct ParkedSource<'a> {
-    pub source_id: Option<&'a str>,
-    pub source_title: Option<&'a str>,
-    pub source_folder: Option<&'a str>,
-    pub excerpt: Option<&'a str>,
-}
-
-pub fn create_parked(
-    state: &AppState,
-    user_id: i64,
-    body: &str,
-    source: ParkedSource<'_>,
-    stamp: &crate::context::ContextStamp,
-) -> Result<Parked, AppError> {
-    let body = body.trim();
-    if body.is_empty() {
-        return Err(AppError::BadRequest("body is empty".into()));
-    }
-    if body.len() > 20_000 {
-        return Err(AppError::BadRequest("body is too long".into()));
-    }
-    let now = Utc::now().to_rfc3339();
-    let weather = match (stamp.lat, stamp.lon) {
-        (Some(lat), Some(lon)) => crate::context::lookup_weather(state, lat, lon).ok().flatten(),
-        _ => None,
-    };
-    let conn = state
-        .db
-        .lock()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
-    let tags = crate::tags::format_tags(&crate::tags::extract_hashtags(body));
-    conn.execute(
-        "INSERT INTO parked (
-            user_id, body, created_at, source_id, source_title, source_folder, excerpt,
-            surface, device, local_time, timezone, lat, lon, accuracy_m,
-            weather_code, weather_label, temp_c, tags
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
-        params![
-            user_id,
-            body,
-            now,
-            source.source_id,
-            source.source_title,
-            source.source_folder,
-            source.excerpt,
-            stamp.surface,
-            stamp.device,
-            stamp.local_time,
-            stamp.timezone,
-            stamp.lat,
-            stamp.lon,
-            stamp.accuracy_m,
-            weather.as_ref().map(|w| w.weather_code),
-            weather.as_ref().map(|w| w.weather_label.as_str()),
-            weather.as_ref().map(|w| w.temp_c),
-            tags,
-        ],
-    )?;
-    let id = conn.last_insert_rowid();
-    drop(conn);
-    get_parked(state, user_id, id)
-}
-
-pub fn get_parked(state: &AppState, user_id: i64, id: i64) -> Result<Parked, AppError> {
-    let conn = state
-        .db
-        .lock()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
-    conn.query_row(
-        &format!("SELECT {PARKED_COLS} FROM parked WHERE id = ?1 AND user_id = ?2"),
-        params![id, user_id],
-        parked_from_row,
-    )
-    .optional()?
-    .ok_or(AppError::NotFound)
-}
-
-pub fn delete_parked(state: &AppState, user_id: i64, id: i64) -> Result<(), AppError> {
-    let conn = state
-        .db
-        .lock()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
-    let n = conn.execute(
-        "DELETE FROM parked WHERE id = ?1 AND user_id = ?2",
-        params![id, user_id],
-    )?;
-    if n == 0 {
-        return Err(AppError::NotFound);
-    }
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {
@@ -834,58 +656,15 @@ mod tests {
     }
 
     #[test]
-    fn parked_is_per_user() {
+    fn context_is_per_vault() {
         let (_dir, state) = setup();
         create_user(&state, "alice", Some("password1")).unwrap();
         create_user(&state, "bob", Some("password1")).unwrap();
-        let alice = authenticate(&state, "alice", "password1").unwrap();
-        let bob = authenticate(&state, "bob", "password1").unwrap();
-        let item = create_parked(
-            &state,
-            alice.id,
-            "ask jim",
-            ParkedSource {
-                source_id: Some("n1"),
-                source_title: Some("Weekly"),
-                source_folder: Some("ideas"),
-                excerpt: Some("retry budget"),
-            },
-            &crate::context::ContextStamp::default(),
-        )
-        .unwrap();
-        assert_eq!(item.body, "ask jim");
-        assert_eq!(item.source_title.as_deref(), Some("Weekly"));
-        assert_eq!(list_parked(&state, alice.id).unwrap().len(), 1);
-        assert!(list_parked(&state, bob.id).unwrap().is_empty());
-        assert!(get_parked(&state, bob.id, item.id).is_err());
-        assert!(delete_parked(&state, bob.id, item.id).is_err());
-        delete_parked(&state, alice.id, item.id).unwrap();
-        assert!(list_parked(&state, alice.id).unwrap().is_empty());
-        assert!(create_parked(
-            &state,
-            alice.id,
-            "   ",
-            ParkedSource {
-                source_id: None,
-                source_title: None,
-                source_folder: None,
-                excerpt: None,
-            },
-            &crate::context::ContextStamp::default()
-        )
-        .is_err());
-    }
-
-    #[test]
-    fn context_is_per_user() {
-        let (_dir, state) = setup();
-        create_user(&state, "alice", Some("password1")).unwrap();
-        create_user(&state, "bob", Some("password1")).unwrap();
-        let alice = authenticate(&state, "alice", "password1").unwrap();
-        let bob = authenticate(&state, "bob", "password1").unwrap();
-        let vault = state.vault_dir("alice");
-        crate::notes::ensure_vault(&vault).unwrap();
-        let note = crate::notes::create_note(&vault, "Weekly", "", Some("hello\n")).unwrap();
+        let alice_vault = state.vault_dir("alice");
+        let bob_vault = state.vault_dir("bob");
+        crate::notes::ensure_vault(&alice_vault).unwrap();
+        crate::notes::ensure_vault(&bob_vault).unwrap();
+        let note = crate::notes::create_note(&alice_vault, "Weekly", "", Some("hello\n")).unwrap();
         let body = crate::context::IngestBody {
             paragraphs: vec!["hello".into()],
             events: vec![crate::context::IngestEvent {
@@ -902,20 +681,20 @@ mod tests {
                 source: Some("auto".into()),
             }],
         };
-        crate::context::ingest(&state, alice.id, &note.id, body).unwrap();
+        crate::context::ingest(&state, &alice_vault, &note.id, body).unwrap();
         assert_eq!(
-            crate::context::get_context(&state, alice.id, &note.id)
+            crate::context::get_context(&alice_vault, &note.id)
                 .unwrap()
                 .events
                 .len(),
             1
         );
-        assert!(crate::context::get_context(&state, bob.id, &note.id)
+        assert!(crate::context::get_context(&bob_vault, &note.id)
             .unwrap()
             .events
             .is_empty());
-        crate::context::delete_note_context(&state, alice.id, &note.id).unwrap();
-        assert!(crate::context::get_context(&state, alice.id, &note.id)
+        crate::context::delete_note_context(&alice_vault, &note.id).unwrap();
+        assert!(crate::context::get_context(&alice_vault, &note.id)
             .unwrap()
             .events
             .is_empty());
