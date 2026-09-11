@@ -20,26 +20,22 @@ md.core.ruler.after("inline", "task_lists", (state) => {
     if (!mark) continue;
     const prefix = mark[0];
     token.attrJoin("class", "task-list-item");
-    if (token.map) token.attrSet("data-task-line", String(token.map[0]));
-    token.attrSet("data-checked", mark[1] === " " ? "false" : "true");
+    const line = token.map ? String(token.map[0]) : "";
+    if (line) token.attrSet("data-task-line", line);
+    const checked = mark[1] !== " ";
     inline.content = inline.content.slice(prefix.length);
-    const first = inline.children?.[0];
+    const children = inline.children ?? [];
+    const first = children[0];
     if (first?.type === "text" && first.content.startsWith(prefix)) {
       first.content = first.content.slice(prefix.length);
-      if (!first.content) inline.children?.splice(0, 1);
+      if (!first.content) children.splice(0, 1);
     }
+    const box = new state.Token("html_inline", "", 0);
+    box.content = `<input type="checkbox" class="task-checkbox" data-task-line="${escapeHtml(line)}"${checked ? " checked" : ""}>`;
+    children.unshift(box);
+    inline.children = children;
   }
 });
-
-const listItemOpen = md.renderer.rules.list_item_open;
-md.renderer.rules.list_item_open = (tokens, idx, options, env, self) => {
-  const token = tokens[idx];
-  const html = listItemOpen ? listItemOpen(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
-  const line = token.attrGet("data-task-line");
-  if (line == null) return html;
-  const checked = token.attrGet("data-checked") === "true" ? " checked" : "";
-  return `${html}<input type="checkbox" class="task-checkbox" data-task-line="${escapeHtml(line)}"${checked}>`;
-};
 
 const image = md.renderer.rules.image;
 md.renderer.rules.image = (tokens, idx, options, env, self) => {

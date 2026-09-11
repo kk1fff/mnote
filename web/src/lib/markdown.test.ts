@@ -36,6 +36,12 @@ describe("markdown", () => {
     expect(html).not.toContain("[x]");
   });
 
+  it("keeps checkboxes on the same line as task text in loose lists", () => {
+    const html = renderMarkdown("- [ ] one\n\n- [x] two");
+    expect(html).toMatch(/<p><input type="checkbox" class="task-checkbox" data-task-line="0">one<\/p>/);
+    expect(html).toMatch(/<p><input type="checkbox" class="task-checkbox" data-task-line="2" checked>two<\/p>/);
+  });
+
   it("keeps wiki links inside task items", () => {
     const html = renderMarkdown("- [ ] see [[page]]");
     expect(html).toContain('data-task-line="0"');

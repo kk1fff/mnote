@@ -2591,6 +2591,8 @@ button:disabled { cursor: default; opacity: 0.55; }
 .preview h1 { font-size: 1.55rem; margin: 1.3em 0 0.42em; }.preview h2 { font-size: 1.25rem; margin: 1.5em 0 0.38em; }.preview h3 { font-size: 1.08rem; margin: 1.25em 0 0.3em; }.preview p { margin: 0 0 1em; }.preview li { margin: 0.18em 0; }
 .preview ul:has(> .task-list-item) { padding-left: 1.15em; list-style: none; }
 .preview .task-list-item { list-style: none; }
+.preview .task-list-item > p { margin: 0; }
+.preview .task-list-item > p + p { margin-top: 0.5em; }
 .preview .task-checkbox {
   width: 0.875rem;
   height: 0.875rem;
