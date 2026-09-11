@@ -1,7 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" role="img" aria-hidden="true">
-
-<path d="M18 29.5l-3.2 3.2a5.7 5.7 0 1 1-8.1-8.1l4.8-4.8a5.7 5.7 0 0 1 8.1 0" stroke="currentColor" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-<path d="M30 18.5l3.2-3.2a5.7 5.7 0 1 1 8.1 8.1l-4.8 4.8a5.7 5.7 0 0 1-8.1 0" stroke="currentColor" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-<path d="M18.8 29.2l10.4-10.4" stroke="var(--icon-accent, var(--accent))" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+  <g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 4H7a4 4 0 0 0 0 8h2M15 4h2a4 4 0 0 1 0 8h-2M8 8h8"/>
+    <path d="M20 16v1a2 2 0 0 1-2 2H5m3-3-3 3 3 3" stroke="var(--icon-accent, var(--accent))"/>
+  </g>
 </svg>
