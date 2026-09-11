@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { auditIcons } from "../../web/scripts/icon-review.mjs";
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +38,7 @@ async function setTheme(page, theme) {
 
 async function shot(page, name) {
   await page.waitForLoadState("networkidle");
+  await auditIcons(page);
   const file = path.join(out, `${name}.png`);
   await page.screenshot({ path: file, fullPage: false, animations: "disabled" });
   console.log(file);

@@ -27,7 +27,7 @@ function openLink(link: NoteMeta) {
       <span class="backlinks-label">
         <NavIcon name="backlinks" />
         Backlinks
-        <span class="fold-chevron" :class="{ folded: !(open && links.length) }" aria-hidden="true">▾</span>
+        <span class="fold-chevron" :class="{ folded: !(open && links.length) }" aria-hidden="true"><NavIcon name="chevronDown" /></span>
       </span>
       <span v-if="links.length" class="muted">{{ links.length }}</span>
     </button>

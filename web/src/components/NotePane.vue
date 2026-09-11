@@ -901,7 +901,7 @@ onBeforeUnmount(() => {
              <NavIcon name="park" />Park {{ parkShortcut }}
            </button>
            <button type="button" class="ghost" data-testid="insert-image" @click="openAssetPicker">
-             <NavIcon name="image" />Insert image
+             <NavIcon name="insertImage" />Insert image
            </button>
            <button type="button" class="ghost" @click="openImageManager"><NavIcon name="images" />Manage images</button>
            <button

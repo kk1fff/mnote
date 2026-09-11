@@ -2,6 +2,7 @@ import { chromium } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { auditIcons, reviewIcons } from "./icon-review.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.resolve(here, "..", "artifacts", "visual");
@@ -16,12 +17,14 @@ fs.mkdirSync(out, { recursive: true });
 async function shot(page, name) {
   const file = path.join(out, `${name}.png`);
   await page.waitForLoadState("networkidle");
+  await auditIcons(page);
   await page.screenshot({ path: file, fullPage: false, animations: "disabled" });
   console.log(file);
 }
 
 async function shotMotion(page, name) {
   const file = path.join(out, `${name}.png`);
+  await auditIcons(page);
   await page.screenshot({ path: file, fullPage: false, animations: "allow" });
   console.log(file);
 }
@@ -204,13 +207,14 @@ async function tagsChrome(root) {
 }
 
 async function ensureNoteTags(page) {
-  if (await page.locator('[data-testid="note-tags"]').count()) return;
+  const pane = page.getByTestId("pane-primary");
+  if (await pane.getByTestId("note-tags").count()) return;
   await editor(page).click();
-  await page.keyboard.press("End");
-  await page.keyboard.press("Enter");
-  await page.keyboard.type(" #work");
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.insertText("\n\n#work\n");
   await page.keyboard.press("Escape");
-  await page.waitForSelector('[data-testid="note-tags"]', { timeout: 8000 });
+  // The compact mobile header intentionally hides the folder/tag row.
+  await pane.getByTestId("note-tags").waitFor({ state: "attached", timeout: 8000 });
 }
 
 function checkTagsRow(chrome, label) {
@@ -702,13 +706,9 @@ await m.waitForSelector(".notes-browser");
 await shot(m, "10b-notes-mobile");
 await m.goto(`${url}/today`);
 await m.waitForSelector('[data-testid="editor"]');
-try {
-    await ensureNoteTags(m);
-    checkTagsRow(await tagsChrome(m), "mobile");
-    await shot(m, "23e-note-tags-mobile");
-  } catch {
-    console.warn("mobile tags row did not appear");
-  }
+await ensureNoteTags(m);
+checkTagsRow(await tagsChrome(m), "mobile");
+await shot(m, "23e-note-tags-mobile");
 const wrapped = await m.evaluate(() => {
   const bar = document.querySelector(".bar");
   if (!bar) return true;
@@ -776,6 +776,23 @@ for (const mobile of [false, true]) {
     await p.waitForSelector('[data-testid="editor"]');
     const label = `${mobile ? "mobile" : "desktop"}-${theme}`;
     await shot(p, `25-workspace-${label}`);
+    // Review appearance semantics and all three selected theme states in context.
+    if (mobile) {
+      await p.getByRole("button", { name: "Menu", exact: true }).click();
+      await p.getByTestId("sidebar").getByRole("button", { name: /Appearance/ }).scrollIntoViewIfNeeded();
+      await shot(p, `41-appearance-${label}`);
+      await p.getByRole("button", { name: "Close sidebar" }).click();
+    } else {
+      await p.getByTestId("theme-toggle").click();
+      await shot(p, `41-appearance-${label}`);
+      await p.getByTestId("theme-option-system").click();
+      await p.emulateMedia({ colorScheme: theme });
+      await p.getByTestId("theme-toggle").click();
+      await shot(p, `41-appearance-system-${label}`);
+      await p.getByTestId(`theme-option-${theme}`).click();
+      await p.locator(".tab-chip").first().hover();
+      await shot(p, `42-tab-controls-${label}`);
+    }
     if (mobile) await p.getByRole("button", { name: "Menu", exact: true }).click();
     await p.getByTestId("new-note").click();
     await shot(p, `26-new-note-${label}`);
@@ -810,5 +827,6 @@ for (const mobile of [false, true]) {
     await context.close();
   }
 }
+await reviewIcons(browser, url, out);
 await browser.close();
 console.log(`visual review wrote ${out}`);

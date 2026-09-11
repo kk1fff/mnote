@@ -40,6 +40,7 @@ function label(tab: Tab) {
           <NavIcon name="tab" />
           <span
             class="tab-star"
+            data-favorite="true"
             title="Unfavorite"
             data-testid="tab-star"
             @click.stop="emit('pin', tab)"
@@ -53,7 +54,7 @@ function label(tab: Tab) {
             data-testid="tab-close"
             @click.stop="emit('close', tab.id)"
           >
-            ×
+            <NavIcon name="close" />
           </span>
         </button>
         <span v-if="groups.rest.length" class="tab-split" aria-hidden="true" />
@@ -86,7 +87,7 @@ function label(tab: Tab) {
           data-testid="tab-close"
           @click.stop="emit('close', tab.id)"
         >
-          ×
+          <NavIcon name="close" />
         </span>
       </button>
       <button type="button" class="tab-add" data-testid="tab-add" title="Open in new tab" aria-label="Open in new tab" @click="showPicker('add')">

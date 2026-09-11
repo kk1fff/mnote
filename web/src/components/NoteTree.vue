@@ -35,7 +35,7 @@ function onOpen(event: MouseEvent, id: string) {
           :aria-expanded="!collapsed.has(node.path)"
           @click="emit('toggle', node.path)"
         >
-          <span class="fold-chevron" :class="{ folded: collapsed.has(node.path) }" aria-hidden="true">▾</span>
+          <span class="fold-chevron" :class="{ folded: collapsed.has(node.path) }" aria-hidden="true"><NavIcon name="chevronDown" /></span>
           <span class="folder-name">{{ node.name }}</span>
         </button>
         <SidebarFold :open="!collapsed.has(node.path)">

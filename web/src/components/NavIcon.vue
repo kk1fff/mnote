@@ -22,6 +22,11 @@ export type IconName =
   | "more"
   | "gear"
   | "settings"
+  | "systemMode"
+  | "appearance"
+  | "folder"
+  | "insertImage"
+  | "close"
   | "panelClose"
   | "panelOpen"
   | "chevronRight"
@@ -68,6 +73,12 @@ const FILES: Partial<Record<IconName, string>> = {
   more: "more",
   gear: "settings",
   settings: "settings",
+  systemMode: "system-mode",
+  appearance: "appearance",
+  folder: "folder",
+  insertImage: "insert-image",
+  close: "close",
+  history: "history",
   panelClose: "sidebar-close",
   panelOpen: "sidebar-open",
   chevronRight: "chevron-right",
@@ -101,9 +112,6 @@ const modules = import.meta.glob("../icons/*.svg", {
   eager: true,
 }) as Record<string, string>;
 
-const HISTORY =
-  '<path d="M3.25 3.5h4.1c1.2 0 2.15.95 2.15 2.15v6.6c0-.83-.67-1.5-1.5-1.5H3.25V3.5z" /><path d="M12.75 3.5H8.65c-1.2 0-2.15.95-2.15 2.15v6.6c0-.83.67-1.5 1.5-1.5h4.75V3.5z" />';
-
 const props = defineProps<{ name: IconName }>();
 
 function source() {
@@ -114,12 +122,10 @@ function source() {
 }
 
 const viewBox = computed(() => {
-  if (props.name === "history") return "0 0 16 16";
   return source().match(/viewBox="([^"]+)"/i)?.[1] ?? "0 0 24 24";
 });
 
 const inner = computed(() => {
-  if (props.name === "history") return HISTORY;
   const raw = source();
   if (!raw) return "";
   return raw.replace(/^[\s\S]*?<svg[^>]*>/i, "").replace(/<\/svg>\s*$/i, "").trim();
@@ -129,13 +135,13 @@ const inner = computed(() => {
 <template>
   <svg
     class="nav-icon"
+    :data-icon="name"
     :class="{ 'is-flip': name === 'chevronLeft' }"
     :viewBox="viewBox"
     width="20"
     height="20"
     fill="none"
     stroke="currentColor"
-    :stroke-width="name === 'history' ? 1.5 : undefined"
     stroke-linecap="round"
     stroke-linejoin="round"
     aria-hidden="true"

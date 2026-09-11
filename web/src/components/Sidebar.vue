@@ -51,13 +51,13 @@ const deleteBusy = ref(false);
 const narrow = ref(typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches);
 let footerMq: MediaQueryList | undefined;
 const themes: { id: ThemeMode; label: string; icon: IconName }[] = [
-  { id: "system", label: "System", icon: "settings" },
+  { id: "system", label: "System", icon: "systemMode" },
   { id: "light", label: "Light", icon: "lightMode" },
   { id: "dark", label: "Dark", icon: "darkMode" },
 ];
 
 function themeIcon(mode: ThemeMode): IconName {
-  return themes.find((theme) => theme.id === mode)?.icon ?? "settings";
+  return themes.find((theme) => theme.id === mode)?.icon ?? "systemMode";
 }
 
 const recentNotes = computed(() =>
@@ -429,7 +429,7 @@ defineExpose({ load });
         @click="toggleSidebarSection('calendarOpen')"
       >
         <span class="calendar-toggle-label"><NavIcon name="calendar" />Calendar</span>
-        <span class="fold-chevron" :class="{ folded: !sidebarPrefs.calendarOpen }" aria-hidden="true">▾</span>
+        <span class="fold-chevron" :class="{ folded: !sidebarPrefs.calendarOpen }" aria-hidden="true"><NavIcon name="chevronDown" /></span>
       </button>
       <SidebarFold :open="sidebarPrefs.calendarOpen">
         <SidebarCalendar
@@ -476,13 +476,13 @@ defineExpose({ load });
           :title="folderPath"
           @click="toggleFooter('folder')"
         >
-          <NavIcon name="notes" />
+          <NavIcon name="folder" />
           <span class="rail-label folder-chip-name">{{ folderName }}</span>
         </button>
         <div class="sidebar-popover sidebar-popover-account" role="menu">
           <p class="sidebar-popover-user folder-popover-path" :title="folderPath">{{ folderPath }}</p>
           <button type="button" data-testid="show-folder" role="menuitem" @click="void revealFolder()">
-            <NavIcon name="notes" />Show in folder
+            <NavIcon name="folder" />Show in folder
           </button>
           <button type="button" data-testid="change-folder" role="menuitem" @click="changeFolder">
             <NavIcon name="move" />Change folder
@@ -516,7 +516,7 @@ defineExpose({ load });
           :aria-expanded="footerMenu === 'appearance'"
           @click="toggleFooter('appearance')"
         >
-          <NavIcon name="gear" />
+          <NavIcon name="appearance" />
         </button>
         <div class="sidebar-popover sidebar-popover-theme" role="menu">
           <button
@@ -541,7 +541,7 @@ defineExpose({ load });
       <template v-if="localApp">
         <p class="sidebar-folder-path" :title="folderPath">{{ folderPath }}</p>
         <button type="button" class="menu-row" data-testid="show-folder" @click="void revealFolder()">
-          <NavIcon name="notes" />Show in folder
+          <NavIcon name="folder" />Show in folder
         </button>
         <button type="button" class="menu-row" data-testid="change-folder" @click="changeFolder">
           <NavIcon name="move" />Change folder
