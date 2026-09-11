@@ -20,18 +20,18 @@ function openLink(link: NoteMeta) {
     <button
       class="backlinks-toggle"
       type="button"
-      :aria-expanded="open && !!links.length"
+      :aria-expanded="open"
       aria-controls="backlinks-content"
-      @click="links.length && (open = !open)"
+      @click="open = !open"
     >
       <span class="backlinks-label">
         <NavIcon name="backlinks" />
         Backlinks
-        <span class="fold-chevron" :class="{ folded: !(open && links.length) }" aria-hidden="true"><NavIcon name="chevronDown" /></span>
+        <span class="fold-chevron" :class="{ folded: !open }" aria-hidden="true"><NavIcon name="chevronDown" /></span>
       </span>
       <span v-if="links.length" class="muted">{{ links.length }}</span>
     </button>
-    <p v-if="!links.length" class="backlinks-empty muted">No backlinks yet. Links to this note will appear here.</p>
+    <p v-if="open && !links.length" class="backlinks-empty muted">No backlinks yet. Links to this note will appear here.</p>
     <div v-if="open && links.length" id="backlinks-content" class="backlinks-content">
       <ul>
         <li v-for="link in links" :key="link.id">
