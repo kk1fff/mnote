@@ -312,6 +312,18 @@ async function openTableNote(page) {
 async function shotTables(page, prefix) {
   await openTableNote(page);
   await shot(page, `${prefix}-table-edit`);
+  const pane = page.getByTestId("pane-primary");
+  const toggle = pane.getByTestId("mode-toggle");
+  if (await toggle.isVisible()) {
+    await toggle.getByRole("button", { name: "Preview" }).click();
+  } else {
+    await noteAction(page, "preview-toggle");
+  }
+  const preview = pane.locator(".document-column .preview");
+  await preview.waitFor();
+  await preview.locator("table").first().waitFor();
+  await shot(page, `${prefix}-table-preview`);
+  await leavePreview(page);
   await page.getByTestId("table-edit").first().click();
   const sheet = page.getByTestId("table-editor");
   await sheet.waitFor();

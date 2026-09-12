@@ -131,6 +131,32 @@ test("pipe tables get a source shade", async ({ page }) => {
   await expect(page.getByTestId("table-edit")).toHaveText("Edit table");
 });
 
+test("preview renders a pipe table", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await createNote(page, uid("TablePrev"));
+  await page.locator(".cm-content").click();
+  await page.keyboard.insertText("| Name | Qty |\n| --- | ---: |\n| Apples | 12 |");
+  await noteAction(page, "preview-toggle");
+  const table = page.locator(".preview table").first();
+  await expect(table.locator("th").first()).toHaveText("Name");
+  await expect(table.locator("td").first()).toHaveText("Apples");
+  await expect(table.locator("th").nth(1)).toHaveCSS("text-align", "right");
+});
+
+test("preview renders a table after a paragraph with no blank line", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await createNote(page, uid("TableTight"));
+  await page.locator(".cm-content").click();
+  await page.keyboard.insertText("Intro line\n| Name | Qty |\n| --- | ---: |\n| Apples | 12 |");
+  await noteAction(page, "preview-toggle");
+  await expect(page.locator(".preview")).toContainText("Intro line");
+  const table = page.locator(".preview table").first();
+  await expect(table.locator("th").first()).toHaveText("Name");
+  await expect(table.locator("td").first()).toHaveText("Apples");
+});
+
 test("preview shows markdown and source returns", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);

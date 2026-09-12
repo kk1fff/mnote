@@ -7,7 +7,7 @@ const md = new MarkdownIt({
   html: false,
   linkify: true,
   breaks: true,
-});
+}).enable("table");
 
 // Allow the one inline HTML element needed for line breaks in pipe-table cells.
 // Other HTML remains escaped by MarkdownIt.
@@ -61,14 +61,29 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
   return self.renderToken(tokens, idx, options);
 };
 
+const tableOpen = md.renderer.rules.table_open;
+md.renderer.rules.table_open = (tokens, idx, options, env, self) =>
+  `<div class="preview-table">${tableOpen ? tableOpen(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options)}`;
+const tableClose = md.renderer.rules.table_close;
+md.renderer.rules.table_close = (tokens, idx, options, env, self) =>
+  `${tableClose ? tableClose(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options)}</div>`;
+
 export function renderMarkdown(source: string): string {
   // The source table parser treats wiki aliases as a single cell. GFM needs
   // their pipes escaped during rendering as well; never rewrite the note.
   const lines = source.split("\n");
-  for (const table of parseTablesFromSource(source)) {
+  const tables = parseTablesFromSource(source);
+  for (const table of tables) {
     for (let line = table.fromLine; line <= table.toLine; line++) {
       lines[line - 1] = lines[line - 1].replace(/\[\[[^\]\n]+\]\]/g, wiki => wiki.replace(/(?<!\\)\|/g, "\\|"));
     }
+  }
+  // markdown-it only starts a table at a block boundary. Source mode still
+  // shades a table that follows a paragraph, so insert a blank line in the
+  // render copy only.
+  for (let i = tables.length - 1; i >= 0; i -= 1) {
+    const at = tables[i].fromLine - 1;
+    if (at > 0 && (lines[at - 1] ?? "").trim() !== "") lines.splice(at, 0, "");
   }
   return linkifyTags(linkifyWiki(md.render(lines.join("\n"))));
 }

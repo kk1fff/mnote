@@ -2,6 +2,38 @@ import { describe, expect, it } from "vitest";
 import { renderMarkdown } from "./markdown";
 
 describe("markdown", () => {
+  it("renders GFM pipe tables with alignment and wiki cells", () => {
+    const html = renderMarkdown("| Name | Qty | Link |\n| --- | ---: | --- |\n| Apples | 12 | [[Page|alias]] |");
+    expect(html).toContain("<table>");
+    expect(html).toContain("<th>Name</th>");
+    expect(html).toMatch(/<th[^>]*style="text-align:right"[^>]*>Qty<\/th>/);
+    expect(html).toContain("<td>Apples</td>");
+    expect(html).toContain('data-wiki="Page"');
+    expect(html).toContain("alias</a>");
+    expect(html).toContain('class="preview-table"');
+  });
+
+  it("renders consecutive GFM tables in a note", () => {
+    const html = renderMarkdown(`| Name | Qty | Notes |
+| --- | ---: | --- |
+| Apples | 12 | keep cold |
+
+| Wide | Column | Extra |
+| --- | --- | --- |
+| 1 | 2 | extra extra |`);
+    expect(html.match(/<table>/g)?.length).toBe(2);
+    expect(html).toContain("<td>Apples</td>");
+    expect(html).toContain("<td>1</td>");
+  });
+
+  it("renders a table that follows a paragraph with no blank line", () => {
+    const html = renderMarkdown("Intro line\n| Name | Qty |\n| --- | ---: |\n| Apples | 12 |");
+    expect(html).toContain("<p>Intro line</p>");
+    expect(html).toContain("<table>");
+    expect(html).toContain("<td>Apples</td>");
+    expect(html).not.toMatch(/Intro line\s*\| Name/);
+  });
+
   it("renders headings and wiki links", () => {
     const html = renderMarkdown("# Hi\n\nsee [[page]]");
     expect(html).toContain("<h1>Hi</h1>");

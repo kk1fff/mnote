@@ -1394,6 +1394,34 @@ button.notes-heading.active {
   object-fit: contain;
 }
 
+.preview-table {
+  overflow-x: auto;
+  margin: 0 0 1em;
+  overscroll-behavior-x: contain;
+}
+
+.preview table {
+  border-collapse: collapse;
+  min-width: 100%;
+  margin: 0;
+  font-family: var(--font-note);
+  font-size: 0.9375rem;
+  background: var(--surface);
+}
+
+.preview th,
+.preview td {
+  border: 1px solid var(--border);
+  padding: 0.45rem 0.7rem;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.preview thead th {
+  background: var(--surface-muted);
+  font-weight: 600;
+}
+
 .asset-picker { width: min(46rem, calc(100vw - 2rem)); }
 .asset-picker-tabs { display: flex; gap: 0.5rem; padding: 0 1.25rem; border-bottom: 1px solid var(--border); }
 .asset-picker-tabs button { background: transparent; color: var(--text-muted); border-radius: 0; padding: 0.7rem 0.25rem; }
