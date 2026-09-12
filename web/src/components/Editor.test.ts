@@ -59,6 +59,18 @@ describe("Editor", () => {
     wrapper.unmount();
   });
 
+  it("shades a GFM table in the source editor", async () => {
+    const wrapper = mount(Editor, {
+      props: {
+        modelValue: "| Name | Qty |\n| --- | --- |\n| Apples | 12 |",
+      },
+    });
+    await flushPromises();
+    expect(wrapper.find(".cm-table").exists()).toBe(true);
+    expect(wrapper.find("[data-testid='table-edit']").text()).toBe("Edit table");
+    wrapper.unmount();
+  });
+
   it("paints multiple selection ranges", async () => {
     const wrapper = mount(Editor, { props: { modelValue: "abcd\nefgh" } });
     await flushPromises();

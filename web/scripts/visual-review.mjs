@@ -283,6 +283,35 @@ async function leavePreview(page) {
   await pane.getByTestId("editor").waitFor();
 }
 
+const TABLE_SAMPLE = `| Name | Qty | Notes |
+| --- | ---: | --- |
+| Apples | 12 | keep cold |
+| Bread | 2 | |
+
+| Wide | Column | That keeps going so the source row stays on one line and scrolls |
+| --- | --- | --- |
+| 1 | 2 | extra extra extra extra extra extra extra extra extra extra extra extra extra extra extra extra |
+`;
+
+async function openTableNote(page) {
+  await openPicker(page);
+  await page.getByTestId("picker-input").fill("Table sample");
+  const existing = page.getByTestId("picker").getByRole("button", { name: "Table sample", exact: true });
+  await page.waitForTimeout(250);
+  if (await existing.count()) await existing.click();
+  else await page.getByTestId("picker-create").click();
+  await page.waitForSelector('[data-testid="editor"]');
+  await editor(page).click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.insertText(TABLE_SAMPLE);
+  await page.waitForSelector('[data-testid="table-mat"]');
+}
+
+async function shotTables(page, prefix) {
+  await openTableNote(page);
+  await shot(page, `${prefix}-table-edit`);
+}
+
 async function shotTodos(page, prefix, { mod = true } = {}) {
   await openTodoNote(page);
   await shot(page, `${prefix}-todo-edit`);
@@ -394,6 +423,7 @@ await shot(page, "02h-journal-note-light");
 await shotCompact(page, "02j-journal-compact-light");
 await shotModeToggle(page, "34");
 await shotTodos(page, "35");
+await shotTables(page, "37");
 await page.goto(`${url}/journal`);
 await page.waitForSelector(".journal-browser");
 await shot(page, "02a-journal-desktop-light");
@@ -630,6 +660,7 @@ await shot(page, "08c-journal-note-dark");
 await shotCompact(page, "08f-journal-compact-dark");
 await shotModeToggle(page, "34b");
 await shotTodos(page, "35b");
+await shotTables(page, "37b");
 await shotFolding(page, page.getByTestId("sidebar-cal-toggle"), "08g-sidebar-calendar-folding-dark", "08d-sidebar-calendar-folded-dark");
 await page.getByTestId("sidebar-fold").click();
 await page.waitForTimeout(200);
@@ -693,6 +724,7 @@ await m.waitForSelector('[data-testid="editor"]');
 await captureSaveStatus(m, "31c-unsaved-mobile", "32c-saved-toast-mobile");
 await shot(m, "10-note-mobile");
 await shotTodos(m, "35c", { mod: false });
+await shotTables(m, "37c");
 await openDateSuggest(m);
 await shot(m, "33i-date-suggest-mobile");
 await m.getByTestId("date-suggest-input").fill("mon");
@@ -754,6 +786,7 @@ await mdark.addInitScript(() => localStorage.setItem("mnote-theme", "dark"));
 await login(mdark);
 await mdark.waitForSelector('[data-testid="editor"]');
 await shotTodos(mdark, "35d", { mod: false });
+await shotTables(mdark, "37d");
 await mobileDark.close();
 
 const loginDark = await browser.newContext({ viewport: { width: 1440, height: 900 } });

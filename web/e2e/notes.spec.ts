@@ -121,6 +121,16 @@ test("task lists continue and toggle in preview", async ({ page }) => {
   await expect(page.locator(".cm-content")).toContainText("- [ ] one");
 });
 
+test("pipe tables get a source shade", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  await createNote(page, uid("Table"));
+  await page.locator(".cm-content").click();
+  await page.keyboard.insertText("| Name | Qty |\n| --- | --- |\n| Apples | 12 |");
+  await expect(page.locator(".cm-table").first()).toBeVisible();
+  await expect(page.getByTestId("table-edit")).toHaveText("Edit table");
+});
+
 test("preview shows markdown and source returns", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);

@@ -77,7 +77,7 @@ For every new user-facing feature, add or update a corresponding visual-review s
    The first visual login sets its password from `password1` to `visualpass1`.
 2. Read every PNG in `web/artifacts/visual/` and `desktop/artifacts/visual/` with the image Read tool. Fix issues, then rerun the container suite.
 
-Required shots: login light/dark, note desktop light/dark, title editing, history, park capture, parked list/detail, mobile note, mobile More menu, mobile nav, picker light/dark, picker recent light/dark, picker favorites light, picker mobile, picker recent mobile, images page light/dark, images page mobile, tags row light/dark/mobile, tags overflow, tags long folder, sidebar calendar folded light/dark/mobile, sidebar calendar mid-fold light/dark, mode toggle edit/preview/mid-drag light/dark.
+Required shots: login light/dark, note desktop light/dark, title editing, history, park capture, parked list/detail, mobile note, mobile More menu, mobile nav, picker light/dark, picker recent light/dark, picker favorites light, picker mobile, picker recent mobile, images page light/dark, images page mobile, tags row light/dark/mobile, tags overflow, tags long folder, sidebar calendar folded light/dark/mobile, sidebar calendar mid-fold light/dark, mode toggle edit/preview/mid-drag light/dark, table edit light/dark/mobile.
 
 Required Electron shots: connect light/dark, connect error light/dark, setup light/dark, note light/dark, folder popover light/dark, note mobile light/dark.
 
