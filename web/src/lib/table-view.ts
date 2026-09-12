@@ -1,4 +1,4 @@
-import { type EditorState, StateEffect, StateField } from "@codemirror/state";
+import { type EditorState, Facet, StateEffect, StateField } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -69,6 +69,8 @@ type TableOverlay = {
   scrollLeft: number;
 };
 
+const tableOpener = Facet.define<(table: TableBlock) => void>();
+
 function parseFromState(state: EditorState): TableBlock[] {
   return tableParser.parse(state.doc.lines, (number) => state.doc.line(number).text);
 }
@@ -136,7 +138,7 @@ function mapLine(update: ViewUpdate, line: number): number {
   return update.state.doc.lineAt(update.changes.mapPos(pos, 1)).number;
 }
 
-function createOverlay(back: HTMLElement, front: HTMLElement): TableOverlay {
+function createOverlay(back: HTMLElement, front: HTMLElement, view: EditorView): TableOverlay {
   const mat = document.createElement("div");
   mat.className = "cm-table-mat";
   mat.setAttribute("data-testid", "table-mat");
@@ -166,6 +168,13 @@ function createOverlay(back: HTMLElement, front: HTMLElement): TableOverlay {
     toLine: 0,
     scrollLeft: 0,
   };
+  edit.disabled = !view.state.facet(EditorView.editable);
+  edit.addEventListener("click", () => {
+    if (!view.state.facet(EditorView.editable)) return;
+    edit.focus({ preventScroll: true });
+    const table = view.plugin(tablePlugin)?.tables.find((entry) => entry.fromLine === overlay.fromLine);
+    if (table) for (const open of view.state.facet(tableOpener)) open(table);
+  });
   hscroll.addEventListener("scroll", () => {
     overlay.scrollLeft = hscroll.scrollLeft;
     syncLineScroll(overlay, front);
@@ -321,7 +330,7 @@ export class TableView {
           (entry) => !used.has(entry) && mapLine(update, entry.fromLine) === table.fromLine,
         );
       }
-      if (!overlay) overlay = createOverlay(this.back, this.front);
+      if (!overlay) overlay = createOverlay(this.back, this.front, _view);
       used.add(overlay);
       overlay.fromLine = table.fromLine;
       overlay.toLine = table.toLine;
@@ -391,8 +400,8 @@ export const tablePlugin = ViewPlugin.fromClass(TableView, {
   },
 });
 
-export function tableExtension() {
-  return [tablePadField, tablePlugin];
+export function tableExtension(open?: (table: TableBlock) => void) {
+  return [tablePadField, tablePlugin, ...(open ? [tableOpener.of(open)] : [])];
 }
 
 export function tablePluginState(view: EditorView): TableView | null {

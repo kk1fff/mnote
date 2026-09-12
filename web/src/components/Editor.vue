@@ -13,7 +13,7 @@ import {
   ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab, isolateHistory } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { excerptAround, findExcerpt } from "../lib/excerpt";
@@ -28,6 +28,9 @@ import { taskBoxInLine } from "../lib/tasks";
 import { buildPageItems, completeTag, completeWiki, detectTrigger } from "../lib/suggest";
 import type { TagSuggest } from "../api";
 import DateSuggest from "./DateSuggest.vue";
+import TableEditor from "./TableEditor.vue";
+import { mapTableRange } from "../lib/table-editor";
+import { parseTablesFromSource, type TableBlock } from "../lib/tables";
 
 export type RemoteCaret = { id: string; from: number; to: number };
 
@@ -77,6 +80,51 @@ let dirtyLine = -1;
 let lineFlashTimer: number | undefined;
 let rawPaste = false;
 let rawPasteTimer: number | undefined;
+
+const tableSession = ref<{ from: number; to: number; source: string; conflict: boolean; key: number; message?: string } | null>(null);
+let tableSessionKey = 0;
+let tableReturnFocus: HTMLElement | null = null;
+
+function openTable(table: TableBlock) {
+  if (!view || props.disabled) return;
+  closeMenu();
+  tableReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const from = view.state.doc.line(table.fromLine).from;
+  const to = view.state.doc.line(table.toLine).to;
+  tableSession.value = { from, to, source: view.state.doc.sliceString(from, to), conflict: false, key: ++tableSessionKey };
+}
+
+function closeTable() {
+  tableSession.value = null;
+  nextTick(() => {
+    if (tableReturnFocus?.isConnected) tableReturnFocus.focus({ preventScroll: true });
+    else view?.focus();
+  });
+}
+
+function applyTable(source: string) {
+  const session = tableSession.value;
+  if (!view || !session || session.conflict || props.disabled) return;
+  if (view.state.doc.sliceString(session.from, session.to) !== session.source) {
+    session.conflict = true;
+    return;
+  }
+  tableSession.value = null;
+  if (source !== session.source) view.dispatch({
+    changes: { from: session.from, to: session.to, insert: source },
+    selection: { anchor: session.from },
+    annotations: isolateHistory.of("full"),
+  });
+  closeTable();
+}
+
+function reloadTable() {
+  if (!view || !tableSession.value) return;
+  const line = view.state.doc.lineAt(Math.min(tableSession.value.from, view.state.doc.length)).number;
+  const table = parseTablesFromSource(view.state.doc.toString()).find(t => t.fromLine <= line && t.toLine >= line);
+  if (table) openTable(table);
+  else tableSession.value.message = "The original table was removed. Copy your draft to keep your changes, then Cancel to return to the note.";
+}
 
 const remoteAnn = Annotation.define<boolean>();
 const setRemotes = StateEffect.define<RemoteCaret[]>();
@@ -539,12 +587,22 @@ onMounted(() => {
         flashField,
         lineFlashField,
         markdownHierarchy,
-        tableExtension(),
+        tableExtension(openTable),
         taskModField,
         EditorView.updateListener.of((update) => {
           const remote = update.transactions.some((tr) => tr.annotation(remoteAnn));
           if (update.docChanged) {
             const content = update.state.doc.toString();
+            const session = tableSession.value;
+            if (session && !session.conflict) {
+              const mapped = mapTableRange(update.startState.doc.toString(), content, session.from, session.to);
+              if (!mapped || update.state.doc.sliceString(mapped.from, mapped.to) !== session.source) session.conflict = true;
+              else {
+                session.from = mapped.from; session.to = mapped.to;
+                const table = parseTablesFromSource(content).find(t => update.state.doc.line(t.fromLine).from === mapped.from);
+                if (!table || update.state.doc.line(table.toLine).to !== mapped.to) session.conflict = true;
+              }
+            }
             emit("update:modelValue", content);
             if (!remote) {
               let sent = false;
@@ -817,6 +875,7 @@ onBeforeUnmount(() => {
 <template>
   <div ref="host" class="editor" data-testid="editor" />
   <Teleport to="body">
+    <TableEditor v-if="tableSession" :key="tableSession.key" :source="tableSession.source" :conflict="tableSession.conflict" :conflict-message="tableSession.message" :disabled="disabled" @cancel="closeTable" @apply="applyTable" @reload="reloadTable" />
     <DateSuggest
       v-if="dateMenu"
       ref="dateSuggest"

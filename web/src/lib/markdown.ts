@@ -1,11 +1,22 @@
 import MarkdownIt from "markdown-it";
 import { escapeHtml, linkifyWiki } from "./wiki";
 import { normalizeTag } from "./tags";
+import { parseTablesFromSource } from "./tables";
 
 const md = new MarkdownIt({
   html: false,
   linkify: true,
   breaks: true,
+});
+
+// Allow the one inline HTML element needed for line breaks in pipe-table cells.
+// Other HTML remains escaped by MarkdownIt.
+md.inline.ruler.before("html_inline", "cell_break", (state, silent) => {
+  const match = /^<br\s*\/?\s*>/i.exec(state.src.slice(state.pos));
+  if (!match) return false;
+  if (!silent) state.push("hardbreak", "br", 0);
+  state.pos += match[0].length;
+  return true;
 });
 
 md.core.ruler.after("inline", "task_lists", (state) => {
@@ -51,7 +62,19 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
 };
 
 export function renderMarkdown(source: string): string {
-  return linkifyTags(linkifyWiki(md.render(source)));
+  // The source table parser treats wiki aliases as a single cell. GFM needs
+  // their pipes escaped during rendering as well; never rewrite the note.
+  const lines = source.split("\n");
+  for (const table of parseTablesFromSource(source)) {
+    for (let line = table.fromLine; line <= table.toLine; line++) {
+      lines[line - 1] = lines[line - 1].replace(/\[\[[^\]\n]+\]\]/g, wiki => wiki.replace(/(?<!\\)\|/g, "\\|"));
+    }
+  }
+  return linkifyTags(linkifyWiki(md.render(lines.join("\n"))));
+}
+
+export function renderTableCell(source: string): string {
+  return linkifyTags(linkifyWiki(md.renderInline(source)));
 }
 
 const TAG_LINK_RE = /(^|[^A-Za-z0-9-])#([A-Za-z][A-Za-z0-9-]{0,31})\b/g;

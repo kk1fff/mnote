@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { readEnv, uid } from "./env";
@@ -10,9 +10,13 @@ function noteIdFromUrl(url: string): string {
 }
 
 function ageSession(noteId: string, minutes = 6) {
-  const file = path.join(readEnv().data, "vaults", "alice", "history", noteId, "last_edit");
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, new Date(Date.now() - minutes * 60_000).toISOString());
+  const database = path.join(readEnv().data, "db", "mnote.db");
+  execFileSync("python3", ["-c", `
+import sqlite3, sys
+with sqlite3.connect(sys.argv[1]) as db:
+    changed = db.execute("UPDATE note_edit_clock SET last_edit = ? WHERE user_id = (SELECT id FROM users WHERE username = ?) AND note_id = ?", (sys.argv[3], "alice", sys.argv[2]))
+    assert changed.rowcount == 1, "expected an existing edit clock"
+`, database, noteId, new Date(Date.now() - minutes * 60_000).toISOString()]);
 }
 
 test("history lists a prior session and restore brings it back", async ({ page }) => {
