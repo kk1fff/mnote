@@ -42,7 +42,7 @@ flowchart LR
 
 - **Self-hosted** — one process, one data folder, private vaults. Notes are markdown on disk.
 - **Cross-device** — browser or Electron (local folder or remote server), same account.
-- **Context logging** — time, place, and weather on paragraphs and parked captures, not stuffed into the note body.
+- **Context logging** — time and place on paragraphs and parked captures, not stuffed into the note body. Weather from Open-Meteo is off unless `MNOTE_WEATHER=1`.
 - **History** — snapshots per note; restore any revision.
 - **Interaction** — daily inbox, park-and-capture, `[[wiki-links]]`, note picker, source + preview.
 
@@ -102,6 +102,8 @@ From the repo root (kills anything already on :3000 / :5173, then starts both):
 make dev
 ```
 
+`make dev` binds the API on `0.0.0.0:3000`. Plain `mnote serve` listens on `127.0.0.1:3000`.
+
 First time: `cd web && npm install`. Vite proxies `/api` to the Rust server and forwards the session cookie. Use the web app at http://127.0.0.1:5173.
 
 ```bash
@@ -154,9 +156,10 @@ flowchart LR
 ```
 
 1. Install Tailscale on the home host and on each device.
-2. Run mnote there (`docker compose` or `mnote serve`). Reach it by Tailscale IP or MagicDNS, not a public port.
+2. Run mnote there (`docker compose` or `mnote serve --bind 0.0.0.0:3000` if Tailscale should reach it). Do not publish port 3000 on the public internet.
 3. Set `MNOTE_PUBLIC_URL` to that URL so invites print the right link.
 4. Open it in a browser, or enter `host:port` in **mnote Remote**.
+5. Optional: `MNOTE_WEATHER=1` to attach Open-Meteo weather to stamps (sends lat/lon to that API).
 
 Do not expose port 3000 to the public internet.
 
@@ -177,7 +180,7 @@ cd web && npm install && npm run build
 cargo run --release -- --data data serve --bind 127.0.0.1:3000
 ```
 
-Open http://127.0.0.1:3000. Set `MNOTE_SECURE_COOKIE=1` if you terminate TLS in front of the process.
+Open http://127.0.0.1:3000. Cookies get `Secure` if `MNOTE_SECURE_COOKIE=1` or `MNOTE_PUBLIC_URL` starts with `https:`.
 
 ## Docker
 
@@ -188,13 +191,13 @@ docker compose up --build -d
 docker compose exec mnote mnote user add alice
 ```
 
-Then open http://localhost:3000.
+Compose publishes `127.0.0.1:3000` only. Then open http://127.0.0.1:3000.
 
 The production `mnote` image intentionally contains only the shipped application. Use the separate `test` Compose service for tests and visual review.
 
 ## API (cookie session)
 
-Browser uses the session cookie. Login also returns a `token` for Electron: send `Authorization: Bearer <token>` (or `/api/live?token=`).
+Browser uses the session cookie. Login also returns a `token` for Electron: send `Authorization: Bearer <token>`. Query `?token=` is accepted only on `/api/live`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |

@@ -23,7 +23,7 @@ for _ in 1 2 3 4 5; do
   fi
 done
 
-cargo run -- --data data serve &
+cargo run -- --data data serve --bind "${MNOTE_BIND:-0.0.0.0:3000}" &
 api=$!
 npm --prefix web run dev &
 web=$!

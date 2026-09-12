@@ -13,10 +13,49 @@ pub mod tags;
 use crate::context::WeatherNow;
 use crate::error::AppError;
 use rusqlite::Connection;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 pub type WeatherFn = Arc<dyn Fn(f64, f64) -> Option<WeatherNow> + Send + Sync>;
+
+#[derive(Clone, Default)]
+pub struct LoginLimiter {
+    inner: Arc<Mutex<HashMap<String, Vec<Instant>>>>,
+}
+
+impl LoginLimiter {
+    const MAX: usize = 5;
+    const WINDOW_SECS: u64 = 15 * 60;
+
+    pub fn allow(&self, key: &str) -> Result<(), AppError> {
+        let mut map = self
+            .inner
+            .lock()
+            .map_err(|_| AppError::Internal(anyhow::anyhow!("lock")))?;
+        let now = Instant::now();
+        let window = std::time::Duration::from_secs(Self::WINDOW_SECS);
+        let times = map.entry(key.to_string()).or_default();
+        times.retain(|t| now.saturating_duration_since(*t) < window);
+        if times.len() >= Self::MAX {
+            return Err(AppError::RateLimited);
+        }
+        Ok(())
+    }
+
+    pub fn fail(&self, key: &str) {
+        if let Ok(mut map) = self.inner.lock() {
+            map.entry(key.to_string()).or_default().push(Instant::now());
+        }
+    }
+
+    pub fn success(&self, key: &str) {
+        if let Ok(mut map) = self.inner.lock() {
+            map.remove(key);
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -27,16 +66,19 @@ pub struct AppState {
     pub live: live::LiveHub,
     pub weather: WeatherFn,
     pub desktop_unlock: Option<String>,
+    pub listen_loopback: bool,
+    pub login_limiter: LoginLimiter,
+}
+
+pub fn weather_enabled() -> bool {
+    std::env::var("MNOTE_WEATHER").ok().as_deref() == Some("1")
 }
 
 fn default_weather() -> WeatherFn {
-    #[cfg(test)]
-    {
-        Arc::new(|_, _| None)
-    }
-    #[cfg(not(test))]
-    {
+    if weather_enabled() {
         Arc::new(context::fetch_open_meteo)
+    } else {
+        Arc::new(|_, _| None)
     }
 }
 
@@ -46,11 +88,18 @@ impl AppState {
         Self::open_inner(data_dir.clone(), data_dir, false)
     }
 
-    pub fn open_single(vault: impl Into<PathBuf>, state_dir: impl Into<PathBuf>) -> Result<Self, AppError> {
+    pub fn open_single(
+        vault: impl Into<PathBuf>,
+        state_dir: impl Into<PathBuf>,
+    ) -> Result<Self, AppError> {
         Self::open_inner(vault.into(), state_dir.into(), true)
     }
 
-    fn open_inner(data_dir: PathBuf, state_dir: PathBuf, single_vault: bool) -> Result<Self, AppError> {
+    fn open_inner(
+        data_dir: PathBuf,
+        state_dir: PathBuf,
+        single_vault: bool,
+    ) -> Result<Self, AppError> {
         ensure_layout(&data_dir, &state_dir, single_vault)?;
         if single_vault {
             migrate_legacy_desktop_vault(&data_dir)?;
@@ -65,6 +114,8 @@ impl AppState {
             live: live::LiveHub::new(),
             weather: default_weather(),
             desktop_unlock: None,
+            listen_loopback: true,
+            login_limiter: LoginLimiter::default(),
         };
         migrate_on_open(&state)?;
         Ok(state)
@@ -72,7 +123,16 @@ impl AppState {
 
     pub fn with_desktop_unlock(mut self, secret: impl Into<String>) -> Self {
         let secret = secret.into();
-        self.desktop_unlock = if secret.is_empty() { None } else { Some(secret) };
+        self.desktop_unlock = if secret.is_empty() {
+            None
+        } else {
+            Some(secret)
+        };
+        self
+    }
+
+    pub fn with_listen_loopback(mut self, loopback: bool) -> Self {
+        self.listen_loopback = loopback;
         self
     }
 

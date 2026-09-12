@@ -1,7 +1,7 @@
 .PHONY: dev test container-test desktop-test desktop-mac desktop-mac-smoke fix-perms
 
 dev:
-	./scripts/dev.sh
+	MNOTE_BIND=0.0.0.0:3000 ./scripts/dev.sh
 
 test: container-test
 

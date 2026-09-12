@@ -3,7 +3,7 @@ services:
     build: .
     init: true
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       MNOTE_PUBLIC_URL: http://localhost:3000
     volumes:
