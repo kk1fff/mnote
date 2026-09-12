@@ -2,6 +2,8 @@
 
 Personal markdown notes for a small, locally hosted group (~10 users). Each person has a private vault. The daily note is the inbox; other pages are freeform markdown with `[[wiki-links]]`.
 
+Illustrated tour: [FEATURES.md](FEATURES.md)
+
 ```mermaid
 flowchart LR
   subgraph frontend [Frontend]
@@ -26,6 +28,7 @@ flowchart LR
 
 ## Contents
 
+- [Features tour](FEATURES.md)
 - [Features](#features)
 - [Data directory](#data-directory)
 - [First-time users](#first-time-users)
