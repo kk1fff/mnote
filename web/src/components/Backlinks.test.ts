@@ -16,7 +16,13 @@ describe("Backlinks", () => {
       global: { plugins: [router] },
     });
     expect(empty.text()).toContain("Backlinks");
+    expect(empty.text()).not.toContain("No backlinks yet");
+    expect(empty.get("button").attributes("aria-expanded")).toBe("false");
+    await empty.get("button").trigger("click");
     expect(empty.text()).toContain("No backlinks yet");
+    expect(empty.get("button").attributes("aria-expanded")).toBe("true");
+    await empty.get("button").trigger("click");
+    expect(empty.text()).not.toContain("No backlinks yet");
     expect(empty.find("#backlinks-content").exists()).toBe(false);
     const filled = mount(Backlinks, {
       props: { links: [{ id: "a", title: "A", modified_at: "" }] },
