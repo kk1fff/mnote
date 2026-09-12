@@ -974,6 +974,7 @@ button.notes-heading.active {
   flex: 1;
   min-height: 0;
   padding: 0.85rem 1.1rem;
+  background: var(--surface);
 }
 
 .tab-strip {
@@ -1102,6 +1103,31 @@ button.notes-heading.active {
 .tab-close:hover {
   background: var(--surface);
   color: var(--text);
+}
+
+.tab-pending-wrap {
+  display: inline-flex;
+  align-items: flex-end;
+  overflow: hidden;
+  flex: 0 0 auto;
+  height: 100%;
+  max-width: 4.5rem;
+}
+
+.tab-pending-enter-active,
+.tab-pending-leave-active {
+  transition: max-width 0.16s ease, opacity 0.16s ease;
+}
+
+.tab-pending-enter-from,
+.tab-pending-leave-to {
+  max-width: 0;
+  opacity: 0;
+}
+
+.tab-chip.pending {
+  min-width: 3.25rem;
+  pointer-events: none;
 }
 
 .tab-add {

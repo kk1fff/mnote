@@ -10,7 +10,7 @@ import {
 } from "../lib/picker";
 import { noteFolderLabel, noteIdFromRoute } from "../lib/paths";
 import { formatTagQuery, parseTagQuery, pendingTagReveal, tagsFromNotes } from "../lib/tags";
-import { openInWorkspace, type OpenMode } from "../workspace";
+import { beginPendingAdd, cancelPendingAdd, openInWorkspace, pendingAdd, type OpenMode } from "../workspace";
 
 const emit = defineEmits<{ created: [] }>();
 const router = useRouter();
@@ -73,6 +73,11 @@ const itemOffset = computed(() => {
 });
 
 function show(mode: OpenMode = "replace", collectionKind?: PickerCollection, initialQuery?: string) {
+  if (mode === "add") {
+    if (!pendingAdd.value) beginPendingAdd();
+  } else {
+    cancelPendingAdd();
+  }
   returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   creating.value = false;
   open.value = true;
@@ -105,6 +110,7 @@ function showTag(tag: string) {
 
 function close() {
   open.value = false;
+  cancelPendingAdd();
   window.clearTimeout(searchTimer);
   searchId++;
   searching.value = false;
@@ -121,16 +127,18 @@ function indexOf(item: PickerItem): number {
 }
 
 async function select(note: NoteMeta) {
+  const href = openInWorkspace(note.id, note.title, openMode.value);
   close();
-  await router.push(openInWorkspace(note.id, note.title, openMode.value));
+  await router.push(href);
 }
 
 async function selectHit(hit: Extract<PickerItem, { type: "tag-hit" }>) {
   if (hit.from != null && hit.to != null) {
     pendingTagReveal.value = { id: hit.id, from: hit.from, to: hit.to };
   }
+  const href = openInWorkspace(hit.id, hit.title, openMode.value);
   close();
-  await router.push(openInWorkspace(hit.id, hit.title, openMode.value));
+  await router.push(href);
 }
 
 async function jump(to: string) {
@@ -145,8 +153,9 @@ async function create() {
   try {
     const note = await api.createNote(createItem.value.draft.title, createItem.value.draft.folder);
     emit("created");
+    const href = openInWorkspace(note.id, note.title, openMode.value);
     close();
-    await router.push(openInWorkspace(note.id, note.title, openMode.value));
+    await router.push(href);
   } catch (err) {
     error.value = err instanceof ApiError ? err.code : "Could not create note";
   } finally {

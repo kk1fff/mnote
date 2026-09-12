@@ -160,6 +160,58 @@ async function closePicker(page) {
   }
 }
 
+async function openAddTab(page) {
+  await page.getByTestId("pane-primary").getByTestId("tab-add").click();
+  await page.waitForSelector('[data-testid="picker"]');
+  await page.waitForSelector('[data-testid="tab-pending"]');
+  await page.waitForSelector('[data-testid="tab-pending-page"]');
+}
+
+async function shotAddTabOverlay(page, suffix) {
+  await openAddTab(page);
+  const wrap = page.getByTestId("pane-primary").locator(".tab-pending-wrap");
+  await wrap.evaluate((el) => {
+    el.style.transition = "none";
+    el.style.maxWidth = "2.2rem";
+    el.style.opacity = "0.55";
+  });
+  await shotMotion(page, `43d-tab-add-inserting-${suffix}`);
+  await wrap.evaluate((el) => {
+    el.style.transition = "";
+    el.style.maxWidth = "";
+    el.style.opacity = "";
+  });
+  await shot(page, `43-tab-add-${suffix}`);
+}
+
+async function finishAddTab(page, title) {
+  const open = new Set(
+    (await page.locator(".tab-chip:not(.pending) .tab-title").allInnerTexts()).map((text) => text.trim()),
+  );
+  const links = page.locator(".tree-link");
+  const n = await links.count();
+  for (let i = 0; i < n; i++) {
+    const text = (await links.nth(i).innerText()).trim();
+    if (!text || open.has(text)) continue;
+    await page.getByTestId("picker-input").fill(text);
+    await page.waitForTimeout(250);
+    const hit = page.getByTestId("picker").getByRole("button", { name: text, exact: true });
+    if (await hit.count()) {
+      await hit.click();
+      await page.waitForSelector('[data-testid="picker"]', { state: "hidden" });
+      await page.getByTestId("pane-primary").getByTestId("tab-pending").waitFor({ state: "hidden" });
+      await page.getByTestId("pane-primary").getByTestId("note-title").waitFor();
+      return;
+    }
+  }
+  await page.getByTestId("picker-input").fill(title);
+  await page.getByTestId("picker-create").waitFor();
+  await page.getByTestId("picker-create").click();
+  await page.waitForSelector('[data-testid="picker"]', { state: "hidden" });
+  await page.getByTestId("pane-primary").getByTestId("tab-pending").waitFor({ state: "hidden" });
+  await page.getByTestId("pane-primary").getByTestId("note-title").filter({ hasText: title }).waitFor();
+}
+
 async function pickerChrome(page) {
   return page.locator(".note-picker").evaluate((el) => {
     const box = el.getBoundingClientRect();
@@ -601,6 +653,18 @@ await page.waitForSelector('[data-testid="editor"]');
   await page.waitForTimeout(200);
   await shot(page, "14-tabs-light");
 
+  await shotAddTabOverlay(page, "light");
+  await finishAddTab(page, "Selected tab");
+  await shot(page, "43b-tab-add-selected-light");
+  await openAddTab(page);
+  await page.getByTestId("picker-input").fill("Added tab");
+  await page.getByTestId("picker-create").waitFor();
+  await page.getByTestId("picker-create").click();
+  await page.waitForSelector('[data-testid="picker"]', { state: "hidden" });
+  await page.getByTestId("pane-primary").getByTestId("tab-pending").waitFor({ state: "hidden" });
+  await page.getByTestId("pane-primary").getByTestId("note-title").filter({ hasText: "Added tab" }).waitFor();
+  await shot(page, "43c-tab-add-created-light");
+
   await openPicker(page);
   const homeChrome = await pickerChrome(page);
   await shot(page, "18-picker-light");
@@ -719,6 +783,17 @@ await page.getByTestId("sidebar-fold").click();
 await page.waitForTimeout(200);
   await shot(page, "15-tabs-dark");
   await shot(page, "17-split-dark");
+  await shotAddTabOverlay(page, "dark");
+  await finishAddTab(page, "Selected tab dark");
+  await shot(page, "43b-tab-add-selected-dark");
+  await openAddTab(page);
+  await page.getByTestId("picker-input").fill("Added tab dark");
+  await page.getByTestId("picker-create").waitFor();
+  await page.getByTestId("picker-create").click();
+  await page.waitForSelector('[data-testid="picker"]', { state: "hidden" });
+  await page.getByTestId("pane-primary").getByTestId("tab-pending").waitFor({ state: "hidden" });
+  await page.getByTestId("pane-primary").getByTestId("note-title").filter({ hasText: "Added tab dark" }).waitFor();
+  await shot(page, "43c-tab-add-created-dark");
   await openPicker(page);
   const darkChrome = await pickerChrome(page);
   await shot(page, "19-picker-dark");

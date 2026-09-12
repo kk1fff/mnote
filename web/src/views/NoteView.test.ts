@@ -377,6 +377,36 @@ describe("NoteView", () => {
     expect(wrapper.get('[data-testid="journal-crumb-journal"]').text()).toBe("Journal");
   });
 
+  it("shows a pending tab and empty page when adding a tab", async () => {
+    vi.mocked(api.getNote).mockResolvedValue({
+      id: "n1",
+      title: "Keep",
+      content: "hi",
+      modified_at: "",
+    });
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        { path: "/n/:id", component: NoteView },
+        { path: "/today", component: { template: "<div />" } },
+      ],
+    });
+    await router.push("/n/n1");
+    await router.isReady();
+    const wrapper = mount(NoteView, { global: { plugins: [router] } });
+    await flushPromises();
+    await wrapper.get('[data-testid="tab-add"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tab-pending"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="tab-pending-page"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="picker"]').exists()).toBe(true);
+    await wrapper.get('[aria-label="Close picker"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tab-pending"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="tab-pending-page"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="note-title"]').text()).toBe("Keep");
+  });
+
   it("compacts the title bar when the document scrolls", async () => {
     vi.mocked(api.getNote).mockResolvedValue({
       id: "n1",

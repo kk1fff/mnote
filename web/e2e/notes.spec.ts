@@ -420,6 +420,42 @@ async function openBeside(page: import("@playwright/test").Page, title: string) 
   await expect(page.getByTestId("pane-beside").getByTestId("editor")).toBeVisible();
 }
 
+test("add tab pending chip becomes the chosen note", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL(/\/n\//);
+  const keep = uid("KeepTab");
+  const next = uid("NextTab");
+  const created = uid("NewTab");
+  await createNote(page, keep);
+  await createNote(page, next);
+  await page.getByTestId("tab-add").click();
+  await expect(page.getByTestId("picker")).toBeVisible();
+  await expect(page.getByTestId("tab-pending")).toBeVisible();
+  await expect(page.getByTestId("tab-pending-page")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("picker")).toHaveCount(0);
+  await expect(page.getByTestId("tab-pending")).toHaveCount(0);
+  await expect(page.getByTestId("note-title")).toHaveText(next);
+  await page.getByTestId("tab-add").click();
+  await page.getByTestId("picker-input").fill(keep);
+  await expect(page.getByTestId("picker").getByRole("button", { name: keep, exact: true })).toBeVisible();
+  await page.getByTestId("picker").getByRole("button", { name: keep, exact: true }).click();
+  await expect(page.getByTestId("picker")).toHaveCount(0);
+  await expect(page.getByTestId("tab-pending")).toHaveCount(0);
+  await expect(page.getByTestId("note-title")).toHaveText(keep);
+  await expect(page.getByTestId("tab-strip")).toContainText(keep);
+  await expect(page.getByTestId("tab-strip")).toContainText(next);
+  await page.getByTestId("tab-add").click();
+  await page.getByTestId("picker-input").fill(created);
+  await page.getByTestId("picker-create").click();
+  await expect(page.getByTestId("picker")).toHaveCount(0);
+  await expect(page.getByTestId("tab-pending")).toHaveCount(0);
+  await expect(page.getByTestId("note-title")).toHaveText(created);
+  await expect(page.getByTestId("tab-strip")).toContainText(keep);
+  await expect(page.getByTestId("tab-strip")).toContainText(next);
+  await expect(page.getByTestId("tab-strip")).toContainText(created);
+});
+
 test("split panes edit independently and can share a note", async ({ page }) => {
   await page.goto("/");
   await page.waitForURL(/\/n\//);

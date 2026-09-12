@@ -15,6 +15,7 @@ import {
   focusPane,
   isDesktop,
   layoutHref,
+  pendingAdd,
   setPinned,
   setRatio,
   syncFavorites,
@@ -37,6 +38,8 @@ let mq: MediaQueryList | undefined;
 
 const split = computed(() => desktop.value && !!workspace.value.beside);
 const primaryWidth = computed(() => `${workspace.value.ratio * 100}%`);
+const primaryPending = computed(() => pendingAdd.value === "primary");
+const besidePending = computed(() => pendingAdd.value === "beside");
 
 watch(
   [noteId, besideId, desktop],
@@ -158,6 +161,7 @@ function stopDrag() {
           @mousedown="onFocus('primary')"
         >
           <PaneTabBar
+            pane-id="primary"
             :pane="workspace.primary"
             :focused="workspace.focused === 'primary'"
             @select="selectTab($event, 'primary')"
@@ -165,12 +169,14 @@ function stopDrag() {
             @pin="onPin"
           />
           <NotePane
+            v-if="!primaryPending"
             :note-id="workspace.primary.active || noteId"
             :toggle="toggle"
             :client="primaryLive"
             :focused="workspace.focused === 'primary'"
             @index="void shell?.load()"
           />
+          <div v-else class="note-empty" data-testid="tab-pending-page" />
         </section>
         <template v-if="split">
           <div class="workspace-gutter" data-testid="split-gutter" @pointerdown="startDrag" />
@@ -180,23 +186,25 @@ function stopDrag() {
             :class="{ unfocused: workspace.focused !== 'beside' }"
             @mousedown="onFocus('beside')"
           >
-            <PaneTabBar
-              v-if="workspace.beside"
-              :pane="workspace.beside"
-              :focused="workspace.focused === 'beside'"
-              @select="selectTab($event, 'beside')"
-              @close="onClose($event, 'beside')"
-              @pin="onPin"
-            />
-            <NotePane
-              v-if="workspace.beside?.active"
-              :note-id="workspace.beside.active"
-              :toggle="toggle"
-              :client="besideLive"
-              :focused="workspace.focused === 'beside'"
-              @index="void shell?.load()"
-            />
-            <div v-else class="note-empty muted">Open a note</div>
+              <PaneTabBar
+                v-if="workspace.beside"
+                pane-id="beside"
+                :pane="workspace.beside"
+                :focused="workspace.focused === 'beside'"
+                @select="selectTab($event, 'beside')"
+                @close="onClose($event, 'beside')"
+                @pin="onPin"
+              />
+              <NotePane
+                v-if="workspace.beside?.active && !besidePending"
+                :note-id="workspace.beside.active"
+                :toggle="toggle"
+                :client="besideLive"
+                :focused="workspace.focused === 'beside'"
+                @index="void shell?.load()"
+              />
+              <div v-else-if="besidePending" class="note-empty" data-testid="tab-pending-page" />
+              <div v-else class="note-empty muted">Open a note</div>
           </section>
         </template>
       </div>

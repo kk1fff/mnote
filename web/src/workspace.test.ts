@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyOpen,
   applyRoute,
+  beginPendingAdd,
+  cancelPendingAdd,
   closeTab,
   collapseBeside,
   emptyWorkspace,
@@ -10,6 +12,7 @@ import {
   loadWorkspace,
   openBeside,
   openInWorkspace,
+  pendingAdd,
   rememberTitle,
   resetWorkspace,
   setPinned,
@@ -132,6 +135,20 @@ describe("workspace", () => {
     expect(workspace.value.primary.tabs).toHaveLength(2);
     expect(openInWorkspace("c", "C", "add")).toBe("/n/c");
     expect(workspace.value.primary.tabs.map((tab) => tab.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("tracks a pending add without persisting it", () => {
+    applyOpen("a", "A");
+    beginPendingAdd("primary");
+    expect(pendingAdd.value).toBe("primary");
+    expect(loadWorkspace().primary.tabs.map((tab) => tab.id)).toEqual(["a"]);
+    cancelPendingAdd();
+    expect(pendingAdd.value).toBeNull();
+    beginPendingAdd("beside");
+    expect(pendingAdd.value).toBe("primary");
+    applyOpen("b", "B", "primary", true, "add");
+    expect(pendingAdd.value).toBeNull();
+    expect(workspace.value.primary.tabs.map((tab) => tab.id)).toEqual(["a", "b"]);
   });
 
   it("opens through the workspace and forgets a visible note", () => {

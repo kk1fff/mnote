@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { showPicker, splitTabs, type Pane, type Tab } from "../workspace";
+import { beginPendingAdd, pendingAdd, showPicker, splitTabs, type Pane, type PaneId, type Tab } from "../workspace";
 import NavIcon from "./NavIcon.vue";
 
 const props = defineProps<{
   pane: Pane;
+  paneId: PaneId;
   focused: boolean;
 }>();
 
@@ -15,9 +16,15 @@ const emit = defineEmits<{
 }>();
 
 const groups = computed(() => splitTabs(props.pane));
+const pending = computed(() => pendingAdd.value === props.paneId);
 
 function label(tab: Tab) {
   return tab.title || tab.id;
+}
+
+function addTab() {
+  beginPendingAdd(props.paneId);
+  showPicker("add");
 }
 </script>
 
@@ -31,8 +38,8 @@ function label(tab: Tab) {
           type="button"
           class="tab-chip pinned"
           role="tab"
-          :class="{ active: tab.id === pane.active }"
-          :aria-selected="tab.id === pane.active"
+          :class="{ active: !pending && tab.id === pane.active }"
+          :aria-selected="!pending && tab.id === pane.active"
           :title="label(tab)"
           :data-testid="`tab-${tab.id}`"
           @click="emit('select', tab.id)"
@@ -65,8 +72,8 @@ function label(tab: Tab) {
         type="button"
         class="tab-chip"
         role="tab"
-        :class="{ active: tab.id === pane.active }"
-        :aria-selected="tab.id === pane.active"
+        :class="{ active: !pending && tab.id === pane.active }"
+        :aria-selected="!pending && tab.id === pane.active"
         :title="label(tab)"
         :data-testid="`tab-${tab.id}`"
         @click="emit('select', tab.id)"
@@ -90,7 +97,22 @@ function label(tab: Tab) {
           <NavIcon name="close" />
         </span>
       </button>
-      <button type="button" class="tab-add" data-testid="tab-add" title="Open in new tab" aria-label="Open in new tab" @click="showPicker('add')">
+      <Transition name="tab-pending">
+        <span v-if="pending" class="tab-pending-wrap">
+          <button
+            type="button"
+            class="tab-chip pending active"
+            role="tab"
+            aria-selected="true"
+            aria-label="New tab"
+            data-testid="tab-pending"
+            tabindex="-1"
+          >
+            <NavIcon name="tab" />
+          </button>
+        </span>
+      </Transition>
+      <button type="button" class="tab-add" data-testid="tab-add" title="Open in new tab" aria-label="Open in new tab" @click="addTab">
         <NavIcon name="addTab" />
       </button>
     </div>
