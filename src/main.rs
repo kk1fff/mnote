@@ -21,7 +21,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     Serve {
-        #[arg(long, env = "MNOTE_BIND", default_value = "0.0.0.0:3000")]
+        #[arg(long, env = "MNOTE_BIND", default_value = "127.0.0.1:3000")]
         bind: String,
     },
     User {
@@ -164,7 +164,8 @@ fn init_logging(
 
 async fn serve_vault(vault: PathBuf, state_dir: PathBuf, bind: String) -> anyhow::Result<()> {
     let addr: SocketAddr = bind.parse()?;
-    let mut state = AppState::open_single(&vault, &state_dir)?;
+    let mut state =
+        AppState::open_single(&vault, &state_dir)?.with_listen_loopback(addr.ip().is_loopback());
     if addr.ip().is_loopback() {
         if let Ok(secret) = std::env::var("MNOTE_SIDECAR_UNLOCK") {
             state = state.with_desktop_unlock(secret);
@@ -186,7 +187,7 @@ async fn serve_vault(vault: PathBuf, state_dir: PathBuf, bind: String) -> anyhow
 async fn serve(data: PathBuf, bind: String) -> anyhow::Result<()> {
     warn_if_likely_wrong_data_dir(&data);
     let addr: SocketAddr = bind.parse()?;
-    let mut state = AppState::open(&data)?;
+    let mut state = AppState::open(&data)?.with_listen_loopback(addr.ip().is_loopback());
     if addr.ip().is_loopback() {
         if let Ok(secret) = std::env::var("MNOTE_SIDECAR_UNLOCK") {
             state = state.with_desktop_unlock(secret);

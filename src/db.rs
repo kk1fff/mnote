@@ -112,13 +112,17 @@ pub fn init(conn: &rusqlite::Connection) -> Result<(), AppError> {
         );
         ",
     )?;
-        migrate_parked_context(conn)?;
-        add_column(conn, "parked", "tags", "TEXT")?;
-        crate::index::init(conn)?;
-        Ok(())
+    migrate_parked_context(conn)?;
+    add_column(conn, "parked", "tags", "TEXT")?;
+    crate::index::init(conn)?;
+    Ok(())
 }
 
-fn table_has_column(conn: &rusqlite::Connection, table: &str, column: &str) -> Result<bool, AppError> {
+fn table_has_column(
+    conn: &rusqlite::Connection,
+    table: &str,
+    column: &str,
+) -> Result<bool, AppError> {
     let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
     let cols = stmt.query_map([], |row| row.get::<_, String>(1))?;
     for col in cols {
@@ -136,7 +140,10 @@ fn add_column(
     decl: &str,
 ) -> Result<(), AppError> {
     if !table_has_column(conn, table, column)? {
-        conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"), [])?;
+        conn.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"),
+            [],
+        )?;
     }
     Ok(())
 }
@@ -163,11 +170,7 @@ pub fn create_user(
     insert_user(state, username, password, true)
 }
 
-pub fn bootstrap_user(
-    state: &AppState,
-    username: &str,
-    password: &str,
-) -> Result<User, AppError> {
+pub fn bootstrap_user(state: &AppState, username: &str, password: &str) -> Result<User, AppError> {
     insert_user(state, username, Some(password), false)?;
     authenticate(state, username, password)
 }
@@ -320,9 +323,8 @@ pub fn sole_user(state: &AppState) -> Result<User, AppError> {
         .db
         .lock()
         .map_err(|_| AppError::Internal(anyhow::anyhow!("db lock")))?;
-    let mut stmt = conn.prepare(
-        "SELECT id, username, must_change_password FROM users ORDER BY id LIMIT 2",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT id, username, must_change_password FROM users ORDER BY id LIMIT 2")?;
     let mut rows = stmt.query([])?;
     let Some(row) = rows.next()? else {
         return Err(AppError::NotFound);
@@ -363,10 +365,16 @@ pub fn authenticate(state: &AppState, username: &str, password: &str) -> Result<
         )
         .optional()?;
     let Some((id, username, hash, must_change_password)) = row else {
+        drop(conn);
+        let _ = auth::verify_password(password, auth::dummy_password_hash());
         return Err(AppError::Unauthorized);
     };
+    drop(conn);
     if !auth::verify_password(password, &hash) {
         return Err(AppError::Unauthorized);
+    }
+    if auth::needs_rehash(&hash) {
+        let _ = set_password(state, &username, password, must_change_password);
     }
     Ok(User {
         id,
@@ -571,8 +579,6 @@ pub fn set_folder_collapsed(
     }
     Ok(())
 }
-
-
 
 #[cfg(test)]
 mod tests {

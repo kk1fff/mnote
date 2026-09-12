@@ -6,6 +6,7 @@ import {
   Menu,
   net,
   protocol,
+  safeStorage,
   session,
   shell,
 } from "electron";
@@ -105,16 +106,28 @@ function loadStore(): Store {
 
 function saveStore(next: Store) {
   fs.mkdirSync(path.dirname(storePath()), { recursive: true });
-  fs.writeFileSync(storePath(), JSON.stringify(next, null, 2));
+  const file = storePath();
+  fs.writeFileSync(file, JSON.stringify(next, null, 2), { mode: 0o600 });
+  fs.chmodSync(file, 0o600);
 }
 
 function encrypt(plain: string): string {
+  if (safeStorage.isEncryptionAvailable()) {
+    return `safe:${safeStorage.encryptString(plain).toString("base64")}`;
+  }
   return `plain:${plain}`;
 }
 
 function decrypt(stored?: string): string | null {
   if (!stored) return null;
   if (stored.startsWith("plain:")) return stored.slice(6);
+  if (stored.startsWith("safe:")) {
+    try {
+      return safeStorage.decryptString(Buffer.from(stored.slice(5), "base64"));
+    } catch {
+      return null;
+    }
+  }
   return null;
 }
 
@@ -270,11 +283,7 @@ function registerProtocol() {
 }
 
 function preloadScript(): string {
-  const src = path.join(here, "preload.cjs");
-  const dest = path.join(app.getPath("userData"), "mnote-preload.cjs");
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
-  fs.copyFileSync(src, dest);
-  return dest;
+  return path.join(here, "preload.cjs");
 }
 
 function createWindow() {
@@ -289,11 +298,20 @@ function createWindow() {
       additionalArguments: [`--mnote-flavor=${flavor}`],
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
   win.webContents.on("preload-error", (_e, preloadPath, err) => {
     console.error("preload-error", preloadPath, err);
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("https:") || url.startsWith("http:")) {
+      void shell.openExternal(url);
+    }
+    return { action: "deny" };
+  });
+  win.webContents.on("will-navigate", (event, url) => {
+    if (!url.startsWith("mnote:")) event.preventDefault();
   });
   void win.loadURL("mnote://app/");
 }

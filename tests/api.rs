@@ -652,8 +652,8 @@ async fn assets() {
     let cookie = h.login("alice", "password1").await;
     let png = [
         137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6,
-        0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 218, 99, 252, 207, 192, 80, 15,
-        0, 4, 133, 1, 128, 132, 169, 140, 33, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+        0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 218, 99, 252, 207, 192, 80,
+        15, 0, 4, 133, 1, 128, 132, 169, 140, 33, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
     ];
     let body = build_multipart("file", "pic.png", "image/png", &png);
 
@@ -734,6 +734,7 @@ async fn change_password_and_short_rejected() {
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 
+    let other = h.login("alice", "password1").await;
     let (status, _, _) = h
         .call(h.authed(
             Method::POST,
@@ -748,6 +749,10 @@ async fn change_password_and_short_rejected() {
         .call(h.authed(Method::GET, "/api/auth/me", &cookie, None))
         .await;
     assert_eq!(status, StatusCode::OK);
+    let (status, _, _) = h
+        .call(h.authed(Method::GET, "/api/auth/me", &other, None))
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
@@ -1074,12 +1079,7 @@ async fn note_context_does_not_change_markdown() {
 
     let bob = h.login("bob", "password1").await;
     let (status, _, _) = h
-        .call(h.authed(
-            Method::GET,
-            &format!("/api/notes/{id}/context"),
-            &bob,
-            None,
-        ))
+        .call(h.authed(Method::GET, &format!("/api/notes/{id}/context"), &bob, None))
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 
@@ -1196,7 +1196,7 @@ async fn login_returns_token_and_bearer_works() {
 }
 
 #[tokio::test]
-async fn cors_preflight_mirrors_origin() {
+async fn cors_preflight_allows_electron_origin() {
     let h = Harness::new();
     let (status, headers, _) = h
         .call(
@@ -1218,6 +1218,26 @@ async fn cors_preflight_mirrors_origin() {
             .to_str()
             .unwrap(),
         "mnote://app"
+    );
+
+    let (status, headers, _) = h
+        .call(
+            Request::builder()
+                .method(Method::OPTIONS)
+                .uri("/api/health")
+                .header(header::ORIGIN, "https://evil.example")
+                .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert!(status == StatusCode::OK || status.is_client_error());
+    assert_ne!(
+        headers
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .map(|v| v.to_str().unwrap())
+            .unwrap_or(""),
+        "https://evil.example"
     );
 }
 
@@ -1251,36 +1271,32 @@ async fn setup_only_on_loopback_when_empty() {
     assert_eq!(body["error"], "setup_not_allowed");
 
     let (status, _, body) = h
-        .call(
-            with_peer(
-                Request::builder()
-                    .method(Method::POST)
-                    .uri("/api/setup")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(
-                        json!({ "username": "pat", "password": "password1" }).to_string(),
-                    ))
-                    .unwrap(),
-                "10.0.0.8:9",
-            ),
-        )
+        .call(with_peer(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/setup")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "username": "pat", "password": "password1" }).to_string(),
+                ))
+                .unwrap(),
+            "10.0.0.8:9",
+        ))
         .await;
     assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
 
     let (status, _, body) = h
-        .call(
-            with_peer(
-                Request::builder()
-                    .method(Method::POST)
-                    .uri("/api/setup")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(
-                        json!({ "username": "pat", "password": "password1" }).to_string(),
-                    ))
-                    .unwrap(),
-                "127.0.0.1:9",
-            ),
-        )
+        .call(with_peer(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/setup")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "username": "pat", "password": "password1" }).to_string(),
+                ))
+                .unwrap(),
+            "127.0.0.1:9",
+        ))
         .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["username"], "pat");
@@ -1298,19 +1314,17 @@ async fn setup_only_on_loopback_when_empty() {
     assert_eq!(status, StatusCode::OK, "{body}");
 
     let (status, _, body) = h
-        .call(
-            with_peer(
-                Request::builder()
-                    .method(Method::POST)
-                    .uri("/api/setup")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(
-                        json!({ "username": "other", "password": "password1" }).to_string(),
-                    ))
-                    .unwrap(),
-                "127.0.0.1:9",
-            ),
-        )
+        .call(with_peer(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/setup")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "username": "other", "password": "password1" }).to_string(),
+                ))
+                .unwrap(),
+            "127.0.0.1:9",
+        ))
         .await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert_eq!(body["error"], "already_setup");
@@ -1320,17 +1334,15 @@ async fn setup_only_on_loopback_when_empty() {
 async fn desktop_session_absent_without_sidecar_unlock() {
     let h = Harness::empty();
     let (status, _, body) = h
-        .call(
-            with_peer(
-                Request::builder()
-                    .method(Method::POST)
-                    .uri("/api/desktop/session")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(json!({ "unlock": "secret" }).to_string()))
-                    .unwrap(),
-                "127.0.0.1:9",
-            ),
-        )
+        .call(with_peer(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/desktop/session")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({ "unlock": "secret" }).to_string()))
+                .unwrap(),
+            "127.0.0.1:9",
+        ))
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
 
@@ -1367,7 +1379,9 @@ async fn desktop_session_loopback_secret_only() {
                 .method(Method::POST)
                 .uri("/api/desktop/session")
                 .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(json!({ "unlock": "sidecar-secret" }).to_string()))
+                .body(Body::from(
+                    json!({ "unlock": "sidecar-secret" }).to_string(),
+                ))
                 .unwrap(),
         )
         .await;
@@ -1375,47 +1389,45 @@ async fn desktop_session_loopback_secret_only() {
     assert_eq!(body["error"], "desktop_not_allowed");
 
     let (status, _, body) = h
-        .call(
-            with_peer(
-                Request::builder()
-                    .method(Method::POST)
-                    .uri("/api/desktop/session")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(json!({ "unlock": "wrong" }).to_string()))
-                    .unwrap(),
-                "127.0.0.1:9",
-            ),
-        )
+        .call(with_peer(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/desktop/session")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({ "unlock": "wrong" }).to_string()))
+                .unwrap(),
+            "127.0.0.1:9",
+        ))
         .await;
     assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
 
     let (status, _, body) = h
-        .call(
-            with_peer(
-                Request::builder()
-                    .method(Method::POST)
-                    .uri("/api/desktop/session")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(json!({ "unlock": "sidecar-secret" }).to_string()))
-                    .unwrap(),
-                "10.0.0.8:9",
-            ),
-        )
+        .call(with_peer(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/desktop/session")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "unlock": "sidecar-secret" }).to_string(),
+                ))
+                .unwrap(),
+            "10.0.0.8:9",
+        ))
         .await;
     assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
 
     let (status, _, body) = h
-        .call(
-            with_peer(
-                Request::builder()
-                    .method(Method::POST)
-                    .uri("/api/desktop/session")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(json!({ "unlock": "sidecar-secret" }).to_string()))
-                    .unwrap(),
-                "127.0.0.1:9",
-            ),
-        )
+        .call(with_peer(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/desktop/session")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "unlock": "sidecar-secret" }).to_string(),
+                ))
+                .unwrap(),
+            "127.0.0.1:9",
+        ))
         .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["username"], "me");
@@ -1460,17 +1472,17 @@ async fn desktop_session_rejects_multi_user_vault() {
         _dir: dir,
     };
     let (status, _, body) = h
-        .call(
-            with_peer(
-                Request::builder()
-                    .method(Method::POST)
-                    .uri("/api/desktop/session")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(json!({ "unlock": "sidecar-secret" }).to_string()))
-                    .unwrap(),
-                "127.0.0.1:9",
-            ),
-        )
+        .call(with_peer(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/desktop/session")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "unlock": "sidecar-secret" }).to_string(),
+                ))
+                .unwrap(),
+            "127.0.0.1:9",
+        ))
         .await;
     assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
     assert_eq!(body["error"], "desktop_multi_user");
@@ -1530,7 +1542,9 @@ async fn tags_patch_search_parked_and_suggest() {
     assert_eq!(status, StatusCode::OK, "{body}");
     let hits = body.as_array().unwrap();
     assert_eq!(hits.len(), 3);
-    assert!(hits.iter().any(|h| h["kind"] == "parked" && h["parked_id"] == parked_id));
+    assert!(hits
+        .iter()
+        .any(|h| h["kind"] == "parked" && h["parked_id"] == parked_id));
     assert_eq!(hits.iter().filter(|h| h["kind"] != "parked").count(), 2);
 
     let (status, _, body) = h
@@ -1560,7 +1574,11 @@ async fn tags_patch_search_parked_and_suggest() {
         ))
         .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert!(body.as_array().unwrap().iter().any(|h| h["name"] == "meeting"));
+    assert!(body
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|h| h["name"] == "meeting"));
 
     let (status, _, body) = h
         .call(h.authed(
@@ -1644,9 +1662,143 @@ async fn structured_tag_query_scopes_and_here() {
     assert!(body.as_array().unwrap().is_empty());
 
     let (status, _, body) = h
-        .call(h.authed(Method::GET, "/api/tags/query?q=%23work%20%3E", &cookie, None))
+        .call(h.authed(
+            Method::GET,
+            "/api/tags/query?q=%23work%20%3E",
+            &cookie,
+            None,
+        ))
         .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert!(body.as_array().unwrap().iter().any(|tag| tag["name"] == "meeting"));
-    assert!(body.as_array().unwrap().iter().all(|tag| tag["name"] != "work"));
+    assert!(body
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|tag| tag["name"] == "meeting"));
+    assert!(body
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|tag| tag["name"] != "work"));
+}
+
+#[tokio::test]
+async fn setup_denied_when_listen_not_loopback() {
+    let dir = TempDir::new().unwrap();
+    let state = AppState::open(dir.path())
+        .unwrap()
+        .with_listen_loopback(false);
+    let app = api::router(state);
+    let res = app
+        .oneshot(with_peer(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/setup")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "username": "pat", "password": "password1" }).to_string(),
+                ))
+                .unwrap(),
+            "127.0.0.1:9",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn query_token_not_accepted_on_notes() {
+    let h = Harness::new();
+    let (status, _, body) = h
+        .call(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/auth/login")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "username": "alice", "password": "password1" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let token = body["token"].as_str().unwrap();
+    let (status, _, _) = h
+        .call(
+            Request::builder()
+                .uri(format!("/api/notes?token={token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn weather_off_by_default() {
+    let h = Harness::new();
+    let cookie = h.login("alice", "password1").await;
+    let (status, _, _) = h
+        .call(h.authed(Method::GET, "/api/weather?lat=1&lon=2", &cookie, None))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn login_rate_limited() {
+    let h = Harness::new();
+    for _ in 0..5 {
+        let (status, _, _) = h
+            .call(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/auth/login")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({ "username": "alice", "password": "wrongpass" }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+    let (status, _, body) = h
+        .call(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/auth/login")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "username": "alice", "password": "wrongpass" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{body}");
+}
+
+#[tokio::test]
+async fn security_headers_present() {
+    let h = Harness::new();
+    let (status, headers, _) = h
+        .call(
+            Request::builder()
+                .uri("/api/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        headers
+            .get("x-content-type-options")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "nosniff"
+    );
+    assert_eq!(
+        headers.get("x-frame-options").unwrap().to_str().unwrap(),
+        "DENY"
+    );
 }

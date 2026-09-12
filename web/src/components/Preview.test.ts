@@ -54,4 +54,13 @@ describe("Preview", () => {
     await wrapper.get("input.task-checkbox").trigger("click");
     expect(wrapper.emitted("toggle")).toBeUndefined();
   });
+
+  it("opens http links outside the page", async () => {
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+    const wrapper = mount(Preview, { props: { source: "[x](https://example.com/a)" } });
+    await wrapper.get("a").trigger("click");
+    expect(open).toHaveBeenCalledWith("https://example.com/a", "_blank", "noopener,noreferrer");
+    vi.unstubAllGlobals();
+  });
 });

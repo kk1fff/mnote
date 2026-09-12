@@ -4,6 +4,7 @@ use argon2::password_hash::{
 use argon2::{Algorithm, Argon2, Params, Version};
 use rand::Rng;
 use sha2::{Digest, Sha256};
+use std::sync::OnceLock;
 
 const PASSWORD_CHARS: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 
@@ -21,6 +22,22 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
     argon2()
         .verify_password(password.as_bytes(), &parsed)
         .is_ok()
+}
+
+pub fn dummy_password_hash() -> &'static str {
+    static HASH: OnceLock<String> = OnceLock::new();
+    HASH.get_or_init(|| hash_password("mnote-timing-dummy").expect("dummy hash"))
+}
+
+pub fn needs_rehash(hash: &str) -> bool {
+    let Ok(parsed) = PasswordHash::new(hash) else {
+        return true;
+    };
+    let Ok(params) = Params::try_from(&parsed) else {
+        return true;
+    };
+    let (m, t, p) = target_params();
+    params.m_cost() < m || params.t_cost() < t || params.p_cost() < p
 }
 
 pub fn generate_password() -> String {
@@ -65,8 +82,20 @@ pub fn valid_username(username: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
+fn target_params() -> (u32, u32, u32) {
+    #[cfg(debug_assertions)]
+    {
+        (4096, 1, 1)
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        (19456, 2, 1)
+    }
+}
+
 fn argon2() -> Argon2<'static> {
-    let params = Params::new(4096, 1, 1, None).expect("argon2 params");
+    let (m, t, p) = target_params();
+    let params = Params::new(m, t, p, None).expect("argon2 params");
     Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
 }
 

@@ -39,6 +39,10 @@ There is no self-signup.
 
 `MNOTE_PUBLIC_URL` (default `http://127.0.0.1:3000`) is the URL printed in the invite.
 
+Default listen address is `127.0.0.1:3000` (`MNOTE_BIND`). Docker sets `0.0.0.0:3000` inside the container; compose publishes `127.0.0.1:3000`. `make dev` binds `0.0.0.0:3000`. `POST /api/setup` requires a loopback peer **and** a loopback listen address.
+
+Weather lookups to Open-Meteo are off unless `MNOTE_WEATHER=1`. Location stamps stay on the server.
+
 Browser and **mnote Remote** always use that invite + password flow. `POST /api/auth/login` never accepts an empty password. `POST /api/setup` stays loopback + username/password.
 
 ## Electron

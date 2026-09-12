@@ -353,12 +353,15 @@ async function openTableNote(page) {
   await page.waitForTimeout(250);
   if (await existing.count()) await existing.click();
   else await page.getByTestId("picker-create").click();
-  await page.waitForSelector('[data-testid="editor"]');
+  await page.waitForSelector('[data-testid="picker"]', { state: "hidden" });
+  const pane = page.getByTestId("pane-primary");
+  await pane.getByTestId("note-title").filter({ hasText: "Table sample" }).waitFor();
+  await pane.getByTestId("editor").waitFor();
   await page.waitForLoadState("networkidle");
   await editor(page).click();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.insertText(TABLE_SAMPLE);
-  await page.waitForSelector('[data-testid="table-mat"]');
+  await pane.getByTestId("table-mat").first().waitFor();
 }
 
 async function shotTables(page, prefix) {

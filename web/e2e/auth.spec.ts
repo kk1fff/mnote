@@ -30,7 +30,13 @@ test("bad login stays on login with an error", async ({ page }) => {
 });
 
 test("change password keeps the session", async ({ page }) => {
-  await login(page, "alice", ALICE_PASSWORD);
+  const { bin, data } = readEnv();
+  const user = uid("erin")
+    .replace(/[^a-z0-9_-]/gi, "")
+    .slice(0, 32);
+  execFileSync(bin, ["--data", data, "user", "add", user, "--password", TEMP_PASSWORD]);
+  await login(page, user, TEMP_PASSWORD);
+  await setPassword(page, ALICE_PASSWORD);
   await page.waitForURL(/\/n\//);
   await page.getByRole("button", { name: "Account" }).click();
   await page.getByRole("menuitem", { name: "Account" }).click();

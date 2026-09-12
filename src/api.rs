@@ -8,10 +8,11 @@ use crate::AppState;
 use axum::body::Body;
 use axum::extract::connect_info::ConnectInfo;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{DefaultBodyLimit, FromRequestParts, Multipart, Path, Query, State};
-use axum::http::header::{AUTHORIZATION, CACHE_CONTROL, CONTENT_TYPE, COOKIE, SET_COOKIE};
+use axum::extract::{DefaultBodyLimit, FromRequestParts, Multipart, Path, Query, Request, State};
+use axum::http::header::{AUTHORIZATION, CACHE_CONTROL, CONTENT_TYPE, COOKIE, SET_COOKIE, UPGRADE};
 use axum::http::request::Parts;
-use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
@@ -64,9 +65,9 @@ pub fn router(state: AppState) -> Router {
         .route("/backlinks/{id}", get(backlinks))
         .route(
             "/assets",
-            get(list_assets).post(upload_asset).layer(DefaultBodyLimit::max(
-                notes::MAX_ASSET_BYTES + 1024 * 1024,
-            )),
+            get(list_assets)
+                .post(upload_asset)
+                .layer(DefaultBodyLimit::max(notes::MAX_ASSET_BYTES + 1024 * 1024)),
         )
         .route("/assets/{id}", get(get_asset))
         .route("/assets/{id}/meta", get(get_asset_meta))
@@ -75,7 +76,10 @@ pub fn router(state: AppState) -> Router {
 
     let mut app = Router::new()
         .nest("/api", api)
-        .layer(TraceLayer::new_for_http())
+        .layer(TraceLayer::new_for_http().make_span_with(|req: &axum::http::Request<_>| {
+            tracing::info_span!("request", method = %req.method(), path = %req.uri().path())
+        }))
+        .layer(middleware::from_fn(security_headers))
         .with_state(state);
 
     let dist = crate::web_dist();
@@ -90,7 +94,7 @@ pub fn router(state: AppState) -> Router {
 
 fn cors_layer() -> CorsLayer {
     CorsLayer::new()
-        .allow_origin(AllowOrigin::mirror_request())
+        .allow_origin(AllowOrigin::exact(HeaderValue::from_static("mnote://app")))
         .allow_methods([
             Method::GET,
             Method::POST,
@@ -100,6 +104,38 @@ fn cors_layer() -> CorsLayer {
             Method::OPTIONS,
         ])
         .allow_headers([AUTHORIZATION, CONTENT_TYPE, COOKIE])
+}
+
+async fn security_headers(request: Request, next: Next) -> Response {
+    let websocket = request
+        .headers()
+        .get(UPGRADE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.eq_ignore_ascii_case("websocket"));
+    let mut res = next.run(request).await;
+    if websocket || res.status() == StatusCode::SWITCHING_PROTOCOLS {
+        return res;
+    }
+    let headers = res.headers_mut();
+    headers.insert(
+        HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        HeaderName::from_static("x-frame-options"),
+        HeaderValue::from_static("DENY"),
+    );
+    headers.insert(
+        HeaderName::from_static("referrer-policy"),
+        HeaderValue::from_static("no-referrer"),
+    );
+    headers.insert(
+        HeaderName::from_static("content-security-policy"),
+        HeaderValue::from_static(
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss: http: https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        ),
+    );
+    res
 }
 
 #[derive(Clone)]
@@ -118,8 +154,25 @@ impl FromRequestParts<AppState> for Auth {
     }
 }
 
+struct LiveAuth(User);
+
+impl FromRequestParts<AppState> for LiveAuth {
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let token = token_from_headers(&parts.headers)
+            .or_else(|| query_token(parts.uri.query()))
+            .ok_or(AppError::Unauthorized)?;
+        let user = db::user_from_token(state, &token)?;
+        Ok(LiveAuth(user))
+    }
+}
+
 fn session_token(parts: &Parts) -> Option<String> {
-    token_from_headers(&parts.headers).or_else(|| query_token(parts.uri.query()))
+    token_from_headers(&parts.headers)
 }
 
 fn token_from_headers(headers: &HeaderMap) -> Option<String> {
@@ -167,10 +220,19 @@ fn session_cookie(token: &str, clear: bool) -> HeaderValue {
             SESSION_DAYS * 24 * 60 * 60
         )
     };
-    if std::env::var("MNOTE_SECURE_COOKIE").ok().as_deref() == Some("1") {
+    if secure_cookie() {
         cookie.push_str("; Secure");
     }
     HeaderValue::from_str(&cookie).expect("cookie header")
+}
+
+fn secure_cookie() -> bool {
+    if std::env::var("MNOTE_SECURE_COOKIE").ok().as_deref() == Some("1") {
+        return true;
+    }
+    std::env::var("MNOTE_PUBLIC_URL")
+        .ok()
+        .is_some_and(|url| url.starts_with("https:"))
 }
 
 fn require_ready(user: &User) -> Result<(), AppError> {
@@ -212,11 +274,32 @@ fn me_body(user: &User, token: Option<String>) -> MeBody {
     }
 }
 
+fn login_key(peer: Option<SocketAddr>, username: &str) -> String {
+    let ip = peer
+        .map(|addr| addr.ip().to_string())
+        .unwrap_or_else(|| "unknown".into());
+    format!("{}:{}", ip, username.trim().to_ascii_lowercase())
+}
+
 async fn login(
     State(state): State<AppState>,
+    Peer(peer): Peer,
     Json(body): Json<LoginBody>,
 ) -> Result<Response, AppError> {
-    let user = db::authenticate(&state, &body.username, &body.password)?;
+    let key = login_key(peer, &body.username);
+    state.login_limiter.allow(&key)?;
+    let user = match db::authenticate(&state, &body.username, &body.password) {
+        Ok(user) => {
+            state.login_limiter.success(&key);
+            user
+        }
+        Err(err) => {
+            if matches!(err, AppError::Unauthorized) {
+                state.login_limiter.fail(&key);
+            }
+            return Err(err);
+        }
+    };
     let token = db::create_session(&state, user.id)?;
     let mut res = Json(me_body(&user, Some(token.clone()))).into_response();
     res.headers_mut()
@@ -279,7 +362,7 @@ async fn setup(
     Json(body): Json<SetupBody>,
 ) -> Result<Response, AppError> {
     let loopback = peer.map(|addr| addr.ip().is_loopback()).unwrap_or(false);
-    if !loopback {
+    if !state.listen_loopback || !loopback {
         return Err(AppError::Forbidden("setup_not_allowed"));
     }
     if db::user_count(&state)? != 0 {
@@ -333,9 +416,13 @@ struct PasswordBody {
 async fn change_password(
     State(state): State<AppState>,
     Auth(user): Auth,
+    headers: HeaderMap,
     Json(body): Json<PasswordBody>,
 ) -> Result<Json<MeBody>, AppError> {
     db::replace_password(&state, &user.username, body.password.trim())?;
+    if let Some(token) = token_from_headers(&headers) {
+        db::keep_only_session(&state, user.id, &token)?;
+    }
     Ok(Json(me_body(
         &User {
             id: user.id,
@@ -683,12 +770,12 @@ async fn create_parked(
             let parked_id = item.id.clone();
             tokio::spawn(async move {
                 let fetch = state2.clone();
-                let Some(weather) = tokio::task::spawn_blocking(move || {
-                    context::resolve_weather(&fetch, lat, lon)
-                })
-                .await
-                .ok()
-                .flatten() else {
+                let Some(weather) =
+                    tokio::task::spawn_blocking(move || context::resolve_weather(&fetch, lat, lon))
+                        .await
+                        .ok()
+                        .flatten()
+                else {
                     return;
                 };
                 let _ = context::apply_weather_to_parked(&vault2, &parked_id, &weather);
@@ -949,10 +1036,15 @@ async fn upload_asset(
     while let Some(field) = multipart.next_field().await? {
         let name = field.name().unwrap_or_default().to_string();
         if name == "group" {
-            group = field.text().await.map_err(|e| AppError::BadRequest(e.to_string()))?;
+            group = field
+                .text()
+                .await
+                .map_err(|e| AppError::BadRequest(e.to_string()))?;
             continue;
         }
-        if name != "file" || upload.is_some() { continue; }
+        if name != "file" || upload.is_some() {
+            continue;
+        }
         let content_type = field
             .content_type()
             .unwrap_or("application/octet-stream")
@@ -964,9 +1056,15 @@ async fn upload_asset(
             .map_err(|e| AppError::BadRequest(e.to_string()))?;
         upload = Some((content_type, filename, bytes));
     }
-    let Some((content_type, filename, bytes)) = upload else { return Err(AppError::BadRequest("missing file field".into())); };
+    let Some((content_type, filename, bytes)) = upload else {
+        return Err(AppError::BadRequest("missing file field".into()));
+    };
     Ok(Json(notes::save_asset_in_group(
-        &state.vault_dir(&user.username), &content_type, &bytes, &filename, &group,
+        &state.vault_dir(&user.username),
+        &content_type,
+        &bytes,
+        &filename,
+        &group,
     )?))
 }
 
@@ -984,7 +1082,10 @@ async fn get_asset_meta(
     Path(id): Path<String>,
 ) -> Result<Json<notes::Asset>, AppError> {
     require_ready(&user)?;
-    Ok(Json(notes::get_asset_meta(&state.vault_dir(&user.username), &id)?))
+    Ok(Json(notes::get_asset_meta(
+        &state.vault_dir(&user.username),
+        &id,
+    )?))
 }
 
 async fn asset_backlinks(
@@ -993,13 +1094,16 @@ async fn asset_backlinks(
     Path(id): Path<String>,
 ) -> Result<Json<Vec<notes::NoteMeta>>, AppError> {
     require_ready(&user)?;
-    Ok(Json(notes::asset_backlinks(&state.vault_dir(&user.username), &id)?))
+    Ok(Json(notes::asset_backlinks(
+        &state.vault_dir(&user.username),
+        &id,
+    )?))
 }
 
 async fn live_ws(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
-    Auth(user): Auth,
+    LiveAuth(user): LiveAuth,
 ) -> Result<Response, AppError> {
     require_ready(&user)?;
     Ok(ws.on_upgrade(move |socket| live_socket(socket, state, user)))
@@ -1168,6 +1272,10 @@ async fn get_asset(
     let (bytes, mime) = notes::read_asset(&state.vault_dir(&user.username), &id)?;
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_str(&mime).unwrap());
+    headers.insert(
+        HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
     headers.insert(
         CACHE_CONTROL,
         HeaderValue::from_static("private, max-age=31536000"),

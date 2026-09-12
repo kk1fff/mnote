@@ -126,10 +126,18 @@ fn migrate_legacy_assets(vault: &Path) -> Result<(), AppError> {
     for entry in std::fs::read_dir(&root)? {
         let entry = entry?;
         let path = entry.path();
-        if !path.is_file() { continue; }
-        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else { continue; };
-        let mime = mime_guess::from_path(&path).first_or_octet_stream().to_string();
-        if ext_for_content_type(&mime).is_err() { continue; }
+        if !path.is_file() {
+            continue;
+        }
+        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let mime = mime_guess::from_path(&path)
+            .first_or_octet_stream()
+            .to_string();
+        if ext_for_content_type(&mime).is_err() {
+            continue;
+        }
         let bytes = std::fs::read(&path)?;
         let (width, height) = image_dimensions(&bytes).unwrap_or((0, 0));
         let dir = root.join("legacy").join(filename);
@@ -147,7 +155,8 @@ fn migrate_legacy_assets(vault: &Path) -> Result<(), AppError> {
             created_at: chrono::Utc::now().to_rfc3339(),
             group: "legacy".into(),
         };
-        let json = serde_json::to_vec_pretty(&manifest).map_err(|e| AppError::Internal(e.into()))?;
+        let json =
+            serde_json::to_vec_pretty(&manifest).map_err(|e| AppError::Internal(e.into()))?;
         std::fs::write(dir.join("asset.json"), json)?;
     }
     Ok(())
@@ -539,7 +548,12 @@ fn snapshot_note(vault: &Path, note: &Note) -> Result<(), AppError> {
     Ok(())
 }
 
-fn maybe_snapshot(vault: &Path, id: &str, force: bool, session_ended: bool) -> Result<(), AppError> {
+fn maybe_snapshot(
+    vault: &Path,
+    id: &str,
+    force: bool,
+    session_ended: bool,
+) -> Result<(), AppError> {
     let Some(disk) = find_existing(vault, id)? else {
         return Ok(());
     };
@@ -1100,7 +1114,11 @@ pub fn search_in(
     let mut hits = Vec::new();
     for note in list_notes_internal(vault)? {
         let tags = crate::tags::format_tags(&note.tags);
-        let hay = format!("{}\n{}\n{}\n{}", note.title, note.folder, tags, note.content).to_lowercase();
+        let hay = format!(
+            "{}\n{}\n{}\n{}",
+            note.title, note.folder, tags, note.content
+        )
+        .to_lowercase();
         if let Some(idx) = hay.find(&needle) {
             let prefix = note.title.len() + note.folder.len() + tags.len() + 3;
             let offset = idx.saturating_sub(prefix);
@@ -1355,9 +1373,16 @@ fn image_dimensions(bytes: &[u8]) -> Result<(u32, u32), AppError> {
 }
 
 fn safe_filename(name: &str, ext: &str) -> String {
-    let name = Path::new(name).file_name().and_then(|s| s.to_str()).unwrap_or("");
+    let name = Path::new(name)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
     let stem = name.rsplit_once('.').map(|(stem, _)| stem).unwrap_or(name);
-    let stem: String = stem.chars().filter(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | ' ')).take(100).collect();
+    let stem: String = stem
+        .chars()
+        .filter(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | ' '))
+        .take(100)
+        .collect();
     let stem = stem.trim();
     format!("{}.{}", if stem.is_empty() { "image" } else { stem }, ext)
 }
@@ -1514,14 +1539,17 @@ pub fn save_asset_in_group(
     if bytes.len() > MAX_ASSET_BYTES {
         return Err(AppError::BadRequest("file too large".into()));
     }
-    let mime = sniff_image_mime(bytes).ok_or_else(|| AppError::BadRequest("invalid image data".into()))?;
+    let mime =
+        sniff_image_mime(bytes).ok_or_else(|| AppError::BadRequest("invalid image data".into()))?;
     if ext_for_content_type(content_type).is_err() && ext_for_content_type(mime).is_err() {
         return Err(AppError::BadRequest("unsupported image type".into()));
     }
     let ext = ext_for_content_type(mime)?;
     let (width, height) = image_dimensions(bytes)?;
     if width == 0 || height == 0 || u64::from(width) * u64::from(height) > MAX_ASSET_PIXELS {
-        return Err(AppError::BadRequest("image dimensions are too large".into()));
+        return Err(AppError::BadRequest(
+            "image dimensions are too large".into(),
+        ));
     }
     let group = normalize_asset_group(group)?;
     let group = if group.is_empty() {
@@ -1566,13 +1594,24 @@ fn valid_asset_id(id: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+fn confined_file(vault: &Path, path: &Path) -> Result<PathBuf, AppError> {
+    let vault = vault.canonicalize()?;
+    if !path.exists() {
+        return Err(AppError::NotFound);
+    }
+    let path = path.canonicalize()?;
+    if path.is_file() && path.starts_with(&vault) {
+        Ok(path)
+    } else {
+        Err(AppError::NotFound)
+    }
+}
+
 pub fn read_asset(vault: &Path, id: &str) -> Result<(Vec<u8>, String), AppError> {
     valid_asset_id(id)?;
     if let Some(entry) = asset_map(vault)?.assets.get(id).cloned() {
-        let path = vault.join(&entry.path);
-        if path.is_file() {
-            return Ok((std::fs::read(path)?, entry.mime));
-        }
+        let path = confined_file(vault, &vault.join(&entry.path))?;
+        return Ok((std::fs::read(path)?, entry.mime));
     }
     let root = vault.join("assets");
     for entry in WalkDir::new(&root).into_iter().filter_map(Result::ok) {
@@ -1585,16 +1624,14 @@ pub fn read_asset(vault: &Path, id: &str) -> Result<(Vec<u8>, String), AppError>
                 .unwrap_or(false)
         {
             let manifest = read_manifest(entry.path())?;
-            let path = entry.path().parent().unwrap().join(&manifest.filename);
-            if path.is_file() {
-                return Ok((std::fs::read(path)?, manifest.mime));
-            }
+            let path = confined_file(
+                vault,
+                &entry.path().parent().unwrap().join(&manifest.filename),
+            )?;
+            return Ok((std::fs::read(path)?, manifest.mime));
         }
     }
-    let path = vault.join("assets").join(id);
-    if !path.is_file() {
-        return Err(AppError::NotFound);
-    }
+    let path = confined_file(vault, &vault.join("assets").join(id))?;
     let bytes = std::fs::read(&path)?;
     let mime = mime_guess::from_path(&path)
         .first_or_octet_stream()
@@ -1874,10 +1911,10 @@ mod tests {
         assert!(ext_for_content_type("image/png").is_ok());
         assert!(ext_for_content_type("text/plain").is_err());
         let png = [
-            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8,
-            6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 218, 99, 252, 207, 192,
-            80, 15, 0, 4, 133, 1, 128, 132, 169, 140, 33, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96,
-            130,
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
+            8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 218, 99, 252, 207,
+            192, 80, 15, 0, 4, 133, 1, 128, 132, 169, 140, 33, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66,
+            96, 130,
         ];
         let asset = save_asset(vault, "image/png", &png).unwrap();
         assert!(!asset.id.contains('.'));
@@ -1888,6 +1925,15 @@ mod tests {
         assert_eq!(bytes, png);
         assert!(mime.contains("png"));
         assert!(read_asset(vault, "../x").is_err());
+        let leak = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(leak.path(), b"leak").unwrap();
+        let map_path = vault.join("assets").join("map.json");
+        let mut map: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&map_path).unwrap()).unwrap();
+        map["assets"][&asset.id]["path"] =
+            serde_json::Value::String(leak.path().to_string_lossy().into_owned());
+        std::fs::write(&map_path, map.to_string()).unwrap();
+        assert!(read_asset(vault, &asset.id).is_err());
         assert!(save_asset(vault, "image/png", &[]).is_err());
         assert!(save_asset(vault, "image/png", &vec![0; MAX_ASSET_BYTES + 1]).is_err());
     }
@@ -2018,7 +2064,12 @@ mod tests {
         let here = search_in(vault, "> #meeting", Some(&note.id)).unwrap();
         assert_eq!(here.len(), 3);
         assert!(search_in(vault, "> #meeting", None).unwrap().is_empty());
-        assert_eq!(search_in(vault, "> #meeting", Some(&other.id)).unwrap().len(), 1);
+        assert_eq!(
+            search_in(vault, "> #meeting", Some(&other.id))
+                .unwrap()
+                .len(),
+            1
+        );
 
         let names = tags_in_query(vault, "#work >", None).unwrap();
         assert!(names.iter().any(|tag| tag.name == "meeting"));

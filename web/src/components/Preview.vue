@@ -42,21 +42,33 @@ function onClick(event: MouseEvent) {
     lightbox.value = { src: target.currentSrc || target.src, alt: target.alt };
     return;
   }
-  if (!(target instanceof HTMLAnchorElement)) return;
-  const wiki = target.getAttribute("data-wiki");
+  const link = target instanceof Element ? target.closest("a") : null;
+  if (!(link instanceof HTMLAnchorElement)) return;
+  const wiki = link.getAttribute("data-wiki");
   if (wiki) {
     event.preventDefault();
     void openWiki(wiki);
     return;
   }
-  const tag = target.getAttribute("data-tag");
+  const tag = link.getAttribute("data-tag");
   if (tag) {
     event.preventDefault();
     openTag(tag);
     return;
   }
-  const href = target.getAttribute("href");
-  if (!href?.startsWith("/n/")) return;
+  const href = link.getAttribute("href");
+  if (!href) return;
+  if (/^https?:/i.test(href) || href.startsWith("//")) {
+    event.preventDefault();
+    const url = href.startsWith("//") ? `${location.protocol}${href}` : href;
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  if (href.startsWith("javascript:")) {
+    event.preventDefault();
+    return;
+  }
+  if (!href.startsWith("/n/")) return;
   event.preventDefault();
   const id = noteIdFromRoute(href.replace(/^\/n\//, "").split("?")[0]);
   if (id) void router.push(openInWorkspace(id));

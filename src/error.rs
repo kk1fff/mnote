@@ -15,6 +15,8 @@ pub enum AppError {
     BadRequest(String),
     #[error("{0}")]
     Conflict(String),
+    #[error("too many requests")]
+    RateLimited,
     #[error("internal error")]
     Internal(#[from] anyhow::Error),
 }
@@ -32,6 +34,7 @@ impl AppError {
             AppError::NotFound => StatusCode::NOT_FOUND,
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
             AppError::Conflict(_) => StatusCode::CONFLICT,
+            AppError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
             AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -43,6 +46,7 @@ impl AppError {
             AppError::NotFound => "not_found".into(),
             AppError::BadRequest(msg) => msg.clone(),
             AppError::Conflict(msg) => msg.clone(),
+            AppError::RateLimited => "too_many_requests".into(),
             AppError::Internal(_) => "internal_error".into(),
         }
     }
@@ -98,6 +102,8 @@ mod tests {
         assert_eq!(AppError::NotFound.message(), "not_found");
         assert_eq!(AppError::BadRequest("x".into()).message(), "x");
         assert_eq!(AppError::Conflict("y".into()).message(), "y");
+        assert_eq!(AppError::RateLimited.code(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(AppError::RateLimited.message(), "too_many_requests");
         assert_eq!(
             AppError::Internal(anyhow::anyhow!("z")).message(),
             "internal_error"
