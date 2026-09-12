@@ -9,7 +9,7 @@ import {
 import {
   type TableBlock,
   separatorPipes,
-  tableOverlapsChange,
+  tableOverlapsDelim,
   tableParser,
 } from "./tables";
 
@@ -37,7 +37,7 @@ export function updateNeedsTableParse(update: ViewUpdate, tables: TableBlock[]):
     needed = tableParser.scanNeeded({
       deleted: update.startState.doc.sliceString(fromA, toA),
       inserted: inserted.toString(),
-      overlapsTable: tableOverlapsChange(tables, startLine, endLine),
+      overlapsDelim: tableOverlapsDelim(tables, startLine, endLine),
     });
   });
   return needed;
@@ -70,6 +70,18 @@ function lineElement(view: EditorView, pos: number): HTMLElement | null {
   } catch {
     return null;
   }
+}
+
+function sameTables(left: TableBlock[], right: TableBlock[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (table, i) =>
+        table.fromLine === right[i]?.fromLine &&
+        table.toLine === right[i]?.toLine &&
+        table.delimLine === right[i]?.delimLine,
+    )
+  );
 }
 
 function mapLine(update: ViewUpdate, line: number): number {
@@ -138,28 +150,34 @@ function layoutOverlay(view: EditorView, overlay: TableOverlay, table: TableBloc
     const el = lineElement(view, line.from);
     if (!el) continue;
     el.dataset.tableLine = String(number);
-    el.scrollLeft = overlay.scrollLeft;
+    if (el.scrollLeft !== overlay.scrollLeft) el.scrollLeft = overlay.scrollLeft;
     maxScroll = Math.max(maxScroll, el.scrollWidth);
+    el.onscroll = () => {
+      if (el.scrollLeft === overlay.scrollLeft) return;
+      overlay.scrollLeft = el.scrollLeft;
+      syncLineScroll(overlay, overlay.chrome);
+      if (overlay.hscroll.scrollLeft !== overlay.scrollLeft) overlay.hscroll.scrollLeft = overlay.scrollLeft;
+    };
   }
   overlay.spacer.style.width = `${maxScroll}px`;
   if (overlay.hscroll.scrollLeft !== overlay.scrollLeft) overlay.hscroll.scrollLeft = overlay.scrollLeft;
   const first = view.state.doc.line(table.fromLine);
   const last = view.state.doc.line(table.toLine);
-  let start: { top: number } | null = null;
-  let end: { bottom: number } | null = null;
+  let start: { top: number; bottom: number } | null = null;
+  let end: { top: number; bottom: number } | null = null;
   try {
-    start = view.coordsAtPos(first.from);
-    const endAt = last.to > last.from ? last.to - 1 : last.to;
-    end = view.coordsAtPos(endAt);
+    start = view.lineBlockAt(first.from);
+    end = view.lineBlockAt(last.from);
   } catch {
     return;
   }
-  if (!start || !end) return;
   const editor = view.dom.getBoundingClientRect();
   const content = view.contentDOM.getBoundingClientRect();
-  const top = `${start.top - editor.top}px`;
+  const widthPx = view.scrollDOM.clientWidth || content.width;
+  overlay.hscroll.style.display = maxScroll > widthPx + 1 ? "" : "none";
+  const top = `${start.top + view.documentTop - editor.top}px`;
   const left = `${content.left - editor.left}px`;
-  const width = `${Math.max(0, content.width)}px`;
+  const width = `${Math.max(0, widthPx)}px`;
   const height = `${Math.max(0, end.bottom - start.top)}px`;
   for (const el of [overlay.mat, overlay.chrome]) {
     el.style.top = top;
@@ -192,17 +210,21 @@ export class TableView {
   }
 
   update(update: ViewUpdate) {
+    let relayout = false;
     if (update.docChanged) {
       if (updateNeedsTableParse(update, this.tables)) {
-        this.tables = parseFromState(update.state);
+        const next = parseFromState(update.state);
         this.parseCount += 1;
+        const shapeChanged = !sameTables(this.tables, next);
+        this.tables = next;
         this.decorations = tableDecorations(update.state, this.tables);
-        this.syncOverlays(update.view, update);
+        if (shapeChanged) this.syncOverlays(update.view, update);
+        relayout = true;
       } else {
         this.decorations = this.decorations.map(update.changes);
       }
     }
-    if (update.docChanged || update.geometryChanged || update.viewportChanged || update.selectionSet) {
+    if (relayout || update.geometryChanged || update.viewportChanged) {
       this.measure(update.view);
     }
   }

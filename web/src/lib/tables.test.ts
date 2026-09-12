@@ -5,6 +5,7 @@ import {
   rowCells,
   separatorPipes,
   tableOverlapsChange,
+  tableOverlapsDelim,
   tableParser,
   tableScanNeeded,
 } from "./tables";
@@ -16,19 +17,20 @@ const SAMPLE = `| Name | Qty | Notes |
 
 describe("tableScanNeeded", () => {
   it("skips prose that cannot affect tables", () => {
-    expect(tableScanNeeded({ deleted: "", inserted: "x", overlapsTable: false })).toBe(false);
-    expect(tableScanNeeded({ deleted: "a", inserted: "b", overlapsTable: false })).toBe(false);
+    expect(tableScanNeeded({ deleted: "", inserted: "x", overlapsDelim: false })).toBe(false);
+    expect(tableScanNeeded({ deleted: "a", inserted: "b", overlapsDelim: false })).toBe(false);
   });
 
   it("rescans when a pipe or newline is inserted or deleted", () => {
-    expect(tableScanNeeded({ deleted: "", inserted: "|", overlapsTable: false })).toBe(true);
-    expect(tableScanNeeded({ deleted: "|", inserted: "", overlapsTable: false })).toBe(true);
-    expect(tableScanNeeded({ deleted: "", inserted: "\n", overlapsTable: false })).toBe(true);
-    expect(tableScanNeeded({ deleted: "\n", inserted: "", overlapsTable: false })).toBe(true);
+    expect(tableScanNeeded({ deleted: "", inserted: "|", overlapsDelim: false })).toBe(true);
+    expect(tableScanNeeded({ deleted: "|", inserted: "", overlapsDelim: false })).toBe(true);
+    expect(tableScanNeeded({ deleted: "", inserted: "\n", overlapsDelim: false })).toBe(true);
+    expect(tableScanNeeded({ deleted: "\n", inserted: "", overlapsDelim: false })).toBe(true);
   });
 
-  it("rescans edits that overlap an existing table", () => {
-    expect(tableScanNeeded({ deleted: "s", inserted: "", overlapsTable: true })).toBe(true);
+  it("skips cell edits and only rescans delimiter-line edits without a pipe", () => {
+    expect(tableScanNeeded({ deleted: "s", inserted: "", overlapsDelim: false })).toBe(false);
+    expect(tableScanNeeded({ deleted: "", inserted: "x", overlapsDelim: true })).toBe(true);
   });
 });
 
@@ -110,6 +112,8 @@ describe("tableOverlapsChange", () => {
     const tables = parseTablesFromSource(SAMPLE);
     expect(tableOverlapsChange(tables, 3, 3)).toBe(true);
     expect(tableOverlapsChange(tables, 5, 5)).toBe(false);
+    expect(tableOverlapsDelim(tables, 2, 2)).toBe(true);
+    expect(tableOverlapsDelim(tables, 3, 3)).toBe(false);
   });
 });
 

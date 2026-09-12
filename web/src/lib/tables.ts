@@ -11,10 +11,10 @@ const DELIM_CELL_RE = /^\s*:?-+:?\s*$/;
 export function tableScanNeeded(input: {
   deleted: string;
   inserted: string;
-  overlapsTable: boolean;
+  overlapsDelim: boolean;
 }): boolean {
-  if (input.overlapsTable) return true;
-  return /[|\n\r]/.test(input.deleted) || /[|\n\r]/.test(input.inserted);
+  if (/[|\n\r]/.test(input.deleted) || /[|\n\r]/.test(input.inserted)) return true;
+  return input.overlapsDelim;
 }
 
 export function tableOverlapsChange(
@@ -23,6 +23,14 @@ export function tableOverlapsChange(
   endLine: number,
 ): boolean {
   return tables.some((table) => !(endLine < table.fromLine || startLine > table.toLine));
+}
+
+export function tableOverlapsDelim(
+  tables: TableBlock[],
+  startLine: number,
+  endLine: number,
+): boolean {
+  return tables.some((table) => startLine <= table.delimLine && endLine >= table.delimLine);
 }
 
 export function separatorPipes(text: string): number[] {

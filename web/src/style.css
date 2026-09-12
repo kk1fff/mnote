@@ -2584,6 +2584,7 @@ button:disabled { cursor: default; opacity: 0.55; }
   user-select: none;
 }
 .cm-editor { position: relative; }
+.cm-editor .cm-content { min-width: 0; }
 .cm-table-back, .cm-table-front {
   position: absolute;
   inset: 0;
@@ -2629,17 +2630,22 @@ button:disabled { cursor: default; opacity: 0.55; }
   pointer-events: auto;
 }
 .cm-table-hscroll-inner { height: 1px; }
-.cm-editor .cm-line.cm-table {
-  width: 100%;
+.cm-editor .cm-content .cm-line.cm-table {
+  display: block;
+  width: 0;
+  min-width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  padding-left: 0.55rem;
-  padding-right: 0.55rem;
-  white-space: nowrap;
-  overflow-x: hidden;
+  padding: 0.25rem 0.85rem;
+  white-space: pre !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.cm-editor .cm-line.cm-table-first { padding-top: 1.85rem; }
-.cm-editor .cm-line.cm-table-last { padding-bottom: 0.55rem; }
+.cm-editor .cm-content .cm-line.cm-table::-webkit-scrollbar { height: 0; }
+.cm-editor .cm-content .cm-line.cm-table-first { padding-top: 2.2rem; }
+.cm-editor .cm-content .cm-line.cm-table-last { padding-bottom: 0.85rem; }
 .cm-editor .cm-line.cm-table-header { font-weight: 600; }
 .cm-editor .cm-line.cm-table-delim { color: var(--text-muted); opacity: 0.5; }
 .cm-md-heading { font-weight: 720; letter-spacing: -0.025em; line-height: 1.25; }

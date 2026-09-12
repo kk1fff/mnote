@@ -42,7 +42,7 @@ describe("table view", () => {
     view.destroy();
   });
 
-  it("parses on first paint, not on prose keystrokes, and again when a pipe or newline can change tables", () => {
+  it("parses on first paint, not on prose or cell repeats, and again when a pipe or newline can change tables", () => {
     const parse = vi.spyOn(tableParser, "parse");
     const view = makeView(`hello\n\n${TABLE}`);
     const plugin = tablePluginState(view);
@@ -51,16 +51,16 @@ describe("table view", () => {
 
     insert(view, 0, 0, "x");
     expect(plugin?.parseCount).toBe(1);
-    expect(parse).toHaveBeenCalledTimes(1);
 
-    const pipeAt = view.state.doc.toString().indexOf("| Name");
-    insert(view, pipeAt, pipeAt, " ");
-    expect(plugin?.parseCount).toBe(2);
+    const apples = view.state.doc.toString().indexOf("Apples") + 6;
+    for (let i = 0; i < 12; i += 1) insert(view, apples + i, apples + i, "a");
+    expect(plugin?.parseCount).toBe(1);
+    expect(parse).toHaveBeenCalledTimes(1);
 
     const after = view.state.doc.toString().indexOf("| Bread");
     const lineEnd = view.state.doc.lineAt(after).to;
     insert(view, lineEnd, lineEnd, "\n| Pears | 1 | ");
-    expect(plugin?.parseCount).toBe(3);
+    expect(plugin?.parseCount).toBe(2);
     parse.mockRestore();
     view.destroy();
   });
