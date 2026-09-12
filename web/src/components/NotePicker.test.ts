@@ -2,7 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
-import { applyOpen, emptyWorkspace, resetWorkspace, workspace } from "../workspace";
+import { applyOpen, emptyWorkspace, pendingAdd, resetWorkspace, workspace } from "../workspace";
 import NotePicker from "./NotePicker.vue";
 
 vi.mock("../api", async () => {
@@ -222,13 +222,26 @@ describe("NotePicker", () => {
       { id: "n2", title: "Next", folder: "", modified_at: "" },
     ]);
     const { wrapper } = await openPicker("add");
+    expect(pendingAdd.value).toBe("primary");
     await wrapper.get("input").setValue("Next");
     await vi.advanceTimersByTimeAsync(120);
     await flushPromises();
     await wrapper.get(".picker-results button").trigger("click");
     await flushPromises();
+    expect(pendingAdd.value).toBeNull();
     expect(workspace.value.primary.tabs.map((tab) => tab.id)).toEqual(["keep", "n2"]);
     expect(workspace.value.primary.active).toBe("n2");
+  });
+
+  it("clears a pending add when the picker closes", async () => {
+    applyOpen("keep", "Keep");
+    const { wrapper } = await openPicker("add");
+    expect(pendingAdd.value).toBe("primary");
+    await wrapper.get('[aria-label="Close picker"]').trigger("click");
+    await flushPromises();
+    expect(pendingAdd.value).toBeNull();
+    expect(workspace.value.primary.tabs.map((tab) => tab.id)).toEqual(["keep"]);
+    expect(workspace.value.primary.active).toBe("keep");
   });
 
   it("opens tags from Links and lists lines for an exact tag", async () => {

@@ -34,6 +34,7 @@ export function emptyWorkspace(): Workspace {
 const memory = new Map<string, string>();
 
 export const workspace = ref<Workspace>(loadWorkspace());
+export const pendingAdd = ref<PaneId | null>(null);
 
 function fallbackTitle(id: string): string {
   const parts = id.split("/").filter(Boolean);
@@ -111,6 +112,7 @@ export function persistWorkspace() {
 }
 
 export function resetWorkspace(next = emptyWorkspace()) {
+  pendingAdd.value = null;
   workspace.value = next;
   writeStore(next.primary.tabs.length || next.beside ? JSON.stringify(next) : null);
 }
@@ -174,6 +176,7 @@ export function applyOpen(
   takeFocus = true,
   mode: OpenMode = "replace",
 ) {
+  pendingAdd.value = null;
   if (!id) return;
   const state = workspace.value;
   const targetId = paneId === "beside" && !state.beside ? "primary" : paneId;
@@ -327,6 +330,16 @@ let showPickerFn: ((mode?: OpenMode) => void) | null = null;
 
 export function registerPicker(fn: ((mode?: OpenMode) => void) | null) {
   showPickerFn = fn;
+}
+
+export function beginPendingAdd(paneId: PaneId = workspace.value.focused) {
+  const target = paneId === "beside" && !workspace.value.beside ? "primary" : paneId;
+  focusPane(target);
+  pendingAdd.value = target;
+}
+
+export function cancelPendingAdd() {
+  pendingAdd.value = null;
 }
 
 export function showPicker(mode: OpenMode = "replace") {

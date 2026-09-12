@@ -77,7 +77,7 @@ For every new user-facing feature, add or update a corresponding visual-review s
    The first visual login sets its password from `password1` to `visualpass1`.
 2. Read every PNG in `web/artifacts/visual/` and `desktop/artifacts/visual/` with the image Read tool. Fix issues, then rerun the container suite.
 
-Required shots: login light/dark, note desktop light/dark, title editing, history, park capture, parked list/detail, mobile note, mobile More menu, mobile nav, picker light/dark, picker recent light/dark, picker favorites light, picker mobile, picker recent mobile, images page light/dark, images page mobile, tags row light/dark/mobile, tags overflow, tags long folder, sidebar calendar folded light/dark/mobile, sidebar calendar mid-fold light/dark, mode toggle edit/preview/mid-drag light/dark, table edit light/dark/mobile.
+Required shots: login light/dark, note desktop light/dark, title editing, history, park capture, parked list/detail, mobile note, mobile More menu, mobile nav, picker light/dark, picker recent light/dark, picker favorites light, picker mobile, picker recent mobile, images page light/dark, images page mobile, tags row light/dark/mobile, tags overflow, tags long folder, sidebar calendar folded light/dark/mobile, sidebar calendar mid-fold light/dark, mode toggle edit/preview/mid-drag light/dark, table edit light/dark/mobile, add-tab overlay light/dark, add-tab inserting light/dark, add-tab selected light/dark, add-tab created light/dark.
 
 Required Electron shots: connect light/dark, connect error light/dark, setup light/dark, note light/dark, folder popover light/dark, note mobile light/dark.
 
@@ -89,4 +89,5 @@ Check all of the following:
 - The picker overlay stays put when Recent or Favorites opens. Input chrome must not jump; the page underneath must not move.
 - Light and dark both keep editor, sidebar, and dialog text readable against their backgrounds.
 - Empty or short content still looks designed: no raw unstyled boxes, clipped buttons, or overlapping chrome.
+- Add-tab: dummy chip is the selected untitled tab, empty page under the picker, previous note not showing. After pick or create, dummy is gone, the new tab is active, and the page is that note.
 - Folder-row tags are chips immediately after the folder. Hide the tags node when there are none, and while the title/folder are being edited (folder input takes the full row). A long folder ellipsizes (full path on hover) and is capped at ~50% width when chips are visible; extra chips scroll sideways with an edge fade. Tags must not overlap Preview or More. Header height must not change.
