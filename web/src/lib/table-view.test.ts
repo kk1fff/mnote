@@ -1,7 +1,7 @@
 import { EditorState, EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { describe, expect, it, vi } from "vitest";
-import { tableExtension, tablePluginState } from "./table-view";
+import { tableExtension, tableLinePads, tablePluginState } from "./table-view";
 import { tableParser } from "./tables";
 
 const TABLE = `| Name | Qty | Notes |
@@ -24,6 +24,13 @@ function makeView(doc: string) {
 function insert(view: EditorView, from: number, to: number, text: string) {
   view.dispatch({ changes: { from, to, insert: text }, selection: EditorSelection.cursor(from + text.length) });
 }
+
+describe("tableLinePads", () => {
+  it("pads shorter rows to the longest width", () => {
+    expect(tableLinePads([120, 40, 80])).toEqual([0, 80, 40]);
+    expect(tableLinePads([10, 10])).toEqual([0, 0]);
+  });
+});
 
 describe("table view", () => {
   it("does not shade pipes without a delimiter", () => {
@@ -106,6 +113,18 @@ describe("table view", () => {
     insert(view, pearsLine.from - 1, pearsLine.to, "");
     expect(view.dom.querySelectorAll(".cm-table")).toHaveLength(4);
     expect(mat.dataset.lines).toBe("4");
+    view.destroy();
+  });
+
+  it("scrolls every table row by the same offset", () => {
+    const view = makeView(TABLE);
+    const plugin = tablePluginState(view);
+    expect(plugin).toBeTruthy();
+    plugin!.overlays[0]!.scrollLeft = 24;
+    plugin!.layoutAll(view);
+    const offsets = [...view.dom.querySelectorAll(".cm-line.cm-table")].map((line) => (line as HTMLElement).scrollLeft);
+    expect(offsets.length).toBe(4);
+    expect(new Set(offsets).size).toBe(1);
     view.destroy();
   });
 

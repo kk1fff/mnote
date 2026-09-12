@@ -1,10 +1,11 @@
-import { type EditorState } from "@codemirror/state";
+import { type EditorState, StateEffect, StateField } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
   EditorView,
   ViewPlugin,
   type ViewUpdate,
+  WidgetType,
 } from "@codemirror/view";
 import {
   type TableBlock,
@@ -12,6 +13,51 @@ import {
   tableOverlapsDelim,
   tableParser,
 } from "./tables";
+
+class TablePadWidget extends WidgetType {
+  constructor(readonly px: number) {
+    super();
+  }
+  eq(other: TablePadWidget) {
+    return this.px === other.px;
+  }
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-table-pad";
+    span.style.display = "inline-block";
+    span.style.width = `${this.px}px`;
+    span.style.height = "1px";
+    span.setAttribute("aria-hidden", "true");
+    return span;
+  }
+}
+
+const setTablePads = StateEffect.define<{ at: number; px: number }[]>();
+
+const tablePadField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setTablePads)) {
+        return Decoration.set(
+          effect.value
+            .filter((pad) => pad.px > 0)
+            .map((pad) =>
+              Decoration.widget({ widget: new TablePadWidget(pad.px), side: 1 }).range(pad.at),
+            ),
+          true,
+        );
+      }
+    }
+    return value.map(tr.changes);
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+export function tableLinePads(widths: number[]): number[] {
+  const max = Math.max(0, ...widths);
+  return widths.map((width) => Math.max(0, max - width));
+}
 
 type TableOverlay = {
   mat: HTMLElement;
@@ -138,6 +184,31 @@ function syncLineScroll(overlay: TableOverlay, front: HTMLElement) {
   });
 }
 
+function naturalLineWidth(el: HTMLElement): number {
+  const pad = el.querySelector(".cm-table-pad");
+  const padWidth = pad instanceof HTMLElement ? pad.offsetWidth : 0;
+  return Math.max(0, el.scrollWidth - padWidth);
+}
+
+function collectPads(view: EditorView, tables: TableBlock[]): { at: number; px: number }[] {
+  const pads: { at: number; px: number }[] = [];
+  for (const table of tables) {
+    const lines: { at: number; width: number }[] = [];
+    for (let number = table.fromLine; number <= table.toLine; number += 1) {
+      const line = view.state.doc.line(number);
+      const el = lineElement(view, line.from);
+      lines.push({ at: line.to, width: el ? naturalLineWidth(el) : 0 });
+    }
+    const sizes = tableLinePads(lines.map((entry) => entry.width));
+    lines.forEach((entry, i) => pads.push({ at: entry.at, px: sizes[i] ?? 0 }));
+  }
+  return pads;
+}
+
+function padsEqual(left: { at: number; px: number }[], right: { at: number; px: number }[]): boolean {
+  return left.length === right.length && left.every((pad, i) => pad.at === right[i]?.at && pad.px === right[i]?.px);
+}
+
 function layoutOverlay(view: EditorView, overlay: TableOverlay, table: TableBlock) {
   overlay.fromLine = table.fromLine;
   overlay.toLine = table.toLine;
@@ -150,7 +221,6 @@ function layoutOverlay(view: EditorView, overlay: TableOverlay, table: TableBloc
     const el = lineElement(view, line.from);
     if (!el) continue;
     el.dataset.tableLine = String(number);
-    if (el.scrollLeft !== overlay.scrollLeft) el.scrollLeft = overlay.scrollLeft;
     maxScroll = Math.max(maxScroll, el.scrollWidth);
     el.onscroll = () => {
       if (el.scrollLeft === overlay.scrollLeft) return;
@@ -159,6 +229,7 @@ function layoutOverlay(view: EditorView, overlay: TableOverlay, table: TableBloc
       if (overlay.hscroll.scrollLeft !== overlay.scrollLeft) overlay.hscroll.scrollLeft = overlay.scrollLeft;
     };
   }
+  syncLineScroll(overlay, overlay.chrome);
   overlay.spacer.style.width = `${maxScroll}px`;
   if (overlay.hscroll.scrollLeft !== overlay.scrollLeft) overlay.hscroll.scrollLeft = overlay.scrollLeft;
   const first = view.state.doc.line(table.fromLine);
@@ -194,6 +265,8 @@ export class TableView {
   back: HTMLElement;
   front: HTMLElement;
   parseCount = 0;
+  pads: { at: number; px: number }[] = [];
+  applyingPads = false;
 
   constructor(view: EditorView) {
     this.back = document.createElement("div");
@@ -210,6 +283,15 @@ export class TableView {
   }
 
   update(update: ViewUpdate) {
+    if (this.applyingPads) {
+      this.applyingPads = false;
+      update.view.requestMeasure({
+        key: "table-scroll",
+        read: () => null,
+        write: (_value, vw) => this.layoutAll(vw),
+      });
+      return;
+    }
     let relayout = false;
     if (update.docChanged) {
       if (updateNeedsTableParse(update, this.tables)) {
@@ -267,11 +349,17 @@ export class TableView {
   measure(view: EditorView) {
     view.requestMeasure({
       key: this,
-      read: (vw) => {
+      read: (vw) => collectPads(vw, this.tables),
+      write: (pads, vw) => {
         this.layoutAll(vw);
-        return null;
+        if (padsEqual(this.pads, pads)) return;
+        this.pads = pads;
+        queueMicrotask(() => {
+          if (!vw.dom.isConnected) return;
+          this.applyingPads = true;
+          vw.dispatch({ effects: setTablePads.of(pads) });
+        });
       },
-      write() {},
     });
   }
 
@@ -304,7 +392,7 @@ export const tablePlugin = ViewPlugin.fromClass(TableView, {
 });
 
 export function tableExtension() {
-  return tablePlugin;
+  return [tablePadField, tablePlugin];
 }
 
 export function tablePluginState(view: EditorView): TableView | null {
