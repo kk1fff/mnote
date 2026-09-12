@@ -1,11 +1,22 @@
 import MarkdownIt from "markdown-it";
 import { escapeHtml, linkifyWiki } from "./wiki";
 import { normalizeTag } from "./tags";
+import { parseTablesFromSource } from "./tables";
 
 const md = new MarkdownIt({
   html: false,
   linkify: true,
   breaks: true,
+}).enable("table");
+
+// Allow the one inline HTML element needed for line breaks in pipe-table cells.
+// Other HTML remains escaped by MarkdownIt.
+md.inline.ruler.before("html_inline", "cell_break", (state, silent) => {
+  const match = /^<br\s*\/?\s*>/i.exec(state.src.slice(state.pos));
+  if (!match) return false;
+  if (!silent) state.push("hardbreak", "br", 0);
+  state.pos += match[0].length;
+  return true;
 });
 
 md.core.ruler.after("inline", "task_lists", (state) => {
@@ -50,8 +61,35 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
   return self.renderToken(tokens, idx, options);
 };
 
+const tableOpen = md.renderer.rules.table_open;
+md.renderer.rules.table_open = (tokens, idx, options, env, self) =>
+  `<div class="preview-table">${tableOpen ? tableOpen(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options)}`;
+const tableClose = md.renderer.rules.table_close;
+md.renderer.rules.table_close = (tokens, idx, options, env, self) =>
+  `${tableClose ? tableClose(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options)}</div>`;
+
 export function renderMarkdown(source: string): string {
-  return linkifyTags(linkifyWiki(md.render(source)));
+  // The source table parser treats wiki aliases as a single cell. GFM needs
+  // their pipes escaped during rendering as well; never rewrite the note.
+  const lines = source.split("\n");
+  const tables = parseTablesFromSource(source);
+  for (const table of tables) {
+    for (let line = table.fromLine; line <= table.toLine; line++) {
+      lines[line - 1] = lines[line - 1].replace(/\[\[[^\]\n]+\]\]/g, wiki => wiki.replace(/(?<!\\)\|/g, "\\|"));
+    }
+  }
+  // markdown-it only starts a table at a block boundary. Source mode still
+  // shades a table that follows a paragraph, so insert a blank line in the
+  // render copy only.
+  for (let i = tables.length - 1; i >= 0; i -= 1) {
+    const at = tables[i].fromLine - 1;
+    if (at > 0 && (lines[at - 1] ?? "").trim() !== "") lines.splice(at, 0, "");
+  }
+  return linkifyTags(linkifyWiki(md.render(lines.join("\n"))));
+}
+
+export function renderTableCell(source: string): string {
+  return linkifyTags(linkifyWiki(md.renderInline(source)));
 }
 
 const TAG_LINK_RE = /(^|[^A-Za-z0-9-])#([A-Za-z][A-Za-z0-9-]{0,31})\b/g;

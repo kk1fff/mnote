@@ -28,6 +28,13 @@ describe("Preview", () => {
     expect(wrapper.get("a").attributes("data-wiki")).toBe("ideas/one");
   });
 
+  it("renders a pipe table", () => {
+    const wrapper = mount(Preview, { props: { source: "| Name | Qty |\n| --- | ---: |\n| Apples | 12 |" } });
+    expect(wrapper.get("table th").text()).toContain("Name");
+    expect(wrapper.get("td").text()).toBe("Apples");
+    expect(wrapper.get("th:nth-child(2)").attributes("style")).toContain("text-align:right");
+  });
+
   it("opens the picker from a hashtag", async () => {
     const wrapper = mount(Preview, { props: { source: "see #work" } });
     await wrapper.get("a[data-tag]").trigger("click");

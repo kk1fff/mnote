@@ -266,6 +266,7 @@ async function openTodoNote(page) {
   if (await existing.count()) await existing.click();
   else await page.getByTestId("picker-create").click();
   await page.waitForSelector('[data-testid="editor"]');
+  await page.waitForLoadState("networkidle");
   await editor(page).click();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.insertText(TODO_SAMPLE);
@@ -301,6 +302,7 @@ async function openTableNote(page) {
   if (await existing.count()) await existing.click();
   else await page.getByTestId("picker-create").click();
   await page.waitForSelector('[data-testid="editor"]');
+  await page.waitForLoadState("networkidle");
   await editor(page).click();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.insertText(TABLE_SAMPLE);
@@ -310,6 +312,54 @@ async function openTableNote(page) {
 async function shotTables(page, prefix) {
   await openTableNote(page);
   await shot(page, `${prefix}-table-edit`);
+  const pane = page.getByTestId("pane-primary");
+  const toggle = pane.getByTestId("mode-toggle");
+  if (await toggle.isVisible()) {
+    await toggle.getByRole("button", { name: "Preview" }).click();
+  } else {
+    await noteAction(page, "preview-toggle");
+  }
+  const preview = pane.locator(".document-column .preview");
+  await preview.waitFor();
+  await preview.locator("table").first().waitFor();
+  await shot(page, `${prefix}-table-preview`);
+  await leavePreview(page);
+  await page.getByTestId("table-edit").first().click();
+  const sheet = page.getByTestId("table-editor");
+  await sheet.waitFor();
+  await shot(page, `${prefix}-table-editor`);
+  await sheet.locator('[data-cell="1:1"]').dblclick();
+  await sheet.locator("textarea").fill("24");
+  await shot(page, `${prefix}-table-editor-cell`);
+  if (await sheet.getByRole("button", { name: "Actions ▾", exact: true }).isVisible()) await sheet.getByRole("button", { name: "Actions ▾", exact: true }).click();
+  await sheet.getByRole("button", { name: "Sort ▾", exact: true }).click();
+  await shot(page, `${prefix}-table-editor-sort`);
+  await sheet.getByRole("button", { name: "Close menu", exact: true }).click();
+  await sheet.getByRole("button", { name: "Select column B", exact: true }).click();
+  await shot(page, `${prefix}-table-editor-column`);
+  await sheet.getByRole("button", { name: "Close menu", exact: true }).click();
+  if (await sheet.getByRole("button", { name: "Actions ▾", exact: true }).isVisible()) await sheet.getByRole("button", { name: "Actions ▾", exact: true }).click();
+  await sheet.getByRole("button", { name: "Align ▾", exact: true }).click();
+  await shot(page, `${prefix}-table-editor-alignment`);
+  await sheet.getByRole("button", { name: "Close menu", exact: true }).click();
+  await sheet.getByRole("button", { name: "Select row 1", exact: true }).click();
+  await shot(page, `${prefix}-table-editor-row`);
+  await sheet.getByRole("button", { name: "Delete selected rows", exact: true }).click();
+  await sheet.getByRole("button", { name: "Select row 1", exact: true }).click();
+  await sheet.getByRole("button", { name: "Delete selected rows", exact: true }).click();
+  await shot(page, `${prefix}-table-editor-empty`);
+  await sheet.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByTestId("table-edit").nth(1).click();
+  await shot(page, `${prefix}-table-editor-wide`);
+  const peer = await page.context().newPage();
+  await peer.goto(page.url(), { waitUntil: "networkidle" });
+  await editor(peer).click();
+  await peer.keyboard.press("ControlOrMeta+a");
+  await peer.keyboard.insertText(TABLE_SAMPLE.replace("extra extra", "Updated remotely"));
+  await sheet.getByRole("alert").waitFor();
+  await shot(page, `${prefix}-table-editor-conflict`);
+  await peer.close();
+  await sheet.getByRole("button", { name: "Cancel", exact: true }).click();
 }
 
 async function shotTodos(page, prefix, { mod = true } = {}) {

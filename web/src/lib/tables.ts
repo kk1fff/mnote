@@ -40,9 +40,10 @@ export function separatorPipes(text: string): number[] {
     const ch = text[i];
     if (ch === "[" && text[i + 1] === "[") {
       const close = text.indexOf("]]", i + 2);
-      if (close < 0) break;
-      i = close + 2;
-      continue;
+      if (close >= 0) {
+        i = close + 2;
+        continue;
+      }
     }
     if (ch === "\\" && text[i + 1] === "|") {
       i += 2;
