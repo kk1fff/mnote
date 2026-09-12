@@ -321,7 +321,7 @@ async function shotTables(page, prefix) {
   }
   const preview = pane.locator(".document-column .preview");
   await preview.waitFor();
-  await preview.locator("table").first().waitFor();
+  await preview.locator("table").first().waitFor({ state: "attached" });
   await shot(page, `${prefix}-table-preview`);
   await leavePreview(page);
   await page.getByTestId("table-edit").first().click();
