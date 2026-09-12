@@ -23,6 +23,7 @@ import { api, type NoteMeta } from "../api";
 import { isDailyNote } from "../lib/calendar";
 import { extractHashtags } from "../lib/tags";
 import { matchSlashCommands, type SlashCommand } from "../lib/commands";
+import { tableExtension } from "../lib/table-view";
 import { taskBoxInLine } from "../lib/tasks";
 import { buildPageItems, completeTag, completeWiki, detectTrigger } from "../lib/suggest";
 import type { TagSuggest } from "../api";
@@ -538,6 +539,7 @@ onMounted(() => {
         flashField,
         lineFlashField,
         markdownHierarchy,
+        tableExtension(),
         taskModField,
         EditorView.updateListener.of((update) => {
           const remote = update.transactions.some((tr) => tr.annotation(remoteAnn));
