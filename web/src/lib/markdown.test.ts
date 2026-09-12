@@ -53,4 +53,16 @@ describe("markdown", () => {
     expect(html.match(/task-checkbox/g)?.length).toBe(1);
     expect(html).toContain('data-task-line="3"');
   });
+
+  it("keeps a leading hashtag on the checkbox line", () => {
+    const html = renderMarkdown("- [ ] #mnote");
+    expect(html).toContain('data-tag="mnote"');
+    expect(html).toMatch(/task-checkbox[^>]*>\s*<a [^>]*data-tag="mnote"/);
+    expect(html).not.toMatch(/task-checkbox[^>]*>\s*<p>/);
+  });
+
+  it("keeps the checkbox inside the paragraph in a loose task list", () => {
+    const html = renderMarkdown("- [ ] #mnote\n\n  - nested");
+    expect(html).toMatch(/<p>\s*<input type="checkbox" class="task-checkbox"[^>]*>\s*<a [^>]*data-tag="mnote"/);
+  });
 });
